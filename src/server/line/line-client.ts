@@ -5,17 +5,7 @@ export type LineClientOpts = { channelAccessToken: string; channelSecret: string
 export class LineClient {
   private sdk: Client;
   constructor(opts: LineClientOpts) {
-    // Call Client via Reflect.construct so it works both with the real SDK class
-    // and with vi.fn() mocks that use arrow-function implementations (Vitest 4).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const C = Client as any;
-    try {
-      this.sdk = Reflect.construct(C, [opts], C);
-    } catch {
-      // Vitest 4 vi.fn() + arrow mockImplementation: Reflect.construct still fails.
-      // Fall back to plain call (works for vi.fn mocks, returns the mock object directly).
-      this.sdk = C(opts);
-    }
+    this.sdk = new Client(opts);
   }
 
   async reply(token: string, msg: any | any[]): Promise<void> {

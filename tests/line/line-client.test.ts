@@ -3,9 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const replyMessage = vi.fn().mockResolvedValue({});
 const pushMessage  = vi.fn().mockResolvedValue({});
 
-vi.mock('@line/bot-sdk', () => ({
-  Client: vi.fn().mockImplementation(() => ({ replyMessage, pushMessage })),
-}));
+vi.mock('@line/bot-sdk', () => {
+  // Class-based mock — constructable via `new Client(opts)` in production code
+  class Client {
+    replyMessage = replyMessage;
+    pushMessage = pushMessage;
+    constructor(_opts: any) {}
+  }
+  return { Client };
+});
 
 beforeEach(() => { replyMessage.mockClear(); pushMessage.mockClear(); });
 
