@@ -54,12 +54,12 @@ async function startServer() {
         bookFn: async (input) => {
           // TODO Phase 5+: replace with real booking via appRouter.createCaller(ctx).amenities.book(input)
           const id = 'WO-' + Date.now().toString(36).toUpperCase();
-          console.log('[LINE] STUB bookFn called', { input, id });
+          console.warn('[LINE] STUB bookFn called', { input, id });
           return { id };
         },
         pushHousekeepers: async (payload) => {
           // TODO Phase 5: implement real push to all housekeepers via lineUserRepo.listByRole + lineClient.push
-          console.log('[LINE] STUB pushHousekeepers', payload);
+          console.warn('[LINE] STUB pushHousekeepers', payload);
         },
       });
       console.log('[LINE] dispatcher configured');
