@@ -75,4 +75,25 @@ describe('dispatch() integration smoke', () => {
       expect.objectContaining({ lineUserId: 'U1', direction: 'inbound' })
     );
   });
+
+  it('replies an error message to the user when handler throws', async () => {
+    // Force the handler to throw by making bookFn reject AND the event triggers
+    // the confirm path. We reach the dispatcher's catch by injecting a bookFn that
+    // rejects — but the rollback fix in resident.ts catches that internally.
+    // To hit the dispatcher-level catch we need handleResident itself to throw
+    // (not just bookFn). We do that by making ai.classify throw synchronously.
+    const deps = mkDeps({
+      ai: {
+        classify: vi.fn().mockRejectedValue(new Error('AI service down')),
+      } as any,
+    });
+    await dispatch([
+      { type: 'message', replyToken: 'rt', source: { userId: 'U1' }, message: { type: 'text', text: '測試' } }
+    ], deps);
+    // The dispatcher catch must attempt a best-effort reply via replyOrPush
+    expect(deps.lineClient.replyOrPush).toHaveBeenCalledWith(
+      'rt', 'U1',
+      expect.objectContaining({ type: 'text' }),
+    );
+  });
 });

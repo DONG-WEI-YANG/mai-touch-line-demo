@@ -55,6 +55,16 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       // housekeeper / admin handlers added in Phase 5 / 7
     } catch (err) {
       console.error('[LINE] dispatch handler error', { userId, role: lineUser.role, err });
+      // Best-effort error reply — handler may have already consumed reply token, replyOrPush falls back to push
+      try {
+        const lang = (lineUser.language ?? 'zh-TW') as 'zh-TW' | 'en' | 'ja';
+        await deps.lineClient.replyOrPush(ev.replyToken, userId,
+          { type: 'text', text: lang === 'en' ? 'Sorry, something went wrong. Please try again.'
+                              : lang === 'ja' ? '申し訳ありません、エラーが発生しました'
+                                              : '不好意思,系統剛剛出了點問題,請再試一次 🙏' });
+      } catch (replyErr) {
+        console.error('[LINE] failed to send error reply', { userId, replyErr });
+      }
     }
   }
 }
