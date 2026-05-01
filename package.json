@@ -14,6 +14,7 @@
     "db:reset": "ts-node src/server/database/migrate.ts reset",
     "db:init": "ts-node scripts/init-db.ts",
     "db:init:simple": "ts-node scripts/init-db-simple.ts",
+    "db:init:demo": "ts-node scripts/init-db-demo.ts",
     "setup": "node scripts/setup.bat",
     "test": "vitest run",
     "lint": "eslint src/ --max-warnings 50",
