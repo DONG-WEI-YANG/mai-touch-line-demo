@@ -1,0 +1,109 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { handleResident } from '../../src/server/line/handlers/resident';
+import { SessionStore } from '../../src/server/line/session-store';
+
+const mkAi = (intent: any) => ({ classify: vi.fn().mockResolvedValue(intent) });
+const mkClient = () => ({
+  reply: vi.fn().mockResolvedValue(undefined),
+  push: vi.fn().mockResolvedValue(undefined),
+  replyOrPush: vi.fn().mockResolvedValue(undefined),
+});
+const baseEv = (text: string, replyToken = 'rt') => ({
+  type: 'message', replyToken, source: { userId: 'U1' }, message: { type: 'text', text }
+});
+
+describe('resident handler — facility.book happy path', () => {
+  let store: SessionStore;
+  beforeEach(() => { store = new SessionStore({ ttlMs: 60_000 }); });
+
+  it('asks for missing slot when facility known, time missing', async () => {
+    const ai = mkAi({ intent: 'facility.book', confidence: 0.9, slots: { facility: 'gym' }, language: 'zh-TW' });
+    const client = mkClient();
+    await handleResident(baseEv('預約健身房'), {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn: vi.fn(), pushHousekeepers: vi.fn(),
+    });
+    expect(client.replyOrPush).toHaveBeenCalled();
+    const session = store.get('U1');
+    expect(session?.step).toBe('SLOT_FILLING');
+    expect(session?.slots.facility).toBe('gym');
+  });
+
+  it('moves to CONFIRMING when all slots filled', async () => {
+    const ai = mkAi({ intent: 'facility.book', confidence: 0.95,
+      slots: { facility: 'gym', date: '2026-05-09', time: '19:00' }, language: 'zh-TW' });
+    const client = mkClient();
+    await handleResident(baseEv('預約週六晚上7點健身房'), {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn: vi.fn(), pushHousekeepers: vi.fn(),
+    });
+    expect(store.get('U1')?.step).toBe('CONFIRMING');
+  });
+
+  it('on /confirm postback, calls bookFn, pushes housekeepers, returns to IDLE', async () => {
+    const ai = mkAi({ intent: 'facility.book', confidence: 0.95,
+      slots: { facility: 'gym', date: '2026-05-09', time: '19:00' }, language: 'zh-TW' });
+    const client = mkClient();
+    const bookFn = vi.fn().mockResolvedValue({ id: 'WO-42' });
+    const pushHousekeepers = vi.fn();
+
+    // round 1: classify, fill slots, end at CONFIRMING
+    await handleResident(baseEv('預約週六晚上7點健身房'), {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn, pushHousekeepers,
+    });
+    // round 2: postback confirm
+    await handleResident({ type: 'postback', replyToken: 'rt2', source: { userId: 'U1' },
+      postback: { data: 'act=confirm&intent=facility.book' } } as any, {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn, pushHousekeepers,
+    });
+
+    expect(bookFn).toHaveBeenCalledWith({ facility: 'gym', date: '2026-05-09', time: '19:00' });
+    expect(pushHousekeepers).toHaveBeenCalled();
+    expect(store.get('U1')?.step).toBe('IDLE');
+  });
+
+  it('cancel postback clears session and replies cancel', async () => {
+    const client = mkClient();
+    store.set('U1', { userId: 'U1', role: 'resident', step: 'SLOT_FILLING', slots: { facility: 'gym' },
+      missingSlots: ['date'], language: 'zh-TW', updatedAt: Date.now() });
+    await handleResident({ type: 'postback', replyToken: 'rt', source: { userId: 'U1' },
+      postback: { data: 'act=cancel' } } as any, {
+      ai: mkAi({}), client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn: vi.fn(), pushHousekeepers: vi.fn(),
+    });
+    expect(store.get('U1')).toBeUndefined();
+    expect(client.replyOrPush).toHaveBeenCalled();
+  });
+
+  it('low confidence intent triggers clarification message', async () => {
+    const ai = mkAi({ intent: 'facility.book', confidence: 0.4, slots: {}, language: 'zh-TW' });
+    const client = mkClient();
+    await handleResident(baseEv('呃'), {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn: vi.fn(), pushHousekeepers: vi.fn(),
+    });
+    expect(client.replyOrPush).toHaveBeenCalledWith(expect.anything(), 'U1',
+      expect.objectContaining({ type: 'text' }));
+  });
+
+  it('small_talk replies with greeting, no slot filling', async () => {
+    const ai = mkAi({ intent: 'small_talk', confidence: 0.99, slots: {}, language: 'zh-TW' });
+    const client = mkClient();
+    await handleResident(baseEv('你好'), {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn: vi.fn(), pushHousekeepers: vi.fn(),
+    });
+    expect(client.replyOrPush).toHaveBeenCalled();
+    // session should be cleared (small_talk is terminal)
+    expect(store.get('U1')?.step).toBe('IDLE');
+  });
+});

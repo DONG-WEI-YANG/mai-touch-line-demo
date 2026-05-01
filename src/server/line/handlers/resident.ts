@@ -1,0 +1,143 @@
+import type { SessionStore, SessionState } from '../session-store';
+import type { IntentClassifier, Lang, IntentName } from '../ai/types';
+import type { LineClient } from '../line-client';
+import { parsePostback } from '../postback';
+import { facilityCarousel } from '../flex/facilityCarousel';
+import { dateTimePicker } from '../flex/dateTimePicker';
+import { bookingConfirm } from '../flex/bookingConfirm';
+import { bookingDone } from '../flex/bookingDone';
+import { t } from '../flex/i18n';
+
+const REQUIRED_SLOTS: Partial<Record<IntentName, string[]>> = {
+  'facility.book':   ['facility', 'date', 'time'],
+  'repair.report':   ['issue', 'location', 'urgency'],
+  'visitor.notify':  ['visitor_name', 'visitor_count', 'date', 'time'],
+  'complaint.file':  ['issue'],
+};
+
+export type ResidentDeps = {
+  ai: IntentClassifier;
+  client: LineClient;
+  store: SessionStore;
+  channelId: string;
+  lineUser: { lineUserId: string; role: 'resident' | 'housekeeper' | 'admin'; language: Lang };
+  bookFn: (input: { facility: string; date: string; time: string }) => Promise<{ id: string }>;
+  pushHousekeepers: (payload: { orderId: string; from: string; intent: string; summary: string }) => Promise<void>;
+};
+
+export async function handleResident(ev: any, deps: ResidentDeps): Promise<void> {
+  const userId = deps.lineUser.lineUserId;
+  const lang = deps.lineUser.language;
+  let session: SessionState = deps.store.get(userId) ?? newSession(userId, lang);
+
+  // ──── Postback branch ────
+  if (ev.type === 'postback') {
+    const params = parsePostback(ev.postback?.data ?? '');
+
+    if (params.act === 'cancel') {
+      deps.store.clear(userId);
+      await deps.client.replyOrPush(ev.replyToken, userId,
+        { type: 'text', text: t('booking.btn.cancel', lang) });
+      return;
+    }
+
+    if (params.act === 'book' && params.fac) {
+      session = {
+        ...session, intent: 'facility.book', step: 'SLOT_FILLING',
+        slots: { ...session.slots, facility: params.fac },
+      };
+    }
+
+    if (params.slot && params.val) {
+      session = {
+        ...session,
+        slots: { ...session.slots, [params.slot]: params.val },
+        step: 'SLOT_FILLING',
+      };
+    }
+
+    if (params.act === 'confirm' && session.step === 'CONFIRMING' && session.intent === 'facility.book') {
+      session = { ...session, step: 'EXECUTING' };
+      deps.store.set(userId, session);
+      const order = await deps.bookFn(session.slots as any);
+      await deps.client.replyOrPush(ev.replyToken, userId, bookingDone({ orderId: order.id }, lang));
+      await deps.pushHousekeepers({
+        orderId: order.id, from: userId, intent: session.intent,
+        summary: JSON.stringify(session.slots),
+      });
+      deps.store.clear(userId);
+      // Set a minimal IDLE record so store.get(userId)?.step === 'IDLE'
+      deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+      return;
+    }
+  }
+
+  // ──── Text branch — classify if no active intent ────
+  if (ev.type === 'message' && ev.message?.type === 'text' && !session.intent) {
+    const text = ev.message.text as string;
+    const r = await deps.ai.classify(text, { userId, history: session.history });
+    session = {
+      ...session,
+      intent: r.intent,
+      slots: { ...session.slots, ...r.slots },
+      language: r.language,
+      history: [...(session.history ?? []), text].slice(-4),
+    };
+
+    if (r.intent === 'small_talk') {
+      deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+      await deps.client.replyOrPush(ev.replyToken, userId,
+        { type: 'text', text: t('msg.smallTalk', lang) });
+      return;
+    }
+    if (r.intent === 'unknown' || r.confidence < 0.6) {
+      deps.store.clear(userId);
+      await deps.client.replyOrPush(ev.replyToken, userId,
+        { type: 'text', text: t('msg.unknown', lang) });
+      return;
+    }
+  }
+
+  // ──── Slot accumulation + state advance ────
+  const required = REQUIRED_SLOTS[session.intent ?? 'unknown'] ?? [];
+  const missing = required.filter(k => !(k in session.slots));
+  session = { ...session, missingSlots: missing };
+
+  if (missing.length === 0 && session.intent === 'facility.book') {
+    session = { ...session, step: 'CONFIRMING' };
+    deps.store.set(userId, session);
+    await deps.client.replyOrPush(ev.replyToken, userId,
+      bookingConfirm(session.slots as any, lang));
+    return;
+  }
+
+  // Ask next missing slot
+  const next = missing[0];
+  if (next === 'facility') {
+    session = { ...session, step: 'SLOT_FILLING' };
+    deps.store.set(userId, session);
+    await deps.client.replyOrPush(ev.replyToken, userId, facilityCarousel(lang));
+    return;
+  }
+  if (next === 'date' || next === 'time') {
+    session = { ...session, step: 'SLOT_FILLING' };
+    deps.store.set(userId, session);
+    await deps.client.replyOrPush(ev.replyToken, userId, dateTimePicker(next, lang));
+    return;
+  }
+  if (next) {
+    // generic ask for slots like issue / location / urgency / visitor_name / visitor_count
+    session = { ...session, step: 'SLOT_FILLING' };
+    deps.store.set(userId, session);
+    const askKey = ('ask.' + next.replace('_', '.')) as any;
+    await deps.client.replyOrPush(ev.replyToken, userId, { type: 'text', text: t(askKey, lang) });
+    return;
+  }
+}
+
+function newSession(userId: string, language: Lang): SessionState {
+  return {
+    userId, role: 'resident', step: 'IDLE', slots: {}, missingSlots: [], language,
+    updatedAt: Date.now(),
+  };
+}
