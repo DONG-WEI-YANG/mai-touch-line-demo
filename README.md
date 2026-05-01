@@ -560,3 +560,17 @@ const { data, fetchNextPage, hasNextPage } = trpc.items.list.useInfiniteQuery(
 | tRPC type errors | Run `pnpm check` to verify types |
 | Mutations fail silently | Check browser console for errors |
 | Session expired | User needs to login again |
+
+## 🤖 LINE Demo (Cloud)
+
+A publicly-reachable LINE Official Account demo of m'AI Touch is available — see `docs/LINE_INTEGRATION.md` for setup, presentation playbook, and troubleshooting.
+
+- **Live URL**: `https://mai-touch-demo.onrender.com`
+- **Health check**: `GET /health`
+- **Webhook endpoint**: `POST /line/webhook`
+- **Profile switch**: `DEPLOY_PROFILE=demo` (OpenAI-only, free tier) or `DEPLOY_PROFILE=prod` (existing NLP service)
+- **Available demo scripts**: `/demo facility`, `/demo repair`, `/demo visitor`, `/demo complaint`
+- **Commands**: `/help`, `/role`, `/lang`, `/reset`, `/whoami`, `/demo list`, `/demo stop`
+
+Spec: `docs/superpowers/specs/2026-05-01-line-online-demo-design.md`
+Plan: `docs/superpowers/plans/2026-05-01-line-online-demo-plan*.md`
