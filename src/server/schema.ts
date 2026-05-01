@@ -285,6 +285,34 @@ export const lineMessageLog = sqliteTable('line_message_log', {
 export type LineMessageLog = typeof lineMessageLog.$inferSelect;
 export type InsertLineMessageLog = typeof lineMessageLog.$inferInsert;
 
+/**
+ * Runtime Config — DB-backed key/value settings editable without redeploy.
+ */
+export const runtimeConfig = sqliteTable('runtime_config', {
+  key:         sqliteText('key').primaryKey(),
+  value:       sqliteText('value').notNull(),
+  type:        sqliteText('type', { enum: ['number', 'string', 'bool', 'json'] }).notNull(),
+  description: sqliteText('description'),
+  updatedAt:   sqliteText('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedBy:   sqliteText('updated_by'),
+});
+
+export type RuntimeConfigRow = typeof runtimeConfig.$inferSelect;
+export type InsertRuntimeConfigRow = typeof runtimeConfig.$inferInsert;
+
+/**
+ * Demo Script Config — Enable/disable individual demo scripts and optionally override steps.
+ */
+export const demoScriptConfig = sqliteTable('demo_script_config', {
+  id:        sqliteText('id', { enum: ['facility', 'repair', 'visitor', 'complaint'] }).primaryKey(),
+  enabled:   integer('enabled').notNull().default(1),
+  stepsJson: sqliteText('steps_json'),
+  updatedAt: sqliteText('updated_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type DemoScriptConfigRow = typeof demoScriptConfig.$inferSelect;
+export type InsertDemoScriptConfigRow = typeof demoScriptConfig.$inferInsert;
+
 
 
 
