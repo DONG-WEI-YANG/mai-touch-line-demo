@@ -12,6 +12,11 @@ import { makeMessageLog } from './line/message-log';
 import { makePushHousekeepers } from './line/push-housekeepers';
 import { getAi } from './_core/profile';
 import { dbManager } from './database/adapter';
+import { makeRateLimiter } from './line/rate-limit';
+import { makeEventDedupe } from './line/event-dedupe';
+import { handleCommand } from './line/handlers/command';
+import { startDemo, stopDemo } from './line/handlers/demo';
+import { listScripts } from './line/demo-scripts';
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -48,6 +53,17 @@ async function startServer() {
         channelSecret: process.env.LINE_CHANNEL_SECRET ?? '',
         demoBanner: process.env.DEPLOY_PROFILE === 'demo' && process.env.DEMO_BANNER !== 'false',
       });
+
+      // ── Rate limiter & event dedupe (boot-time singletons) ────────────────
+      const rateLimiter = makeRateLimiter({
+        perMinute: Number(process.env.LINE_RATE_LIMIT_PER_MIN ?? '10'),
+        perDay: Number(process.env.LINE_RATE_LIMIT_PER_DAY ?? '200'),
+      });
+      const eventDedupe = makeEventDedupe(1000);
+
+      // ── Admin whitelist ───────────────────────────────────────────────────
+      const adminWhitelist = (process.env.DEMO_ADMIN_LINE_USERS ?? '')
+        .split(',').map(s => s.trim()).filter(Boolean);
       const channelId = process.env.LINE_CHANNEL_ID ?? 'default';
 
       // Build facility-name → amenityId map at boot (run AFTER seedSystemIfEmpty)
@@ -163,6 +179,35 @@ async function startServer() {
         }
       };
 
+      // ── Command handler factory ──────────────────────────────────────────
+      // demoDepsFactory is called per-event with the current lineUser so startDemo/stopDemo
+      // get the correct userId + language without closure-scope leakage across events.
+      // Note: this is a lightweight object literal per call (no heap accumulation concern).
+      const demoDepsFactory = (lineUser: { lineUserId: string; language: import('./line/ai/types').Lang }) => ({
+        store: sessionStore,
+        client: lineClient,
+        lineUser,
+        runSideEffect,
+      });
+
+      const commandHandler = async (
+        text: string,
+        ev: any,
+        lineUser: { lineUserId: string; role: 'resident' | 'housekeeper' | 'admin'; language: import('./line/ai/types').Lang },
+      ): Promise<boolean> => {
+        return handleCommand(text, ev, {
+          client: lineClient,
+          lineUserRepo,
+          channelId,
+          lineUser,
+          sessionStore,
+          adminWhitelist,
+          startDemo: (id: string) => startDemo(id, demoDepsFactory(lineUser)),
+          stopDemo: () => stopDemo(demoDepsFactory(lineUser)),
+          listScripts,
+        });
+      };
+
       setDispatchDeps({
         lineClient,
         ai: getAi(),
@@ -174,6 +219,9 @@ async function startServer() {
         pushHousekeepers,
         updateOrder,
         runSideEffect,
+        commandHandler,
+        rateLimiter,
+        eventDedupe,
       });
       console.log('[LINE] dispatcher configured');
     } catch (err) {

@@ -1,11 +1,12 @@
 import type { LineClient } from './line-client';
-import type { IntentClassifier } from './ai/types';
+import type { IntentClassifier, Lang } from './ai/types';
 import type { makeLineUserRepo } from './line-user-repo';
 import type { makeMessageLog } from './message-log';
 import type { SessionStore } from './session-store';
 import { handleResident } from './handlers/resident';
 import { handleHousekeeper } from './handlers/housekeeper';
 import { continueDemo } from './handlers/demo';
+import { isCommand } from './handlers/command';
 
 export type DispatchDeps = {
   lineClient: LineClient;
@@ -22,6 +23,12 @@ export type DispatchDeps = {
     rejectedBy?: string;
   }) => Promise<void>;
   runSideEffect: (call: { router: string; procedure: string; input: unknown }) => Promise<void>;
+  /** Handles /commands. Returns true if the command was recognized and handled. */
+  commandHandler: (text: string, ev: any, lineUser: { lineUserId: string; role: 'resident'|'housekeeper'|'admin'; language: Lang }) => Promise<boolean>;
+  /** Per-user rate limiter. check() returns false when the user is over limit. */
+  rateLimiter: { check: (userId: string) => boolean };
+  /** Event-id de-duplication (LRU). seen() returns true if this webhookEventId was already processed. */
+  eventDedupe: { seen: (id: string) => boolean };
 };
 
 export async function dispatch(events: any[], deps: DispatchDeps): Promise<void> {
@@ -31,12 +38,31 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
     const userId = ev.source?.userId;
     if (!userId) continue;
 
+    // ── 1. Event de-dup (before any work) ─────────────────────────────────────
+    if (ev.webhookEventId && deps.eventDedupe.seen(ev.webhookEventId)) continue;
+
+    // ── 2. Upsert lineUser ─────────────────────────────────────────────────────
     let lineUser = deps.lineUserRepo.byLineId(deps.channelId, userId);
     if (!lineUser) {
       deps.lineUserRepo.upsert({ channelId: deps.channelId, lineUserId: userId, isDemo: 1 });
       lineUser = deps.lineUserRepo.byLineId(deps.channelId, userId)!;
     }
 
+    // ── 3. Rate limit (after lineUser so we can reply with lang-aware text) ────
+    if (!deps.rateLimiter.check(userId)) {
+      const lang = (lineUser.language ?? 'zh-TW') as Lang;
+      const msg = lang === 'en' ? 'You are sending messages too fast. Please wait a moment.'
+                : lang === 'ja' ? 'メッセージの送信が速すぎます。少々お待ちください。'
+                                : '您傳送訊息的速度太快，請稍候再試 🙏';
+      try {
+        await deps.lineClient.replyOrPush(ev.replyToken, userId, { type: 'text', text: msg });
+      } catch (err) {
+        console.error('[LINE] failed to send rate-limit reply', { userId, err });
+      }
+      continue;
+    }
+
+    // ── 4. Log inbound message ─────────────────────────────────────────────────
     deps.messageLog.write({
       lineUserId: userId,
       direction: 'inbound',
@@ -45,18 +71,31 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
     });
 
     try {
-      // Demo intercept — BEFORE role routing so demo works for any role
+      // ── 5. Command intercept (BEFORE demo — so /demo stop works mid-demo) ────
+      // Phase 6 Concern A: commands must be checked before demo intercept.
+      if (ev.type === 'message' && ev.message?.type === 'text' && isCommand(ev.message.text)) {
+        const handled = await deps.commandHandler(ev.message.text, ev, {
+          lineUserId: userId,
+          role: (lineUser.role ?? 'resident') as 'resident'|'housekeeper'|'admin',
+          language: (lineUser.language ?? 'zh-TW') as Lang,
+        });
+        if (handled) continue;
+        // If false, fall through to demo / role routing
+      }
+
+      // ── 6. Demo intercept — BEFORE role routing ────────────────────────────
       const session = deps.store.get(userId);
       if (session?.demoScriptId) {
         await continueDemo(ev, {
           store: deps.store,
           client: deps.lineClient,
-          lineUser: { lineUserId: userId, language: (lineUser.language ?? 'zh-TW') as any },
+          lineUser: { lineUserId: userId, language: (lineUser.language ?? 'zh-TW') as Lang },
           runSideEffect: deps.runSideEffect,
         });
         continue;  // skip normal role handlers when demo is active
       }
 
+      // ── 7. Role routing ────────────────────────────────────────────────────
       if (lineUser.role === 'resident') {
         await handleResident(ev, {
           ai: deps.ai,
@@ -83,7 +122,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
           },
         });
       }
-      // admin handler added in Phase 7
+      // admin handler added in Phase 7 (command handler covers admin commands)
     } catch (err) {
       console.error('[LINE] dispatch handler error', { userId, role: lineUser.role, err });
       // Best-effort error reply — handler may have already consumed reply token, replyOrPush falls back to push

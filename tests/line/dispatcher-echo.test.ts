@@ -36,6 +36,9 @@ const mkDeps = (overrides: Partial<Parameters<typeof dispatch>[1]> = {}) => {
     pushHousekeepers: vi.fn().mockResolvedValue(undefined),
     updateOrder: vi.fn().mockResolvedValue(undefined),
     runSideEffect: vi.fn().mockResolvedValue(undefined),
+    commandHandler: vi.fn().mockResolvedValue(false),
+    rateLimiter: { check: vi.fn().mockReturnValue(true) },
+    eventDedupe: { seen: vi.fn().mockReturnValue(false) },
     ...overrides,
   };
 };

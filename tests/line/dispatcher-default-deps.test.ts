@@ -13,6 +13,9 @@ const mkDeps = () => ({
   pushHousekeepers: vi.fn(),
   updateOrder: vi.fn(),
   runSideEffect: vi.fn(),
+  commandHandler: vi.fn().mockResolvedValue(false),
+  rateLimiter: { check: vi.fn().mockReturnValue(true) },
+  eventDedupe: { seen: vi.fn().mockReturnValue(false) },
 });
 
 describe('setDispatchDeps / getDispatchDeps / resetDispatchDeps', () => {
