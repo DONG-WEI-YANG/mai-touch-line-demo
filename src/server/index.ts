@@ -9,6 +9,7 @@ import { LineClient } from './line/line-client';
 import { sessionStore } from './line/session-store';
 import { makeLineUserRepo } from './line/line-user-repo';
 import { makeMessageLog } from './line/message-log';
+import { setLineAdminContext } from './_core/context';
 import { makePushHousekeepers } from './line/push-housekeepers';
 import { getAi } from './_core/profile';
 import { dbManager } from './database/adapter';
@@ -224,12 +225,14 @@ async function startServer() {
         });
       };
 
+      const messageLog = makeMessageLog(rawSqlite);
+
       setDispatchDeps({
         lineClient,
         ai: getAi(),
         store: sessionStore,
         lineUserRepo,
-        messageLog: makeMessageLog(rawSqlite),
+        messageLog,
         channelId,
         bookFn,
         pushHousekeepers,
@@ -239,6 +242,17 @@ async function startServer() {
         rateLimiter,
         eventDedupe,
       });
+
+      // ── Admin dashboard context — must be set BEFORE createApp() ─────────
+      setLineAdminContext({
+        db: rawSqlite,
+        runtimeConfig,
+        lineUserRepo,
+        messageLog,
+        lineClient,
+        channelId,
+      });
+
       console.log('[LINE] dispatcher configured');
     } catch (err) {
       console.error('[LINE] dispatcher setup failed (non-fatal, webhook will throw on first request):', err);
