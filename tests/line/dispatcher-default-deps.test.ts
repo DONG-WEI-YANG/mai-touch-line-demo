@@ -12,6 +12,7 @@ const mkDeps = () => ({
   bookFn: vi.fn(),
   pushHousekeepers: vi.fn(),
   updateOrder: vi.fn(),
+  runSideEffect: vi.fn(),
 });
 
 describe('setDispatchDeps / getDispatchDeps / resetDispatchDeps', () => {

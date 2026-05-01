@@ -5,6 +5,7 @@ import type { makeMessageLog } from './message-log';
 import type { SessionStore } from './session-store';
 import { handleResident } from './handlers/resident';
 import { handleHousekeeper } from './handlers/housekeeper';
+import { continueDemo } from './handlers/demo';
 
 export type DispatchDeps = {
   lineClient: LineClient;
@@ -20,6 +21,7 @@ export type DispatchDeps = {
     acceptedBy?: string;
     rejectedBy?: string;
   }) => Promise<void>;
+  runSideEffect: (call: { router: string; procedure: string; input: unknown }) => Promise<void>;
 };
 
 export async function dispatch(events: any[], deps: DispatchDeps): Promise<void> {
@@ -43,6 +45,18 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
     });
 
     try {
+      // Demo intercept — BEFORE role routing so demo works for any role
+      const session = deps.store.get(userId);
+      if (session?.demoScriptId) {
+        await continueDemo(ev, {
+          store: deps.store,
+          client: deps.lineClient,
+          lineUser: { lineUserId: userId, language: (lineUser.language ?? 'zh-TW') as any },
+          runSideEffect: deps.runSideEffect,
+        });
+        continue;  // skip normal role handlers when demo is active
+      }
+
       if (lineUser.role === 'resident') {
         await handleResident(ev, {
           ai: deps.ai,

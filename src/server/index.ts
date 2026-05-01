@@ -124,6 +124,44 @@ async function startServer() {
         console.log('[LINE] booking status updated', { id: numId, lineStatus: patch.status, dbStatus, by: patch.acceptedBy ?? patch.rejectedBy });
       };
 
+      // Demo side-effect dispatcher — resolves (router, procedure) → direct db call
+      // Avoids tRPC ctx complexity; mirrors the bookFn / updateOrder pattern above.
+      const runSideEffect = async (call: { router: string; procedure: string; input: any }): Promise<void> => {
+        console.log('[LINE/DEMO] side effect', call);
+        try {
+          if (call.router === 'amenities' && call.procedure === 'book') {
+            const { facility, date, time, userId: uid } = call.input;
+            const amenityId = facilityToAmenityId.get(facility) ?? 1;
+            const [h, m] = String(time).split(':').map(Number);
+            const endH = (h + 1) % 24;
+            await db.createBooking({
+              userId: uid ?? SEED_USER_ID,
+              amenityId,
+              date,
+              startTime: time,
+              endTime: `${String(endH).padStart(2, '0')}:${String(m ?? 0).padStart(2, '0')}`,
+              guestCount: 1,
+              notes: '[demo script] facility book',
+            });
+          } else if (call.router === 'workOrders' && call.procedure === 'create') {
+            const { type, issue, location, urgency, userId: uid } = call.input;
+            const priority: 'low' | 'medium' | 'high' | 'urgent' =
+              urgency === 'high' ? 'high' : urgency === 'med' ? 'medium' : 'low';
+            await db.createWorkOrder({
+              userId: uid ?? SEED_USER_ID,
+              title: `[${type}] ${issue ?? location ?? 'demo'}`,
+              description: JSON.stringify(call.input),
+              priority,
+            });
+          } else {
+            console.warn('[LINE/DEMO] unhandled side_effect router/procedure', call);
+          }
+        } catch (err) {
+          console.error('[LINE/DEMO] side_effect db call failed', { call, err });
+          // Don't rethrow — let demo continue (the script's next bot_say will still play)
+        }
+      };
+
       setDispatchDeps({
         lineClient,
         ai: getAi(),
@@ -134,6 +172,7 @@ async function startServer() {
         bookFn,
         pushHousekeepers,
         updateOrder,
+        runSideEffect,
       });
       console.log('[LINE] dispatcher configured');
     } catch (err) {
