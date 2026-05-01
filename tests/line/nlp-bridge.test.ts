@@ -22,6 +22,37 @@ describe('NlpBridge', () => {
     expect(r.language).toBe('zh-TW');
   });
 
+  it('adapts all 9 slot entity types', async () => {
+    nock(BASE).post('/api/intent/classify').reply(200, {
+      intent_class: 'visitor_notify', score: 0.8,
+      entities: [
+        { type:'facility',      value:'lounge' },
+        { type:'date',          value:'2026-05-09' },
+        { type:'time',          value:'19:00' },
+        { type:'location',      value:'12F-A' },
+        { type:'issue',         value:'guest arriving' },
+        { type:'visitor_name',  value:'John Smith' },
+        { type:'visitor_count', value:'3' },
+        { type:'urgency',       value:'low' },
+        { type:'duration_min',  value:'60' },
+      ],
+      detected_lang: 'en',
+    });
+    const ai = new NlpBridge({ baseUrl: BASE, timeoutMs: 2000 });
+    const r = await ai.classify('hi', { userId: 'U' });
+    expect(r.slots.facility).toBe('lounge');
+    expect(r.slots.date).toBe('2026-05-09');
+    expect(r.slots.time).toBe('19:00');
+    expect(r.slots.location).toBe('12F-A');
+    expect(r.slots.issue).toBe('guest arriving');
+    expect(r.slots.visitor_name).toBe('John Smith');
+    expect(r.slots.visitor_count).toBe(3);   // number
+    expect(r.slots.urgency).toBe('low');
+    expect(r.slots.duration_min).toBe(60);   // number
+    expect(r.intent).toBe('visitor.notify');
+    expect(r.language).toBe('en');
+  });
+
   it('throws AiUnavailableError on 5xx', async () => {
     nock(BASE).post('/api/intent/classify').reply(503, 'down');
     const ai = new NlpBridge({ baseUrl: BASE, timeoutMs: 2000 });

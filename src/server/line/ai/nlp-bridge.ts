@@ -38,13 +38,17 @@ export class NlpBridge implements IntentClassifier {
 
 function adapt(raw: any): IntentResult {
   const slots: IntentResult['slots'] = {};
-  for (const e of (raw.entities ?? []) as Array<{type: string; value: string}>) {
+  for (const e of (raw.entities ?? []) as Array<{type:string;value:string|number}>) {
     switch (e.type) {
-      case 'facility': slots.facility = e.value as IntentResult['slots']['facility']; break;
-      case 'date':     slots.date = e.value; break;
-      case 'time':     slots.time = e.value; break;
-      case 'location': slots.location = e.value; break;
-      case 'issue':    slots.issue = e.value; break;
+      case 'facility':      slots.facility = e.value as IntentResult['slots']['facility']; break;
+      case 'date':          slots.date = String(e.value); break;
+      case 'time':          slots.time = String(e.value); break;
+      case 'location':      slots.location = String(e.value); break;
+      case 'issue':         slots.issue = String(e.value); break;
+      case 'visitor_name':  slots.visitor_name = String(e.value); break;
+      case 'visitor_count': slots.visitor_count = Number(e.value); break;
+      case 'urgency':       slots.urgency = e.value as IntentResult['slots']['urgency']; break;
+      case 'duration_min':  slots.duration_min = Number(e.value); break;
     }
   }
   return {
