@@ -1,5 +1,6 @@
 import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 import { integer, text as sqliteText, sqliteTable, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Units — Physical apartment units in the building.
@@ -255,8 +256,8 @@ export const lineUser = sqliteTable('line_user', {
   pictureUrl:  sqliteText('picture_url'),
   language:    sqliteText('language', { enum: ['zh-TW', 'en', 'ja'] }).default('zh-TW'),
   isDemo:      integer('is_demo').notNull().default(0),
-  createdAt:   sqliteText('created_at').default('CURRENT_TIMESTAMP'),
-  updatedAt:   sqliteText('updated_at').default('CURRENT_TIMESTAMP'),
+  createdAt:   sqliteText('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt:   sqliteText('updated_at').default(sql`CURRENT_TIMESTAMP`),
 }, (t) => ({
   uniq:    uniqueIndex('uniq_line_user_channel_user').on(t.channelId, t.lineUserId),
   roleIdx: index('idx_line_user_role').on(t.role),
@@ -276,7 +277,7 @@ export const lineMessageLog = sqliteTable('line_message_log', {
   content:     sqliteText('content'),
   intent:      sqliteText('intent'),
   sessionId:   sqliteText('session_id'),
-  createdAt:   sqliteText('created_at').default('CURRENT_TIMESTAMP'),
+  createdAt:   sqliteText('created_at').default(sql`CURRENT_TIMESTAMP`),
 }, (t) => ({
   userTimeIdx: index('idx_line_message_log_user_time').on(t.lineUserId, t.createdAt),
 }));
