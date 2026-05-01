@@ -61,7 +61,7 @@ export class OpenAIIntent implements IntentClassifier {
           console.warn('[AI] schema parse fail, raw=', raw);
           return { intent: 'unknown', confidence: 0, slots: {}, language: 'zh-TW' };
         }
-        return parsed.data;
+        return parsed.data as IntentResult;
       } catch (err) {
         lastErr = err;
         console.warn(`[AI] attempt ${attempt + 1} failed:`, err);
