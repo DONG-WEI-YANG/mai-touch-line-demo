@@ -53,4 +53,49 @@ describe('LineClient', () => {
     await expect(c.replyOrPush('rt', 'U1', { type:'text', text:'x' })).rejects.toMatchObject({ statusCode: 500 });
     expect(pushMessage).not.toHaveBeenCalled();
   });
+
+  it('prefixes [DEMO] on text when banner enabled', async () => {
+    const { LineClient } = await import('../../src/server/line/line-client');
+    const c = new LineClient({ channelAccessToken:'t', channelSecret:'s', demoBanner: true });
+    await c.reply('rt', { type:'text', text:'hello' });
+    expect(replyMessage).toHaveBeenCalledWith('rt',
+      expect.objectContaining({ text: expect.stringContaining('[DEMO]') }));
+  });
+
+  it('prefixes [DEMO] on flex altText when banner enabled', async () => {
+    const { LineClient } = await import('../../src/server/line/line-client');
+    const c = new LineClient({ channelAccessToken:'t', channelSecret:'s', demoBanner: true });
+    await c.reply('rt', { type:'flex', altText:'card', contents:{} });
+    expect(replyMessage).toHaveBeenCalledWith('rt',
+      expect.objectContaining({ altText: expect.stringContaining('[DEMO]') }));
+  });
+
+  it('does not double-prefix if [DEMO] already present', async () => {
+    const { LineClient } = await import('../../src/server/line/line-client');
+    const c = new LineClient({ channelAccessToken:'t', channelSecret:'s', demoBanner: true });
+    await c.reply('rt', { type:'text', text:'🧪 [DEMO] already here' });
+    const calledMsg = replyMessage.mock.calls[0][1];
+    // Should NOT contain "[DEMO]" twice
+    expect((calledMsg.text.match(/\[DEMO\]/g) ?? []).length).toBe(1);
+  });
+
+  it('handles array of messages', async () => {
+    const { LineClient } = await import('../../src/server/line/line-client');
+    const c = new LineClient({ channelAccessToken:'t', channelSecret:'s', demoBanner: true });
+    await c.reply('rt', [
+      { type:'text', text:'hi' },
+      { type:'flex', altText:'card', contents:{} },
+    ]);
+    const calledMsg = replyMessage.mock.calls[0][1];
+    expect(calledMsg[0].text).toContain('[DEMO]');
+    expect(calledMsg[1].altText).toContain('[DEMO]');
+  });
+
+  it('no-op when banner disabled (default)', async () => {
+    const { LineClient } = await import('../../src/server/line/line-client');
+    const c = new LineClient({ channelAccessToken:'t', channelSecret:'s' });
+    await c.reply('rt', { type:'text', text:'hello' });
+    const calledMsg = replyMessage.mock.calls[0][1];
+    expect(calledMsg.text).toBe('hello');
+  });
 });

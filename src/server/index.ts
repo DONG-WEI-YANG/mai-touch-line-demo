@@ -46,6 +46,7 @@ async function startServer() {
       const lineClient = new LineClient({
         channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '',
         channelSecret: process.env.LINE_CHANNEL_SECRET ?? '',
+        demoBanner: process.env.DEPLOY_PROFILE === 'demo' && process.env.DEMO_BANNER !== 'false',
       });
       const channelId = process.env.LINE_CHANNEL_ID ?? 'default';
 
