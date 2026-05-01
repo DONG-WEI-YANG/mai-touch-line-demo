@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: mai-touch-demo
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: npm ci && npm run db:init:demo
+    startCommand: npm run server
+    envVars:
+      - key: DEPLOY_PROFILE
+        value: demo
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DB_TYPE
+        value: sqlite
+      - key: SQLITE_FILENAME
+        value: /var/data/mai-touch-demo.db
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_CHANNEL_ID
+        value: default
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_TEMPERATURE
+        value: "0.1"
+      - key: BASE_URL
+        value: https://mai-touch-demo.onrender.com
+      - key: DEMO_ADMIN_LINE_USERS
+        sync: false
+      - key: LINE_RATE_LIMIT_PER_MIN
+        value: "10"
+      - key: LINE_RATE_LIMIT_PER_DAY
+        value: "200"
+      - key: DEMO_BANNER
+        value: "true"
+    disk:
+      name: demo-data
+      mountPath: /var/data
+      sizeGB: 1
+    healthCheckPath: /health
