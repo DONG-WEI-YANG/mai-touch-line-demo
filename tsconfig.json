@@ -1,0 +1,55 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": [
+      "DOM",
+      "ESNext"
+    ],
+    "jsx": "react-native",
+    "module": "esnext",
+    "moduleDetection": "force",
+    "strict": false,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    },
+    "baseUrl": ".",
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
+    "customConditions": [
+      "react-native"
+    ],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".cache/tsbuildinfo/tsconfig.tsbuildinfo",
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": false,
+    "types": [
+      "node",
+      "react-native"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests"
+  ],
+  "extends": "expo/tsconfig.base",
+  "ts-node": {
+    "compilerOptions": {
+      "module": "CommonJS",
+      "moduleResolution": "node"
+    }
+  }
+}

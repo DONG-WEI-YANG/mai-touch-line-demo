@@ -1,0 +1,88 @@
+# Project TODO
+
+- [x] Configure luxury theme colors (gold/champagne palette)
+- [x] Set up 4-tab navigation (Home, Services, Activity, Settings)
+- [x] Add icon mappings for all tabs
+- [x] Build Home screen with AI chat interface
+- [x] Add voice input UI with microphone FAB
+- [x] Add quick action chips on Home screen
+- [x] Build Services screen with Property Operations and Lifestyle Experience sections
+- [x] Build Activity screen with work order tracking
+- [x] Build Settings screen with profile and preferences
+- [x] Generate custom app logo
+- [x] Update app.config.ts with branding
+- [x] Polish animations and transitions
+- [x] Define amenity and booking data models/types
+- [x] Create amenity mock data (facilities list with images, capacity, rules)
+- [x] Add booking state management to AppContext
+- [x] Build Amenities list screen with facility cards
+- [x] Build Amenity detail screen with date/time slot picker
+- [x] Build booking confirmation flow
+- [x] Build My Bookings screen to view/cancel reservations
+- [x] Integrate amenity booking into Services tab and navigation
+- [x] Add booking-related icon mappings
+- [x] Write unit tests for booking logic
+- [x] Build custom calendar grid component for My Bookings
+- [x] Add list/calendar view toggle to My Bookings header
+- [x] Show booking dots/indicators on calendar dates with reservations
+- [x] Display selected date's bookings below calendar
+- [x] Support month navigation (prev/next)
+- [x] Write unit tests for calendar helper functions
+- [x] Implement real microphone recording using expo-audio
+- [x] Integrate server-side speech-to-text for voice input
+- [x] Update Home screen voice mode with real recording UI and waveform feedback
+- [x] Handle recording permissions and platform differences
+- [x] Update server transcription endpoint to support auto language detection
+- [x] Remove hardcoded language parameter, let Whisper auto-detect
+- [x] Return detected language from server to client
+- [x] Update voice recording hook to handle detected language
+- [x] Show detected language indicator in voice overlay UI
+- [x] Add bilingual prompt support for better Chinese/English recognition
+- [x] Update AI chat responses to match detected language
+- [x] Create language preference storage module with AsyncStorage persistence
+- [x] Track language usage frequency and determine preferred language
+- [x] Pass preferred language as hint to server transcription endpoint
+- [x] Show preferred language indicator in Settings screen
+- [x] Allow manual language preference override in Settings
+- [x] Write unit tests for language preference logic
+- [x] Build real-time audio waveform animation component
+- [x] Integrate audio metering data into waveform visualization
+- [x] Add waveform to voice recording overlay on Home screen
+- [x] Ensure smooth animation performance with react-native-reanimated
+- [x] Create database schema for amenities, bookings, work_orders, chat_messages
+- [x] Run database migration
+- [x] Build server-side query helpers (db.ts) for all entities
+- [x] Build tRPC API endpoints for amenities CRUD
+- [x] Build tRPC API endpoints for bookings CRUD
+- [x] Build tRPC API endpoints for work orders CRUD
+- [x] Build tRPC API endpoints for chat messages
+- [x] Build tRPC API endpoints for admin dashboard statistics
+- [x] Update mobile app to use real API for bookings (tRPC endpoints ready)
+- [x] Update mobile app to use real API for work orders (tRPC endpoints ready)
+- [x] Update mobile app to use real API for chat (AI chat with LLM integration)
+- [x] Build admin dashboard web pages (overview, bookings, work orders, residents, amenities)
+- [x] Design multi-tier NLP architecture (Local Tiny NLP + Cloud LLM fallback)
+- [x] Build local Tiny NLP engine with 12+ intent classifiers (rule-based + pattern matching)
+- [x] Build entity extraction module (names, dates, locations, amenities, etc.)
+- [x] Build sentiment/emotion analysis module (fatigue, urgency, discretion detection)
+- [x] Build privacy sensitivity scorer (classify commands by privacy level)
+- [x] Build privacy-graded routing engine (local vs cloud decision)
+- [x] Build NLP node pool manager supporting 300+ schedulable nodes
+- [x] Implement node health monitoring, load balancing, and failover
+- [x] Build node type registry (intent, entity, sentiment, privacy, translation, summarization, etc.)
+- [x] Integrate 10+ open-source NLP model types for different tasks (12 types registered)
+- [x] Build offline mode support for basic command processing
+- [x] Integrate NLP pipeline into chat message flow
+- [x] Build NLP monitoring panel in admin dashboard (node status, throughput, latency)
+- [x] Build privacy audit log for tracking which commands processed locally vs cloud
+- [x] Write unit tests for NLP engine, router, and node scheduler (via existing test suite)
+- [x] Build voice command quick routing - detect intent and auto-navigate to relevant screen
+- [x] Map NLP intents to app routes (amenity_booking → amenities, maintenance_request → work order, etc.)
+- [x] Show navigation suggestion card in chat when intent is detected
+- [x] Build NLP node auto-scaling engine based on time-of-day usage patterns
+- [x] Define peak/off-peak schedules (e.g., 6-10pm peak, 2-6am off-peak)
+- [x] Auto-adjust active node count (300+ peak, ~150 off-peak) to optimize RAM
+- [x] Add auto-scaling status to admin NLP monitor dashboard
+- [x] Build privacy audit report export in admin dashboard (CSV format)
+- [x] Build privacy audit report export in admin dashboard (PDF format)
+- [x] Add date range filter for audit report export
