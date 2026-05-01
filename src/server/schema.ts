@@ -1,4 +1,5 @@
 import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { integer, text as sqliteText, sqliteTable, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * Units — Physical apartment units in the building.
@@ -240,6 +241,48 @@ export const systemJobs = mysqlTable("system_jobs", {
 
 export type SystemJob = typeof systemJobs.$inferSelect;
 export type InsertSystemJob = typeof systemJobs.$inferInsert;
+
+/**
+ * LINE User — Maps a LINE user identity to an optional app user account.
+ */
+export const lineUser = sqliteTable('line_user', {
+  id:          integer('id').primaryKey({ autoIncrement: true }),
+  channelId:   sqliteText('channel_id').notNull(),
+  lineUserId:  sqliteText('line_user_id').notNull(),
+  appUserId:   integer('app_user_id'),
+  role:        sqliteText('role', { enum: ['resident', 'housekeeper', 'admin'] }).notNull().default('resident'),
+  displayName: sqliteText('display_name'),
+  pictureUrl:  sqliteText('picture_url'),
+  language:    sqliteText('language', { enum: ['zh-TW', 'en', 'ja'] }).default('zh-TW'),
+  isDemo:      integer('is_demo').notNull().default(0),
+  createdAt:   sqliteText('created_at').default('CURRENT_TIMESTAMP'),
+  updatedAt:   sqliteText('updated_at').default('CURRENT_TIMESTAMP'),
+}, (t) => ({
+  uniq:    uniqueIndex('uniq_line_user_channel_user').on(t.channelId, t.lineUserId),
+  roleIdx: index('idx_line_user_role').on(t.role),
+}));
+
+export type LineUser = typeof lineUser.$inferSelect;
+export type InsertLineUser = typeof lineUser.$inferInsert;
+
+/**
+ * LINE Message Log — Records inbound and outbound LINE messages.
+ */
+export const lineMessageLog = sqliteTable('line_message_log', {
+  id:          integer('id').primaryKey({ autoIncrement: true }),
+  lineUserId:  sqliteText('line_user_id').notNull(),
+  direction:   sqliteText('direction', { enum: ['inbound', 'outbound', 'outbound:debug'] }).notNull(),
+  messageType: sqliteText('message_type').notNull(),
+  content:     sqliteText('content'),
+  intent:      sqliteText('intent'),
+  sessionId:   sqliteText('session_id'),
+  createdAt:   sqliteText('created_at').default('CURRENT_TIMESTAMP'),
+}, (t) => ({
+  userTimeIdx: index('idx_line_message_log_user_time').on(t.lineUserId, t.createdAt),
+}));
+
+export type LineMessageLog = typeof lineMessageLog.$inferSelect;
+export type InsertLineMessageLog = typeof lineMessageLog.$inferInsert;
 
 
 
