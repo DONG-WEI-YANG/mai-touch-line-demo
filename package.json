@@ -59,7 +59,9 @@
     "react-native": "0.73.11",
     "react-native-web": "^0.19.13",
     "superjson": "^2.2.1",
+    "ts-node": "^10.9.2",
     "twilio": "^4.19.3",
+    "typescript": "^5.3.3",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -76,8 +78,6 @@
     "nock": "^14.0.14",
     "nodemon": "^3.0.2",
     "supertest": "^7.2.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.3.3",
     "vitest": "^4.0.18"
   },
   "private": true
