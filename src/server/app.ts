@@ -11,6 +11,8 @@ import {
 } from './middleware/rateLimit';
 import { smartCacheMiddleware } from './middleware/cache';
 import { getProfile } from './_core/profile';
+import { mountWebhook } from './line/webhook';
+import { dispatch, getDefaultDispatchDeps } from './line/dispatcher';
 
 export function createApp(): express.Express {
   const app = express();
@@ -32,6 +34,15 @@ export function createApp(): express.Express {
   }));
 
   app.use(cookieParser());
+
+  // Mount LINE webhook BEFORE the global express.json() — webhook needs raw body for HMAC verify
+  if (process.env.LINE_CHANNEL_SECRET && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+    mountWebhook(app, { dispatch: (events) => dispatch(events, getDefaultDispatchDeps()) });
+    console.log('[LINE] webhook mounted at /line/webhook');
+  } else {
+    console.log('[LINE] webhook not mounted (missing LINE_CHANNEL_*)');
+  }
+
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
