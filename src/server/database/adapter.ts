@@ -28,6 +28,8 @@ export interface DatabaseAdapter {
   db: any;
   type: DatabaseType;
   close: () => Promise<void>;
+  /** Raw better-sqlite3 Database instance. Only populated for SQLite adapters. */
+  rawSqlite?: import('better-sqlite3').Database;
 }
 
 /**
@@ -130,6 +132,7 @@ function createSqliteAdapter(config: DatabaseConfig): DatabaseAdapter {
   return {
     db,
     type: 'sqlite',
+    rawSqlite: sqlite,
     close: async () => {
       sqlite.close();
     },
@@ -231,6 +234,21 @@ export class DatabaseManager {
 
   getType(): DatabaseType | null {
     return this.adapter?.type || null;
+  }
+
+  /**
+   * Returns the raw better-sqlite3 Database handle.
+   * Only valid after connect() has resolved and the adapter type is 'sqlite'.
+   * Used by LINE repos (makeLineUserRepo / makeMessageLog) which bypass Drizzle.
+   */
+  getRawSqlite(): import('better-sqlite3').Database {
+    if (!this.adapter) {
+      throw new Error('Database not connected. Call connect() first.');
+    }
+    if (this.adapter.type !== 'sqlite' || !this.adapter.rawSqlite) {
+      throw new Error('getRawSqlite() is only available for SQLite adapters.');
+    }
+    return this.adapter.rawSqlite;
   }
 
   async close(): Promise<void> {

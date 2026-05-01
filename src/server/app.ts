@@ -12,7 +12,7 @@ import {
 import { smartCacheMiddleware } from './middleware/cache';
 import { getProfile } from './_core/profile';
 import { mountWebhook } from './line/webhook';
-import { dispatch, getDefaultDispatchDeps } from './line/dispatcher';
+import { dispatch, getDispatchDeps } from './line/dispatcher';
 
 export function createApp(): express.Express {
   const app = express();
@@ -37,7 +37,7 @@ export function createApp(): express.Express {
 
   // Mount LINE webhook BEFORE the global express.json() — webhook needs raw body for HMAC verify
   if (process.env.LINE_CHANNEL_SECRET && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
-    mountWebhook(app, { dispatch: (events) => dispatch(events, getDefaultDispatchDeps()) });
+    mountWebhook(app, { dispatch: (events) => dispatch(events, getDispatchDeps()) });
     console.log('[LINE] webhook mounted at /line/webhook');
   } else {
     console.log('[LINE] webhook not mounted (missing LINE_CHANNEL_*)');

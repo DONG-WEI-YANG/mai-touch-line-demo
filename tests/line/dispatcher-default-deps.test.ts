@@ -1,23 +1,42 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { getDefaultDispatchDeps, resetDefaultDeps } from '../../src/server/line/dispatcher';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { setDispatchDeps, getDispatchDeps, resetDispatchDeps } from '../../src/server/line/dispatcher';
+import { SessionStore } from '../../src/server/line/session-store';
 
-describe('getDefaultDispatchDeps env capture', () => {
-  beforeEach(() => resetDefaultDeps());
+const mkDeps = () => ({
+  lineClient: { reply: vi.fn(), push: vi.fn(), replyOrPush: vi.fn() } as any,
+  ai: { classify: vi.fn() } as any,
+  store: new SessionStore(),
+  lineUserRepo: { upsert: vi.fn(), byLineId: vi.fn(), setRole: vi.fn(), setLanguage: vi.fn(), listByRole: vi.fn() } as any,
+  messageLog: { write: vi.fn() } as any,
+  channelId: 'C1',
+  bookFn: vi.fn(),
+  pushHousekeepers: vi.fn(),
+});
 
-  it('captures env at first call', () => {
-    process.env.LINE_CHANNEL_ACCESS_TOKEN = 'token-a';
-    process.env.LINE_CHANNEL_SECRET = 'secret-a';
-    const d1 = getDefaultDispatchDeps();
-    expect(d1.lineClient).toBeDefined();
+describe('setDispatchDeps / getDispatchDeps / resetDispatchDeps', () => {
+  beforeEach(() => resetDispatchDeps());
+
+  it('getDispatchDeps throws when not configured', () => {
+    expect(() => getDispatchDeps()).toThrow('not configured');
   });
 
-  it('reset allows re-capture with new env', () => {
-    process.env.LINE_CHANNEL_ACCESS_TOKEN = 'token-a';
-    process.env.LINE_CHANNEL_SECRET = 'secret-a';
-    const d1 = getDefaultDispatchDeps();
-    resetDefaultDeps();
-    process.env.LINE_CHANNEL_ACCESS_TOKEN = 'token-b';
-    const d2 = getDefaultDispatchDeps();
-    expect(d2).not.toBe(d1);  // new instance after reset
+  it('getDispatchDeps returns deps after setDispatchDeps', () => {
+    const deps = mkDeps();
+    setDispatchDeps(deps);
+    expect(getDispatchDeps()).toBe(deps);
+  });
+
+  it('resetDispatchDeps clears configured deps', () => {
+    setDispatchDeps(mkDeps());
+    resetDispatchDeps();
+    expect(() => getDispatchDeps()).toThrow('not configured');
+  });
+
+  it('setDispatchDeps allows replacing deps', () => {
+    const d1 = mkDeps();
+    const d2 = mkDeps();
+    setDispatchDeps(d1);
+    setDispatchDeps(d2);
+    expect(getDispatchDeps()).toBe(d2);
   });
 });
