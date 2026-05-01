@@ -40,6 +40,10 @@ services:
         value: "200"
       - key: DEMO_BANNER
         value: "true"
+      # Render Free has 512MB total RAM. Default Node heap (~256MB) + ts-node
+      # transpile overhead OOMs. Cap heap at 400MB to leave room for OS + other.
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=400
     # NOTE: Render Free tier does not support persistent disks.
     # SQLite lives on ephemeral storage — survives idle/wake restarts but is
     # wiped on every new deploy. buildCommand runs `db:init:demo` to recreate
