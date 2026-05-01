@@ -54,6 +54,9 @@ async function startServer() {
       const facilityToAmenityId = new Map<string, number>();
       for (const a of amenities) {
         const n = (a.name ?? '').toLowerCase();
+        // Fuzzy match: last-write-wins per facility key. Safe for current demo seed data
+        // (one amenity per facility type). If multi-amenity-per-type is added later, replace
+        // with explicit name → facility key map.
         for (const k of ['gym', 'pool', 'meeting_room', 'meeting', 'lounge', 'bbq', 'sauna']) {
           if (n.includes(k)) facilityToAmenityId.set(k, a.id);
         }
@@ -104,14 +107,19 @@ async function startServer() {
         }
         const numId = Number(orderId.slice(3));
         if (!Number.isFinite(numId)) return;
-        // Map LINE work-order statuses to bookings.status enum
-        const dbStatusMap: Record<string, 'confirmed'|'pending'|'cancelled'|'completed'> = {
-          in_progress: 'confirmed',  // housekeeper accepted → booking confirmed
-          closed:      'cancelled',  // housekeeper rejected → booking cancelled
+        // Map LINE work-order statuses to bookings.status enum.
+        // LineStatus mirrors the 'status' union in the updateOrder patch parameter above.
+        // DbBookingStatus mirrors updateBookingStatus()'s inline parameter type in db.ts
+        // (consider exporting a named BookingStatus type from db.ts for reuse).
+        type LineStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+        type DbBookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed';
+        const dbStatusMap: Record<LineStatus, DbBookingStatus> = {
           open:        'pending',    // re-queued → pending
+          in_progress: 'confirmed',  // housekeeper accepted → booking confirmed
           resolved:    'completed',  // completed
+          closed:      'cancelled',  // housekeeper rejected → booking cancelled
         };
-        const dbStatus = dbStatusMap[patch.status] ?? 'confirmed';
+        const dbStatus = dbStatusMap[patch.status];
         await db.updateBookingStatus(numId, dbStatus);
         console.log('[LINE] booking status updated', { id: numId, lineStatus: patch.status, dbStatus, by: patch.acceptedBy ?? patch.rejectedBy });
       };
