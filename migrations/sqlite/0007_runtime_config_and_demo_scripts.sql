@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS runtime_config (
 CREATE TABLE IF NOT EXISTS demo_script_config (
   id          TEXT PRIMARY KEY,               -- 'facility' | 'repair' | 'visitor' | 'complaint'
   enabled     INTEGER NOT NULL DEFAULT 1,
-  steps_json  TEXT,                           -- NULL = use code default; non-NULL = override
+  steps_json  TEXT,                           -- NULL = use code default, non-NULL = override
   updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
