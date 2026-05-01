@@ -23,3 +23,7 @@ export function getDefaultDispatchDeps(): DispatchDeps {
   };
   return defaultDeps;
 }
+
+export function resetDefaultDeps(): void {
+  defaultDeps = null;
+}
