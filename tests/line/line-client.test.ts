@@ -37,4 +37,20 @@ describe('LineClient', () => {
     await c.replyOrPush('rt-expired', 'U1', { type:'text', text:'late' });
     expect(pushMessage).toHaveBeenCalledWith('U1', { type:'text', text:'late' });
   });
+
+  it('replyOrPush falls back to push on any 400 from reply (not just specific wording)', async () => {
+    replyMessage.mockRejectedValueOnce(Object.assign(new Error('Token has been consumed'), { statusCode: 400 }));
+    const { LineClient } = await import('../../src/server/line/line-client');
+    const c = new LineClient({ channelAccessToken: 't', channelSecret: 's' });
+    await c.replyOrPush('rt', 'U1', { type:'text', text:'late' });
+    expect(pushMessage).toHaveBeenCalledWith('U1', { type:'text', text:'late' });
+  });
+
+  it('replyOrPush re-throws non-400 errors instead of falling back', async () => {
+    replyMessage.mockRejectedValueOnce(Object.assign(new Error('Server down'), { statusCode: 500 }));
+    const { LineClient } = await import('../../src/server/line/line-client');
+    const c = new LineClient({ channelAccessToken: 't', channelSecret: 's' });
+    await expect(c.replyOrPush('rt', 'U1', { type:'text', text:'x' })).rejects.toMatchObject({ statusCode: 500 });
+    expect(pushMessage).not.toHaveBeenCalled();
+  });
 });

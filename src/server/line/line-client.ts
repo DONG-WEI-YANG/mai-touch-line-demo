@@ -18,8 +18,8 @@ export class LineClient {
     if (replyToken) {
       try { await this.reply(replyToken, msg); return; }
       catch (err: any) {
-        const expired = err?.statusCode === 400 && /reply token/i.test(err?.message ?? '');
-        if (!expired) throw err;
+        if (err?.statusCode !== 400) throw err;
+        // 400 on reply = invalid/expired token — fall through to push
       }
     }
     await this.push(userId, msg);
