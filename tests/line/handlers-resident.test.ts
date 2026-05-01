@@ -106,4 +106,33 @@ describe('resident handler — facility.book happy path', () => {
     // session should be cleared (small_talk is terminal)
     expect(store.get('U1')?.step).toBe('IDLE');
   });
+
+  it('on bookFn error, rolls back to CONFIRMING and replies busy', async () => {
+    const ai = mkAi({ intent: 'facility.book', confidence: 0.95,
+      slots: { facility: 'gym', date: '2026-05-09', time: '19:00' }, language: 'zh-TW' });
+    const client = mkClient();
+    const bookFn = vi.fn().mockRejectedValueOnce(new Error('amenity API down'));
+    const pushHousekeepers = vi.fn();
+
+    // Round 1: get to CONFIRMING
+    await handleResident(baseEv('預約週六晚上7點健身房'), {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn, pushHousekeepers,
+    });
+    expect(store.get('U1')?.step).toBe('CONFIRMING');
+
+    // Round 2: confirm postback — bookFn throws
+    await handleResident({ type: 'postback', replyToken: 'rt2', source: { userId: 'U1' },
+      postback: { data: 'act=confirm&intent=facility.book' } } as any, {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn, pushHousekeepers,
+    });
+
+    expect(bookFn).toHaveBeenCalled();
+    expect(pushHousekeepers).not.toHaveBeenCalled();
+    // Must roll back to CONFIRMING — not stuck in EXECUTING
+    expect(store.get('U1')?.step).toBe('CONFIRMING');
+  });
 });

@@ -59,15 +59,22 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     if (params.act === 'confirm' && session.step === 'CONFIRMING' && session.intent === 'facility.book') {
       session = { ...session, step: 'EXECUTING' };
       deps.store.set(userId, session);
-      const order = await deps.bookFn(session.slots as any);
-      await deps.client.replyOrPush(ev.replyToken, userId, bookingDone({ orderId: order.id }, lang));
-      await deps.pushHousekeepers({
-        orderId: order.id, from: userId, intent: session.intent,
-        summary: JSON.stringify(session.slots),
-      });
-      deps.store.clear(userId);
-      // Set a minimal IDLE record so store.get(userId)?.step === 'IDLE'
-      deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+      try {
+        const order = await deps.bookFn(session.slots as any);
+        await deps.client.replyOrPush(ev.replyToken, userId, bookingDone({ orderId: order.id }, lang));
+        await deps.pushHousekeepers({
+          orderId: order.id, from: userId, intent: session.intent,
+          summary: JSON.stringify(session.slots),
+        });
+        deps.store.clear(userId);
+        // Set a minimal IDLE record so store.get(userId)?.step === 'IDLE'
+        deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+      } catch (err) {
+        console.error('[LINE] bookFn failed', { userId, err });
+        // Roll back to CONFIRMING so the user can re-tap "Confirm" without re-entering slots
+        deps.store.set(userId, { ...session, step: 'CONFIRMING' });
+        await deps.client.replyOrPush(ev.replyToken, userId, { type: 'text', text: t('msg.busy', lang) });
+      }
       return;
     }
   }
@@ -91,6 +98,8 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
       return;
     }
     if (r.intent === 'unknown' || r.confidence < 0.6) {
+      // Intentionally clear: ambiguous input is treated as conversational reset.
+      // Partial slots from this turn are discarded so the next turn can start fresh.
       deps.store.clear(userId);
       await deps.client.replyOrPush(ev.replyToken, userId,
         { type: 'text', text: t('msg.unknown', lang) });
