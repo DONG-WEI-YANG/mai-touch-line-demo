@@ -17,7 +17,7 @@ services:
       - key: DB_TYPE
         value: sqlite
       - key: SQLITE_FILENAME
-        value: /var/data/mai-touch-demo.db
+        value: ./data/mai-touch-demo.db
       - key: LINE_CHANNEL_SECRET
         sync: false
       - key: LINE_CHANNEL_ACCESS_TOKEN
@@ -40,8 +40,11 @@ services:
         value: "200"
       - key: DEMO_BANNER
         value: "true"
-    disk:
-      name: demo-data
-      mountPath: /var/data
-      sizeGB: 1
+    # NOTE: Render Free tier does not support persistent disks.
+    # SQLite lives on ephemeral storage — survives idle/wake restarts but is
+    # wiped on every new deploy. buildCommand runs `db:init:demo` to recreate
+    # the DB + seed users on each deploy (idempotent INSERT OR IGNORE).
+    # To preserve booking history across deploys, upgrade to Starter ($7/mo)
+    # and re-add the disk: block with mountPath /var/data plus update
+    # SQLITE_FILENAME back to /var/data/mai-touch-demo.db.
     healthCheckPath: /health
