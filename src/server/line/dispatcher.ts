@@ -48,7 +48,15 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       lineUser = deps.lineUserRepo.byLineId(deps.channelId, userId)!;
     }
 
-    // ── 3. Rate limit (after lineUser so we can reply with lang-aware text) ────
+    // ── 3. Log inbound message (before rate-limit so abuse traffic is always auditable) ──
+    deps.messageLog.write({
+      lineUserId: userId,
+      direction: 'inbound',
+      messageType: ev.type,
+      content: ev,
+    });
+
+    // ── 4. Rate limit (after lineUser so we can reply with lang-aware text) ────
     if (!deps.rateLimiter.check(userId)) {
       const lang = (lineUser.language ?? 'zh-TW') as Lang;
       const msg = lang === 'en' ? 'You are sending messages too fast. Please wait a moment.'
@@ -61,14 +69,6 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       }
       continue;
     }
-
-    // ── 4. Log inbound message ─────────────────────────────────────────────────
-    deps.messageLog.write({
-      lineUserId: userId,
-      direction: 'inbound',
-      messageType: ev.type,
-      content: ev,
-    });
 
     try {
       // ── 5. Command intercept (BEFORE demo — so /demo stop works mid-demo) ────

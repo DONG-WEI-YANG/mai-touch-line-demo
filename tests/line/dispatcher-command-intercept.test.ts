@@ -91,8 +91,23 @@ describe('dispatcher command intercept', () => {
       'rt', 'U1',
       expect.objectContaining({ type: 'text', text: expect.stringMatching(/fast|速|速すぎ/i) }),
     );
-    // No further processing
-    expect(deps.messageLog.write).not.toHaveBeenCalled();
+    // messageLog.write IS called (audit guarantee) but AI/role handler is not
+    expect(deps.messageLog.write).toHaveBeenCalled();
+    expect(deps.ai.classify).not.toHaveBeenCalled();
+  });
+
+  it('logs inbound message even when rate-limited', async () => {
+    // Arrange: rateLimiter blocks the message
+    const rateLimiter = { check: vi.fn().mockReturnValue(false) };
+    const deps = mkDeps({ rateLimiter });
+    await dispatch([mkTextEv('spam')], deps);
+    // messageLog.write is called before the rate-limit continue (audit guarantee)
+    expect(deps.messageLog.write).toHaveBeenCalledWith(
+      expect.objectContaining({ lineUserId: 'U1', direction: 'inbound' }),
+    );
+    // Rate limiter was checked
+    expect(rateLimiter.check).toHaveBeenCalledWith('U1');
+    // But AI/role processing was skipped
     expect(deps.ai.classify).not.toHaveBeenCalled();
   });
 
