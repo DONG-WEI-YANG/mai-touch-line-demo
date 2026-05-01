@@ -36,7 +36,14 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
-  await db.seedSystemIfEmpty();
+  // seedSystemIfEmpty uses now() SQL function which is MySQL-specific and crashes on
+  // SQLite. In demo profile we already seeded via `npm run db:init:demo` at build time,
+  // so it's safe to skip. In prod we still call it but tolerate failure (don't block boot).
+  try {
+    await db.seedSystemIfEmpty();
+  } catch (err) {
+    console.warn('[Server] seedSystemIfEmpty failed (continuing — may be SQLite vs MySQL syntax):', (err as Error).message);
+  }
   startAuditCleanupScheduler();
 
   // ──── LINE dispatcher setup (only when LINE env vars present) ────────────────
