@@ -13,6 +13,7 @@ import { iotRouter } from "./iot";
 import { financeRouter } from "./finance";
 import { accessRouter } from "./access";
 import { adminDashboardRouter } from "./adminRouter";
+import { lineAdminRouter } from "./lineAdminRouter";
 
 export const appRouter = router({
   system: router({
@@ -86,6 +87,7 @@ export const appRouter = router({
   finance: financeRouter,
   access: accessRouter,
   admin: adminDashboardRouter,
+  lineAdmin: lineAdminRouter,
 });
 
 export type AppRouter = typeof appRouter;
