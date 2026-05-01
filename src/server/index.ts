@@ -9,6 +9,7 @@ import { LineClient } from './line/line-client';
 import { sessionStore } from './line/session-store';
 import { makeLineUserRepo } from './line/line-user-repo';
 import { makeMessageLog } from './line/message-log';
+import { makePushHousekeepers } from './line/push-housekeepers';
 import { getAi } from './_core/profile';
 import { dbManager } from './database/adapter';
 
@@ -39,28 +40,92 @@ async function startServer() {
     try {
       // dbManager.connect() was already called transitively via seedSystemIfEmpty/getDb.
       // getRawSqlite() is only valid for SQLite adapters; for MySQL/Postgres the LINE
-      // repos would need a different approach (Phase 5 concern).
+      // repos would need a different approach (Phase 7 concern).
       const rawSqlite = dbManager.getRawSqlite();
+      const lineUserRepo = makeLineUserRepo(rawSqlite);
+      const lineClient = new LineClient({
+        channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '',
+        channelSecret: process.env.LINE_CHANNEL_SECRET ?? '',
+      });
+      const channelId = process.env.LINE_CHANNEL_ID ?? 'default';
+
+      // Build facility-name → amenityId map at boot (run AFTER seedSystemIfEmpty)
+      const amenities = await db.getAllAmenities();
+      const facilityToAmenityId = new Map<string, number>();
+      for (const a of amenities) {
+        const n = (a.name ?? '').toLowerCase();
+        for (const k of ['gym', 'pool', 'meeting_room', 'meeting', 'lounge', 'bbq', 'sauna']) {
+          if (n.includes(k)) facilityToAmenityId.set(k, a.id);
+        }
+      }
+      // 'meeting_room' token: also match plain 'meeting' key so both map correctly
+      if (facilityToAmenityId.has('meeting') && !facilityToAmenityId.has('meeting_room')) {
+        facilityToAmenityId.set('meeting_room', facilityToAmenityId.get('meeting')!);
+      }
+      console.log('[LINE] facility map:', Object.fromEntries(facilityToAmenityId));
+
+      const SEED_USER_ID = 1;
+
+      // Real bookFn — calls db.createBooking directly (skip tRPC ctx auth for demo)
+      const bookFn = async (input: { facility: string; date: string; time: string }): Promise<{ id: string }> => {
+        const amenityId = facilityToAmenityId.get(input.facility);
+        if (!amenityId) {
+          console.warn('[LINE] no amenity mapped for facility', input.facility, '— using fallback id=1');
+        }
+        // Derive endTime = startTime + 1 hour
+        const [h, m] = input.time.split(':').map(Number);
+        const endH = (h + 1) % 24;
+        const endTime = `${String(endH).padStart(2, '0')}:${String(m ?? 0).padStart(2, '0')}`;
+        const bookingId = await db.createBooking({
+          userId: SEED_USER_ID,
+          amenityId: amenityId ?? 1,
+          date: input.date,
+          startTime: input.time,
+          endTime,
+          guestCount: 1,
+          notes: `[LINE demo] facility=${input.facility}`,
+        });
+        return { id: `BK-${bookingId}` };
+      };
+
+      // Real pushHousekeepers — fan-out to all housekeepers in the channel
+      const pushHousekeepers = makePushHousekeepers({ lineUserRepo, client: lineClient, channelId });
+
+      // updateOrder: maps BK-<id> → bookings table status update
+      // LINE statuses map to booking status enum: confirmed|pending|cancelled|completed
+      const updateOrder = async (orderId: string, patch: {
+        status: 'open'|'in_progress'|'resolved'|'closed';
+        acceptedBy?: string;
+        rejectedBy?: string;
+      }): Promise<void> => {
+        if (!orderId.startsWith('BK-')) {
+          console.warn('[LINE] unknown orderId format', orderId);
+          return;
+        }
+        const numId = Number(orderId.slice(3));
+        if (!Number.isFinite(numId)) return;
+        // Map LINE work-order statuses to bookings.status enum
+        const dbStatusMap: Record<string, 'confirmed'|'pending'|'cancelled'|'completed'> = {
+          in_progress: 'confirmed',  // housekeeper accepted → booking confirmed
+          closed:      'cancelled',  // housekeeper rejected → booking cancelled
+          open:        'pending',    // re-queued → pending
+          resolved:    'completed',  // completed
+        };
+        const dbStatus = dbStatusMap[patch.status] ?? 'confirmed';
+        await db.updateBookingStatus(numId, dbStatus);
+        console.log('[LINE] booking status updated', { id: numId, lineStatus: patch.status, dbStatus, by: patch.acceptedBy ?? patch.rejectedBy });
+      };
+
       setDispatchDeps({
-        lineClient: new LineClient({
-          channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '',
-          channelSecret: process.env.LINE_CHANNEL_SECRET ?? '',
-        }),
+        lineClient,
         ai: getAi(),
         store: sessionStore,
-        lineUserRepo: makeLineUserRepo(rawSqlite),
+        lineUserRepo,
         messageLog: makeMessageLog(rawSqlite),
-        channelId: process.env.LINE_CHANNEL_ID ?? 'default',
-        bookFn: async (input) => {
-          // TODO Phase 5+: replace with real booking via appRouter.createCaller(ctx).amenities.book(input)
-          const id = 'WO-' + Date.now().toString(36).toUpperCase();
-          console.warn('[LINE] STUB bookFn called', { input, id });
-          return { id };
-        },
-        pushHousekeepers: async (payload) => {
-          // TODO Phase 5: implement real push to all housekeepers via lineUserRepo.listByRole + lineClient.push
-          console.warn('[LINE] STUB pushHousekeepers', payload);
-        },
+        channelId,
+        bookFn,
+        pushHousekeepers,
+        updateOrder,
       });
       console.log('[LINE] dispatcher configured');
     } catch (err) {

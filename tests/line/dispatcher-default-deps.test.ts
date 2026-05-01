@@ -11,6 +11,7 @@ const mkDeps = () => ({
   channelId: 'C1',
   bookFn: vi.fn(),
   pushHousekeepers: vi.fn(),
+  updateOrder: vi.fn(),
 });
 
 describe('setDispatchDeps / getDispatchDeps / resetDispatchDeps', () => {

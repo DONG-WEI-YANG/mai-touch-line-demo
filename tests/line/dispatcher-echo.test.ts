@@ -34,6 +34,7 @@ const mkDeps = (overrides: Partial<Parameters<typeof dispatch>[1]> = {}) => {
     channelId: 'C',
     bookFn: vi.fn().mockResolvedValue({ id: 'WO-1' }),
     pushHousekeepers: vi.fn().mockResolvedValue(undefined),
+    updateOrder: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 };

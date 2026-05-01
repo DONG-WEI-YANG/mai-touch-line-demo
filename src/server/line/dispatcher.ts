@@ -4,6 +4,7 @@ import type { makeLineUserRepo } from './line-user-repo';
 import type { makeMessageLog } from './message-log';
 import type { SessionStore } from './session-store';
 import { handleResident } from './handlers/resident';
+import { handleHousekeeper } from './handlers/housekeeper';
 
 export type DispatchDeps = {
   lineClient: LineClient;
@@ -14,6 +15,11 @@ export type DispatchDeps = {
   channelId: string;
   bookFn: (input: { facility: string; date: string; time: string }) => Promise<{ id: string }>;
   pushHousekeepers: (payload: { orderId: string; from: string; intent: string; summary: string }) => Promise<void>;
+  updateOrder: (orderId: string, patch: {
+    status: 'open'|'in_progress'|'resolved'|'closed';
+    acceptedBy?: string;
+    rejectedBy?: string;
+  }) => Promise<void>;
 };
 
 export async function dispatch(events: any[], deps: DispatchDeps): Promise<void> {
@@ -52,7 +58,18 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
           pushHousekeepers: deps.pushHousekeepers,
         });
       }
-      // housekeeper / admin handlers added in Phase 5 / 7
+      if (lineUser.role === 'housekeeper') {
+        await handleHousekeeper(ev, {
+          client: deps.lineClient,
+          updateOrder: deps.updateOrder,
+          lineUser: {
+            lineUserId: userId,
+            role: lineUser.role,
+            language: (lineUser.language ?? 'zh-TW') as any,
+          },
+        });
+      }
+      // admin handler added in Phase 7
     } catch (err) {
       console.error('[LINE] dispatch handler error', { userId, role: lineUser.role, err });
       // Best-effort error reply — handler may have already consumed reply token, replyOrPush falls back to push
