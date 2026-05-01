@@ -14,6 +14,7 @@ import { getAi } from './_core/profile';
 import { dbManager } from './database/adapter';
 import { makeRateLimiter } from './line/rate-limit';
 import { makeEventDedupe } from './line/event-dedupe';
+import { makeRuntimeConfig } from './line/runtime-config';
 import { handleCommand } from './line/handlers/command';
 import { startDemo, stopDemo } from './line/handlers/demo';
 import { listScripts } from './line/demo-scripts';
@@ -47,23 +48,32 @@ async function startServer() {
       // getRawSqlite() is only valid for SQLite adapters; for MySQL/Postgres the LINE
       // repos would need a different approach (Phase 7 concern).
       const rawSqlite = dbManager.getRawSqlite();
+
+      // ── Runtime config — must load BEFORE any dep that reads from it ──────
+      const runtimeConfig = makeRuntimeConfig(rawSqlite);
+      await runtimeConfig.load();
+
       const lineUserRepo = makeLineUserRepo(rawSqlite);
       const lineClient = new LineClient({
         channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '',
         channelSecret: process.env.LINE_CHANNEL_SECRET ?? '',
-        demoBanner: process.env.DEPLOY_PROFILE === 'demo' && process.env.DEMO_BANNER !== 'false',
+        // Evaluated per message-send so dashboard changes take effect without restart
+        demoBanner: () =>
+          process.env.DEPLOY_PROFILE === 'demo' &&
+          runtimeConfig.get<boolean>('demo.bannerEnabled', process.env.DEMO_BANNER !== 'false'),
       });
 
       // ── Rate limiter & event dedupe (boot-time singletons) ────────────────
+      // getLimits() is called per-check so dashboard changes take effect without restart
       const rateLimiter = makeRateLimiter({
-        perMinute: Number(process.env.LINE_RATE_LIMIT_PER_MIN ?? '10'),
-        perDay: Number(process.env.LINE_RATE_LIMIT_PER_DAY ?? '200'),
+        getLimits: () => ({
+          perMinute: runtimeConfig.get<number>('line.rateLimit.perMinute',
+            Number(process.env.LINE_RATE_LIMIT_PER_MIN ?? '10')),
+          perDay: runtimeConfig.get<number>('line.rateLimit.perDay',
+            Number(process.env.LINE_RATE_LIMIT_PER_DAY ?? '200')),
+        }),
       });
       const eventDedupe = makeEventDedupe(1000);
-
-      // ── Admin whitelist ───────────────────────────────────────────────────
-      const adminWhitelist = (process.env.DEMO_ADMIN_LINE_USERS ?? '')
-        .split(',').map(s => s.trim()).filter(Boolean);
       const channelId = process.env.LINE_CHANNEL_ID ?? 'default';
 
       // Build facility-name → amenityId map at boot (run AFTER seedSystemIfEmpty)
@@ -195,6 +205,12 @@ async function startServer() {
         ev: any,
         lineUser: { lineUserId: string; role: 'resident' | 'housekeeper' | 'admin'; language: import('./line/ai/types').Lang },
       ): Promise<boolean> => {
+        // Read per-event so dashboard changes to demo.adminLineUserIds apply without restart.
+        // Env var is the fallback if DB has no entries.
+        const adminWhitelist = runtimeConfig.get<string[]>(
+          'demo.adminLineUserIds',
+          (process.env.DEMO_ADMIN_LINE_USERS ?? '').split(',').map(s => s.trim()).filter(Boolean),
+        );
         return handleCommand(text, ev, {
           client: lineClient,
           lineUserRepo,

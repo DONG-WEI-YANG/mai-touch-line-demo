@@ -98,4 +98,26 @@ describe('LineClient', () => {
     const calledMsg = replyMessage.mock.calls[0][1];
     expect(calledMsg.text).toBe('hello');
   });
+
+  it('accepts demoBanner as a function evaluated per call', async () => {
+    const { LineClient } = await import('../../src/server/line/line-client');
+    let on = false;
+    const c = new LineClient({ channelAccessToken:'t', channelSecret:'s', demoBanner: () => on });
+    await c.reply('rt', { type:'text', text:'hi' });
+    expect(replyMessage.mock.calls[0][1].text).toBe('hi');  // banner off
+    on = true;
+    await c.reply('rt', { type:'text', text:'bye' });
+    expect(replyMessage.mock.calls[1][1].text).toContain('[DEMO]');  // now on
+  });
+
+  it('function form banner toggles on push too', async () => {
+    const { LineClient } = await import('../../src/server/line/line-client');
+    let on = true;
+    const c = new LineClient({ channelAccessToken:'t', channelSecret:'s', demoBanner: () => on });
+    await c.push('U1', { type:'text', text:'msg' });
+    expect(pushMessage.mock.calls[0][1].text).toContain('[DEMO]');
+    on = false;
+    await c.push('U1', { type:'text', text:'msg2' });
+    expect(pushMessage.mock.calls[1][1].text).toBe('msg2');
+  });
 });

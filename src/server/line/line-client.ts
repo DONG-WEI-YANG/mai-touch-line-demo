@@ -1,6 +1,10 @@
 import { Client } from '@line/bot-sdk';
 
-export type LineClientOpts = { channelAccessToken: string; channelSecret: string; demoBanner?: boolean };
+export type LineClientOpts = {
+  channelAccessToken: string;
+  channelSecret: string;
+  demoBanner?: boolean | (() => boolean);
+};
 
 const BANNER = '🧪 [DEMO] ';
 
@@ -18,17 +22,23 @@ function applyBanner(msg: any, on?: boolean): any {
 
 export class LineClient {
   private sdk: Client;
-  private demoBanner: boolean;
+  private demoBannerOpt: boolean | (() => boolean);
+
   constructor(opts: LineClientOpts) {
     this.sdk = new Client(opts);
-    this.demoBanner = opts.demoBanner ?? false;
+    this.demoBannerOpt = opts.demoBanner ?? false;
+  }
+
+  private isBannerOn(): boolean {
+    if (typeof this.demoBannerOpt === 'function') return this.demoBannerOpt();
+    return this.demoBannerOpt;
   }
 
   async reply(token: string, msg: any | any[]): Promise<void> {
-    await this.sdk.replyMessage(token, applyBanner(msg, this.demoBanner));
+    await this.sdk.replyMessage(token, applyBanner(msg, this.isBannerOn()));
   }
   async push(userId: string, msg: any | any[]): Promise<void> {
-    await this.sdk.pushMessage(userId, applyBanner(msg, this.demoBanner));
+    await this.sdk.pushMessage(userId, applyBanner(msg, this.isBannerOn()));
   }
   async replyOrPush(replyToken: string | undefined, userId: string, msg: any | any[]): Promise<void> {
     if (replyToken) {
