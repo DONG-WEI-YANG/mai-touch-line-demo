@@ -47,6 +47,13 @@ async function main() {
     VALUES (2, 'demo-admin-001', 'Demo Admin', 'admin@demo.local', 'demo', 'admin', 'Platinum')
   `).run();
 
+  // id=3 logistics@demo.local role='logistics' (for Vercel web logistics-dashboard demo)
+  // Required for token-auth synthetic logistics user (WEB_LOGISTICS_TOKEN → users.id=3).
+  sqliteDb.prepare(`
+    INSERT OR IGNORE INTO users (id, openId, name, email, loginMethod, role, tier)
+    VALUES (3, 'demo-logistics-001', 'Demo Logistics', 'logistics@demo.local', 'demo', 'logistics', 'Platinum')
+  `).run();
+
   // Seed amenities (id=1..6) so bookings.amenityId FK constraint passes for the
   // 6 facility types our LINE bot recognizes (gym/pool/meeting_room/lounge/bbq/sauna).
   // Without this, bookFn throws SqliteError: FOREIGN KEY constraint failed at the
@@ -70,7 +77,7 @@ async function main() {
 
   sqliteDb.close();
 
-  console.log('[demo-init] seeded 2 base users + 6 amenities (idempotent)');
+  console.log('[demo-init] seeded 3 base users + 6 amenities (idempotent)');
   console.log('[demo-init] done');
   process.exit(0);
 }
