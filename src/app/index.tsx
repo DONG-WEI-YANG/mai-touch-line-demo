@@ -88,6 +88,11 @@ export default function HomeScreen() {
     return <AdminDashboardScreen />;
   }
 
+  if (user?.role === "logistics") {
+    // Defer to dedicated route; root layout will catch redirect to /logistics-dashboard.
+    return <ScreenContainer edges={["top"]}><View style={styles.center}><Text style={{ color: "#999" }}>Redirecting to logistics dashboard…</Text></View></ScreenContainer>;
+  }
+
   return (
     <ScreenContainer style={styles.container} edges={["top"]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}>
