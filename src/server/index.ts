@@ -214,11 +214,12 @@ async function startServer() {
         lineUser: { lineUserId: string; role: 'resident' | 'housekeeper' | 'admin'; language: import('./line/ai/types').Lang },
       ): Promise<boolean> => {
         // Read per-event so dashboard changes to demo.adminLineUserIds apply without restart.
-        // Env var is the fallback if DB has no entries.
-        const adminWhitelist = runtimeConfig.get<string[]>(
-          'demo.adminLineUserIds',
-          (process.env.DEMO_ADMIN_LINE_USERS ?? '').split(',').map(s => s.trim()).filter(Boolean),
-        );
+        // MERGE env + DB so env can bootstrap admins even when DB seed is empty array []
+        // (which is truthy and would otherwise block the env fallback in `v ?? fallback`).
+        const dbList = runtimeConfig.get<string[]>('demo.adminLineUserIds', []);
+        const envList = (process.env.DEMO_ADMIN_LINE_USERS ?? '')
+          .split(',').map(s => s.trim()).filter(Boolean);
+        const adminWhitelist = Array.from(new Set([...dbList, ...envList]));
         return handleCommand(text, ev, {
           client: lineClient,
           lineUserRepo,
