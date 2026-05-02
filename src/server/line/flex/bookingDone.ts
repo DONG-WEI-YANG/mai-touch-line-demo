@@ -8,7 +8,7 @@ export function bookingDone(input: { orderId: string }, lang: Lang) {
     contents: {
       type: 'bubble',
       header: { type:'box', layout:'vertical', backgroundColor:'#0a5d0a', paddingAll:'12px',
-        contents: [{ type:'text', text:`✅ ${t('booking.done.title', lang)}`, color:'#fff', weight:'bold' }] },
+        contents: [{ type:'text', text:`✅ ${t('booking.done.title', lang)}`, color:'#FFFFFF', weight:'bold' }] },
       body: { type:'box', layout:'vertical', spacing:'sm', contents: [
         { type:'text', text:`${t('booking.done.orderNo', lang)}: ${input.orderId}`, weight:'bold' },
       ] },
