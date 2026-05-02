@@ -13,6 +13,7 @@ import { smartCacheMiddleware } from './middleware/cache';
 import { getProfile } from './_core/profile';
 import { mountWebhook } from './line/webhook';
 import { dispatch, getDispatchDeps } from './line/dispatcher';
+import { mountAdminDashboard } from './line/admin-dashboard';
 
 export function createApp(): express.Express {
   const app = express();
@@ -157,6 +158,9 @@ export function createApp(): express.Express {
   });
 
   registerOAuthRoutes(app);
+  // Mount LINE admin dashboard BEFORE the existing adminRouter so /admin/line/*
+  // routes match here first, while other /admin/* paths fall through to adminRouter
+  mountAdminDashboard(app);
   app.use('/admin', adminRouter);
   app.use('/api/trpc', createExpressMiddleware({ router: appRouter, createContext }));
 
