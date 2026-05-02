@@ -22,6 +22,9 @@ export type ResidentDeps = {
   channelId: string;
   lineUser: { lineUserId: string; role: 'resident' | 'housekeeper' | 'admin'; language: Lang };
   bookFn: (input: { facility: string; date: string; time: string }) => Promise<{ id: string }>;
+  // Generic work-order creator for non-facility intents (repair/visitor/complaint).
+  // Returns the new order id for echo-back to the user.
+  reportFn: (input: { intent: IntentName; slots: Record<string, unknown> }) => Promise<{ id: string }>;
   pushHousekeepers: (payload: { orderId: string; from: string; intent: string; summary: string }) => Promise<void>;
 };
 
@@ -126,6 +129,40 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     deps.store.set(userId, session);
     await deps.client.replyOrPush(ev.replyToken, userId,
       bookingConfirm(session.slots as any, lang));
+    return;
+  }
+
+  // For non-facility intents (repair/visitor/complaint), all slots already gathered
+  // upfront in the user's free-text message — no separate confirm step needed.
+  // Immediately execute and acknowledge.
+  if (missing.length === 0 && session.intent && session.intent !== 'facility.book') {
+    session = { ...session, step: 'EXECUTING' };
+    deps.store.set(userId, session);
+    try {
+      const order = await deps.reportFn({ intent: session.intent, slots: session.slots });
+      const labels: Partial<Record<IntentName, string>> = {
+        'repair.report':  '報修',
+        'visitor.notify': '訪客通知',
+        'complaint.file': '投訴',
+      };
+      const label = labels[session.intent] ?? '工單';
+      await deps.client.replyOrPush(ev.replyToken, userId,
+        { type: 'text', text: `✅ ${label}已送出,單號 ${order.id}` });
+      await deps.pushHousekeepers({
+        orderId: order.id, from: userId, intent: session.intent,
+        summary: JSON.stringify(session.slots),
+      });
+      deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+    } catch (err: any) {
+      const lineDetail = err?.originalError?.response?.data ?? err?.response?.data;
+      console.error('[LINE] reportFn failed', {
+        userId, intent: session.intent, slots: session.slots,
+        errMsg: err?.message, lineStatus: err?.statusCode ?? err?.status,
+        lineDetail: lineDetail ? JSON.stringify(lineDetail) : undefined,
+      });
+      deps.store.clear(userId);
+      await deps.client.replyOrPush(ev.replyToken, userId, { type: 'text', text: t('msg.busy', lang) });
+    }
     return;
   }
 

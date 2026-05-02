@@ -10,6 +10,9 @@ export type DemoDeps = {
   client: LineClient;
   lineUser: { lineUserId: string; language: Lang };
   runSideEffect: (call: { router: string; procedure: string; input: unknown }) => Promise<void>;
+  // Optional callback to honor the demo_script_config.enabled flag set in dashboard
+  // (Phase 9 admin dashboard). If absent, all scripts are considered enabled.
+  isScriptEnabled?: (id: string) => boolean;
 };
 
 export async function startDemo(scriptId: string, deps: DemoDeps): Promise<void> {
@@ -17,6 +20,11 @@ export async function startDemo(scriptId: string, deps: DemoDeps): Promise<void>
   if (!script) {
     await deps.client.push(deps.lineUser.lineUserId,
       { type: 'text', text: `unknown script: ${scriptId}` });
+    return;
+  }
+  if (deps.isScriptEnabled && !deps.isScriptEnabled(scriptId)) {
+    await deps.client.push(deps.lineUser.lineUserId,
+      { type: 'text', text: `script "${scriptId}" is currently disabled by admin` });
     return;
   }
   const userId = deps.lineUser.lineUserId;

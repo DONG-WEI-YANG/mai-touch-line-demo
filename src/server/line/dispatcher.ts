@@ -7,6 +7,7 @@ import { handleResident } from './handlers/resident';
 import { handleHousekeeper } from './handlers/housekeeper';
 import { continueDemo } from './handlers/demo';
 import { isCommand } from './handlers/command';
+import { welcome } from './flex/welcome';
 
 export type DispatchDeps = {
   lineClient: LineClient;
@@ -16,6 +17,7 @@ export type DispatchDeps = {
   messageLog: ReturnType<typeof makeMessageLog>;
   channelId: string;
   bookFn: (input: { facility: string; date: string; time: string }) => Promise<{ id: string }>;
+  reportFn: (input: { intent: import('./ai/types').IntentName; slots: Record<string, unknown> }) => Promise<{ id: string }>;
   pushHousekeepers: (payload: { orderId: string; from: string; intent: string; summary: string }) => Promise<void>;
   updateOrder: (orderId: string, patch: {
     status: 'open'|'in_progress'|'resolved'|'closed';
@@ -71,6 +73,17 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
     }
 
     try {
+      // ── 4.5 Follow event → send welcome (only fires when user adds bot as friend) ──
+      if (ev.type === 'follow') {
+        const lang = (lineUser.language ?? 'zh-TW') as Lang;
+        try {
+          await deps.lineClient.replyOrPush(ev.replyToken, userId, welcome(lang));
+        } catch (err) {
+          console.error('[LINE] failed to send welcome on follow', { userId, err });
+        }
+        continue;
+      }
+
       // ── 5. Command intercept (BEFORE demo — so /demo stop works mid-demo) ────
       // Phase 6 Concern A: commands must be checked before demo intercept.
       if (ev.type === 'message' && ev.message?.type === 'text' && isCommand(ev.message.text)) {
@@ -108,6 +121,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
             language: (lineUser.language ?? 'zh-TW') as any,
           },
           bookFn: deps.bookFn,
+          reportFn: deps.reportFn,
           pushHousekeepers: deps.pushHousekeepers,
         });
       }

@@ -159,6 +159,28 @@ async function startServer() {
         console.log('[LINE] booking status updated', { id: numId, lineStatus: patch.status, dbStatus, by: patch.acceptedBy ?? patch.rejectedBy });
       };
 
+      // Generic work-order writer for non-facility intents (repair/visitor/complaint).
+      // Returns the new order id for echo-back to the user.
+      const reportFn = async (input: { intent: string; slots: Record<string, unknown> }): Promise<{ id: string }> => {
+        const s: any = input.slots ?? {};
+        const urgency = String(s.urgency ?? 'med');
+        const priority: 'low' | 'medium' | 'high' | 'urgent' =
+          urgency === 'high' ? 'high' : urgency === 'med' ? 'medium' : 'low';
+        const intentShort = input.intent.split('.')[0];
+        const summaryParts = [
+          s.issue, s.location, s.visitor_name && `visitor=${s.visitor_name}`,
+          s.visitor_count && `count=${s.visitor_count}`, s.date, s.time,
+        ].filter(Boolean);
+        const orderId = await db.createWorkOrder({
+          userId: SEED_USER_ID,
+          title: `[${intentShort}] ${summaryParts[0] ?? 'demo'}`,
+          description: JSON.stringify(s),
+          priority,
+        });
+        const prefix = intentShort === 'repair' ? 'WO' : intentShort === 'visitor' ? 'V' : 'C';
+        return { id: `${prefix}-${orderId}` };
+      };
+
       // Demo side-effect dispatcher — resolves (router, procedure) → direct db call
       // Avoids tRPC ctx complexity; mirrors the bookFn / updateOrder pattern above.
       const runSideEffect = async (call: { router: string; procedure: string; input: any }): Promise<void> => {
@@ -201,11 +223,20 @@ async function startServer() {
       // demoDepsFactory is called per-event with the current lineUser so startDemo/stopDemo
       // get the correct userId + language without closure-scope leakage across events.
       // Note: this is a lightweight object literal per call (no heap accumulation concern).
+      // Per-script enabled check honoring demo_script_config.enabled (set via dashboard /admin/line/scripts).
+      // Synchronous prepared statement — fast enough for per-/demo-trigger check.
+      const isScriptEnabledStmt = rawSqlite.prepare(`SELECT enabled FROM demo_script_config WHERE id = ?`);
+      const isScriptEnabled = (id: string): boolean => {
+        const row = isScriptEnabledStmt.get(id) as { enabled: number } | undefined;
+        return row ? !!row.enabled : true;  // default to enabled if no config row
+      };
+
       const demoDepsFactory = (lineUser: { lineUserId: string; language: import('./line/ai/types').Lang }) => ({
         store: sessionStore,
         client: lineClient,
         lineUser,
         runSideEffect,
+        isScriptEnabled,
       });
 
       const commandHandler = async (
@@ -243,6 +274,7 @@ async function startServer() {
         messageLog,
         channelId,
         bookFn,
+        reportFn,
         pushHousekeepers,
         updateOrder,
         runSideEffect,
