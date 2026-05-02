@@ -9,6 +9,7 @@ import type { makeRuntimeConfig } from '../line/runtime-config';
 import type { makeLineUserRepo } from '../line/line-user-repo';
 import type { makeMessageLog } from '../line/message-log';
 import type Database from 'better-sqlite3';
+import { userFromToken } from './token-auth';
 
 export type LineAdminContext = {
   db: Database.Database;
@@ -41,6 +42,21 @@ export type TrpcContext = {
  * This is called for every request
  */
 export async function createContext({ req, res }: { req: Request; res: Response }): Promise<TrpcContext> {
+  // Check Authorization: Bearer <token> header first (web/Vercel token auth)
+  const authHeader = String(req.headers['authorization'] ?? '');
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice('Bearer '.length).trim();
+    const synth = userFromToken(token);
+    if (synth) {
+      return {
+        user: synth as any,  // SyntheticUser is structurally compatible with User
+        req,
+        res,
+        lineAdmin: getLineAdminContext() ?? undefined,
+      };
+    }
+  }
+
   // User will be attached by auth middleware if authenticated
   const user = (req as any).user || null;
 
