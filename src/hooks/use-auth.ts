@@ -9,6 +9,9 @@ export type AuthUser = {
   role: 'resident' | 'admin' | 'logistics';
   loginMethod: string;
   lastSignedIn: Date;
+  picture: string | null;
+  unitId: number | null;
+  tier: 'Platinum' | 'Diamond' | 'Black';
 };
 
 export function useAuth() {

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator, Text } from "react-native";
 import { Tabs, Redirect, usePathname, useRouter } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -26,6 +26,12 @@ function Root() {
   const router = useRouter();
   const pathname = usePathname();
 
+  const [bootstrapping, setBootstrapping] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return new URL(window.location.href).searchParams.has('token'); }
+    catch { return false; }
+  });
+
   // Bootstrap: extract ?token from URL into localStorage on first paint
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -41,13 +47,15 @@ function Root() {
           (url.searchParams.toString() ? '?' + url.searchParams.toString() : '') +
           url.hash
       );
-      void refetch();
+      void refetch().finally(() => setBootstrapping(false));
+    } else {
+      setBootstrapping(false);
     }
   }, [refetch]);
 
   // Routing decisions
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || bootstrapping) return;
     const onLogin = pathname === '/login';
     if (!user && !onLogin) {
       router.replace('/login');
@@ -61,7 +69,7 @@ function Root() {
       router.replace(landing as any);
       return;
     }
-  }, [user, isLoading, pathname, router]);
+  }, [user, isLoading, bootstrapping, pathname, router]);
 
   if (isLoading) {
     return (

@@ -6,10 +6,14 @@ import { useAuth } from '../hooks/use-auth';
 
 const COLORS = { bg: '#1a1a1a', card: '#252525', accent: '#C9A96E', text: '#fff', muted: '#888' };
 
-const QUICK_BUTTONS = [
-  { label: 'Admin',     env: 'EXPO_PUBLIC_DEMO_ADMIN_TOKEN' },
-  { label: 'Logistics', env: 'EXPO_PUBLIC_DEMO_LOGISTICS_TOKEN' },
-  { label: 'Resident',  env: 'EXPO_PUBLIC_DEMO_RESIDENT_TOKEN' },
+const DEMO_ADMIN_TOKEN     = process.env.EXPO_PUBLIC_DEMO_ADMIN_TOKEN;
+const DEMO_LOGISTICS_TOKEN = process.env.EXPO_PUBLIC_DEMO_LOGISTICS_TOKEN;
+const DEMO_RESIDENT_TOKEN  = process.env.EXPO_PUBLIC_DEMO_RESIDENT_TOKEN;
+
+const QUICK_BUTTONS: Array<{ label: string; token: string | undefined }> = [
+  { label: 'Admin',     token: DEMO_ADMIN_TOKEN },
+  { label: 'Logistics', token: DEMO_LOGISTICS_TOKEN },
+  { label: 'Resident',  token: DEMO_RESIDENT_TOKEN },
 ];
 
 export default function LoginScreen() {
@@ -53,20 +57,17 @@ export default function LoginScreen() {
 
       <View style={{ backgroundColor: COLORS.card, padding: 16, borderRadius: 8 }}>
         <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 8 }}>Quick demo logins</Text>
-        {QUICK_BUTTONS.map(b => {
-          const v = (process.env as Record<string, string | undefined>)[b.env];
-          return (
-            <Pressable
-              key={b.env}
-              disabled={!v}
-              onPress={() => v && submit(v)}
-              style={{ marginBottom: 8, padding: 10, borderRadius: 4,
-                       backgroundColor: v ? COLORS.muted : '#444', opacity: v ? 1 : 0.5 }}
-            >
-              <Text style={{ color: '#fff' }}>{b.label}{v ? '' : ' (env not set)'}</Text>
-            </Pressable>
-          );
-        })}
+        {QUICK_BUTTONS.map(b => (
+          <Pressable
+            key={b.label}
+            disabled={!b.token}
+            onPress={() => b.token && submit(b.token)}
+            style={{ marginBottom: 8, padding: 10, borderRadius: 4,
+                     backgroundColor: b.token ? COLORS.muted : '#444', opacity: b.token ? 1 : 0.5 }}
+          >
+            <Text style={{ color: '#fff' }}>{b.label}{b.token ? '' : ' (env not set)'}</Text>
+          </Pressable>
+        ))}
       </View>
     </ScrollView>
   );
