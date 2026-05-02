@@ -47,9 +47,30 @@ async function main() {
     VALUES (2, 'demo-admin-001', 'Demo Admin', 'admin@demo.local', 'demo', 'admin', 'Platinum')
   `).run();
 
+  // Seed amenities (id=1..6) so bookings.amenityId FK constraint passes for the
+  // 6 facility types our LINE bot recognizes (gym/pool/meeting_room/lounge/bbq/sauna).
+  // Without this, bookFn throws SqliteError: FOREIGN KEY constraint failed at the
+  // EXECUTING step of the booking flow.
+  const amenities = [
+    [1, 'gym',          'recreation',    'fitness',  20, 'Floor 12 — gym'],
+    [2, 'pool',         'wellness',      'pool',     30, 'Floor 1 — pool'],
+    [3, 'meeting_room', 'business',      'briefcase', 8, 'Floor 5 — meeting room'],
+    [4, 'lounge',       'recreation',    'sofa',     40, 'Floor 1 — lounge'],
+    [5, 'bbq',          'outdoor',       'flame',    20, 'Rooftop — BBQ area'],
+    [6, 'sauna',        'wellness',      'flame',    10, 'Floor 12 — sauna'],
+  ] as const;
+  const insAmenity = sqliteDb.prepare(`
+    INSERT OR IGNORE INTO amenities
+      (id, name, description, icon, category, capacity, location, openTime, closeTime)
+    VALUES (?, ?, ?, ?, ?, ?, ?, '08:00', '22:00')
+  `);
+  for (const [id, name, category, icon, capacity, location] of amenities) {
+    insAmenity.run(id, name, `${name} amenity (demo)`, icon, category, capacity, location);
+  }
+
   sqliteDb.close();
 
-  console.log('[demo-init] seeded 2 base users (idempotent)');
+  console.log('[demo-init] seeded 2 base users + 6 amenities (idempotent)');
   console.log('[demo-init] done');
   process.exit(0);
 }
