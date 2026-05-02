@@ -39,4 +39,10 @@ describe('userFromToken', () => {
     delete process.env.WEB_ADMIN_TOKEN;
     expect(userFromToken('tok-admin')).toBeNull();
   });
+  it('synthetic user includes default sentinel fields', () => {
+    const u = userFromToken('tok-admin');
+    expect(u?.picture).toBeNull();
+    expect(u?.unitId).toBeNull();
+    expect(u?.tier).toBe('Platinum');
+  });
 });

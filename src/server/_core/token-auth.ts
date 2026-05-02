@@ -8,6 +8,9 @@ export type SyntheticUser = {
   createdAt: Date;
   updatedAt: Date;
   lastSignedIn: Date;
+  picture: string | null;
+  unitId: number | null;
+  tier: 'Platinum' | 'Diamond' | 'Black';
 };
 
 type Mapping = { envName: string; build: () => SyntheticUser };
@@ -22,7 +25,8 @@ function mk(id: number, openId: string, email: string, name: string,
             role: SyntheticUser['role']): SyntheticUser {
   const now = new Date();
   return { id, openId, email, name, role, loginMethod: 'token',
-           createdAt: now, updatedAt: now, lastSignedIn: now };
+           createdAt: now, updatedAt: now, lastSignedIn: now,
+           picture: null, unitId: null, tier: 'Platinum' as const };
 }
 
 export function userFromToken(token: string | null | undefined): SyntheticUser | null {

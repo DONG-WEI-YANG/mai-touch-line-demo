@@ -49,7 +49,7 @@ export async function createContext({ req, res }: { req: Request; res: Response 
     const synth = userFromToken(token);
     if (synth) {
       return {
-        user: synth as any,  // SyntheticUser is structurally compatible with User
+        user: synth as unknown as User,  // SyntheticUser supplies all fields existing procedures access; tier/unitId default to null/Platinum for web token sessions
         req,
         res,
         lineAdmin: getLineAdminContext() ?? undefined,
