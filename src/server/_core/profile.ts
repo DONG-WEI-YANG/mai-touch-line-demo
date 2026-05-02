@@ -33,6 +33,8 @@ export function getAi(): IntentClassifier {
       apiKey:      required('OPENAI_API_KEY'),
       model:       process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
       temperature: Number(process.env.OPENAI_TEMPERATURE ?? '0.1'),
+      // Optional: point at OpenAI-compatible endpoint (e.g. Gemini, Together, etc.)
+      baseURL:     process.env.OPENAI_BASE_URL || undefined,
     });
   } else {
     aiCache = new NlpBridge({

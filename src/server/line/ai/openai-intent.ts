@@ -35,8 +35,11 @@ const Schema = z.object({
 
 export class OpenAIIntent implements IntentClassifier {
   private client: OpenAI;
-  constructor(private opts: { apiKey: string; model: string; temperature?: number }) {
-    this.client = new OpenAI({ apiKey: opts.apiKey });
+  constructor(private opts: { apiKey: string; model: string; temperature?: number; baseURL?: string }) {
+    // baseURL allows pointing at OpenAI-compatible endpoints (e.g. Gemini at
+    // https://generativelanguage.googleapis.com/v1beta/openai/). When unset,
+    // SDK defaults to the official OpenAI endpoint.
+    this.client = new OpenAI({ apiKey: opts.apiKey, baseURL: opts.baseURL });
   }
 
   async classify(text: string, ctx: { userId: string; history?: string[] }): Promise<IntentResult> {
