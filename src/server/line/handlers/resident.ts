@@ -69,8 +69,17 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
         deps.store.clear(userId);
         // Set a minimal IDLE record so store.get(userId)?.step === 'IDLE'
         deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
-      } catch (err) {
-        console.error('[LINE] bookFn failed', { userId, err });
+      } catch (err: any) {
+        // Extract LINE / axios response detail (otherwise Node truncates response: [Object])
+        const lineDetail = err?.originalError?.response?.data ?? err?.response?.data;
+        console.error('[LINE] bookFn failed', {
+          userId,
+          slots: session.slots,
+          errMsg: err?.message,
+          lineStatus: err?.statusCode ?? err?.status,
+          lineDetail: lineDetail ? JSON.stringify(lineDetail) : undefined,
+          err,
+        });
         // Roll back to CONFIRMING so the user can re-tap "Confirm" without re-entering slots
         deps.store.set(userId, { ...session, step: 'CONFIRMING' });
         await deps.client.replyOrPush(ev.replyToken, userId, { type: 'text', text: t('msg.busy', lang) });
