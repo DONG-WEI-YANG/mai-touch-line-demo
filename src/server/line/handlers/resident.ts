@@ -91,6 +91,28 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     }
   }
 
+  // ──── Text-as-slot capture — when an intent is mid slot-filling and the
+  //      next missing slot is a text-typed one (visitor_name / issue / location /
+  //      urgency / visitor_count), accept the user's free-text reply as the slot
+  //      value. Date / time / facility slots have dedicated postback UIs (date
+  //      picker / facility carousel) and are NOT captured here.
+  if (
+    ev.type === 'message' && ev.message?.type === 'text' &&
+    session.intent && session.step === 'SLOT_FILLING'
+  ) {
+    const required = REQUIRED_SLOTS[session.intent] ?? [];
+    const nextMissing = required.find(k => !(k in session.slots));
+    const TEXT_SLOTS = new Set(['visitor_name', 'visitor_count', 'issue', 'location', 'urgency']);
+    if (nextMissing && TEXT_SLOTS.has(nextMissing)) {
+      const text = (ev.message.text as string).trim();
+      const value: string | number = nextMissing === 'visitor_count'
+        ? (Number.isFinite(parseInt(text, 10)) ? parseInt(text, 10) : 0)
+        : text;
+      session = { ...session, slots: { ...session.slots, [nextMissing]: value } };
+      // Fall through to slot loop below to ask next missing slot or execute.
+    }
+  }
+
   // ──── Text branch — classify if no active intent ────
   if (ev.type === 'message' && ev.message?.type === 'text' && !session.intent) {
     const text = ev.message.text as string;
