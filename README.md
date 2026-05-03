@@ -124,6 +124,28 @@ Private - All Rights Reserved
 
 ---
 
+## 🖥️ Vercel Web Dashboard(管理員 / 物流 / 住戶)
+
+存在 Vercel 上的 web 前端,使用 token-based 認證對接 Render backend(`https://mai-touch-demo.onrender.com`)。
+
+**URL**: `https://mai-touch-web.vercel.app`
+
+**3 個角色快速登入連結**(URL 帶 `?token=` → bootstrap 寫入 localStorage → 按 role 自動跳轉對應 landing):
+
+| 角色 | landing 路徑 | 用途 |
+|---|---|---|
+| Admin    | `/admin-dashboard`     | 系統管理、配置 |
+| Logistics| `/logistics-dashboard` | 物流任務派遣 |
+| Resident | `/`                    | 住戶聊天介面 |
+
+實際 token 值不在本 repo,放在 Render 的 `WEB_ADMIN_TOKEN` / `WEB_LOGISTICS_TOKEN` / `WEB_RESIDENT_TOKEN` env(同步寫到 Vercel 的 `EXPO_PUBLIC_DEMO_*_TOKEN`)。
+
+**安全性**:URL 帶 token 的方案僅用於 demo,production 上線前需替換為帳密 + JWT/cookie 流程。詳見 `docs/superpowers/specs/2026-05-03-vercel-web-deploy-design.md`。
+
+**LINE bot**(獨立伴隨服務,非本 dashboard):`maitouchdemo`,跟 dashboard 共用 backend 但走 webhook + HMAC 驗證,**不需要** token URL。
+
+---
+
 ## 原始技術文檔
 
 type StorageConfig = { baseUrl: string; apiKey: string };

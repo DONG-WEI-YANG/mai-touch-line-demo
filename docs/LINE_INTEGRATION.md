@@ -4,7 +4,11 @@ This guide explains how to deploy the m'AI Touch LINE demo to Render and connect
 
 ## Architecture
 
-The LINE integration runs as an Express middleware mounted at `/line/webhook`. Incoming webhook events are HMAC-verified against `LINE_CHANNEL_SECRET`, then dispatched to role-specific handlers (resident, housekeeper, admin). In the `demo` deploy profile, intent classification is handled by OpenAI (`gpt-4o-mini`) rather than the local NLP service; session state is kept in-memory (per process) with a 30-minute TTL; real bookings are written to the SQLite database on the persistent Render disk; and accepted bookings trigger LINE push notifications to housekeeper accounts. See `docs/superpowers/specs/2026-05-01-line-online-demo-design.md` for the full design.
+The LINE integration runs as an Express middleware mounted at `/line/webhook`. Incoming webhook events are HMAC-verified against `LINE_CHANNEL_SECRET`, then dispatched to role-specific handlers (resident, housekeeper, admin). In the `demo` deploy profile, intent classification is handled by OpenAI-compatible models (Gemini 2.5 Flash via `OPENAI_BASE_URL`) rather than the local NLP service; session state is kept in-memory (per process) with a 30-minute TTL; real bookings are written to the SQLite database on the persistent Render disk; and accepted bookings trigger LINE push notifications to housekeeper accounts. See `docs/superpowers/specs/2026-05-01-line-online-demo-design.md` for the full design.
+
+**Companion web dashboard**: a separate Vercel-hosted Expo Router web app (`https://mai-touch-web.vercel.app`) lets admin/logistics/resident roles use the same backend through a browser. It uses Bearer-token auth (URL `?token=...` → localStorage), which is independent from this LINE bot. See README's "Vercel Web Dashboard" section.
+
+**AI key fallback**: `OPENAI_API_KEY` accepts a comma-separated list of keys; `OpenAIIntent` rotates through them on 429/quota errors so a Gemini Free Tier RPM hit on one key auto-falls-through to the next. Production demo currently runs 4 keys for headroom.
 
 ## One-Time Setup
 
