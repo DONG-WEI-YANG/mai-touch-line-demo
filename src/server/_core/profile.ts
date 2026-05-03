@@ -29,8 +29,14 @@ export function getAi(): IntentClassifier {
   if (aiCache) return aiCache;
   const profile = getProfile();
   if (profile === 'demo') {
+    // OPENAI_API_KEY accepts a comma-separated list for round-robin failover
+    // (useful when one Gemini free-tier key hits 429 quota — fall through to next).
+    const apiKeys = required('OPENAI_API_KEY')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
     aiCache = new OpenAIIntent({
-      apiKey:      required('OPENAI_API_KEY'),
+      apiKeys,
       model:       process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
       temperature: Number(process.env.OPENAI_TEMPERATURE ?? '0.1'),
       // Optional: point at OpenAI-compatible endpoint (e.g. Gemini, Together, etc.)

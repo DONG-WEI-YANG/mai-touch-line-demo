@@ -85,12 +85,16 @@ const Schema = z.object({
 });
 
 export class OpenAIIntent implements IntentClassifier {
-  private client: OpenAI;
-  constructor(private opts: { apiKey: string; model: string; temperature?: number; baseURL?: string }) {
+  private clients: OpenAI[];
+  constructor(private opts: { apiKey?: string; apiKeys?: string[]; model: string; temperature?: number; baseURL?: string }) {
     // baseURL allows pointing at OpenAI-compatible endpoints (e.g. Gemini at
     // https://generativelanguage.googleapis.com/v1beta/openai/). When unset,
     // SDK defaults to the official OpenAI endpoint.
-    this.client = new OpenAI({ apiKey: opts.apiKey, baseURL: opts.baseURL });
+    // Accept either a single apiKey (backward compat) or an apiKeys array for
+    // round-robin failover when one key hits 429/quota.
+    const keys = opts.apiKeys ?? (opts.apiKey ? [opts.apiKey] : []);
+    if (!keys.length) throw new Error('OpenAIIntent requires at least one apiKey');
+    this.clients = keys.map(k => new OpenAI({ apiKey: k, baseURL: opts.baseURL }));
   }
 
   async classify(text: string, ctx: { userId: string; history?: string[] }): Promise<IntentResult> {
@@ -101,9 +105,14 @@ export class OpenAIIntent implements IntentClassifier {
     ];
 
     let lastErr: unknown;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // Always make at least 2 attempts (preserves single-key retry behavior). When
+    // multiple keys are configured, walk through them all so a 429 on one key is
+    // immediately covered by the next.
+    const totalAttempts = Math.max(2, this.clients.length);
+    for (let attempt = 0; attempt < totalAttempts; attempt++) {
+      const keyIdx = attempt % this.clients.length;
       try {
-        const resp = await this.client.chat.completions.create({
+        const resp = await this.clients[keyIdx].chat.completions.create({
           model: this.opts.model,
           messages,
           response_format: { type: 'json_object' },
@@ -123,9 +132,9 @@ export class OpenAIIntent implements IntentClassifier {
           return { intent: 'unknown', confidence: 0, slots: {}, language: 'zh-TW' };
         }
         return parsed.data as IntentResult;
-      } catch (err) {
+      } catch (err: any) {
         lastErr = err;
-        console.warn(`[AI] attempt ${attempt + 1} failed:`, err);
+        console.warn(`[AI] attempt ${attempt + 1}/${totalAttempts} failed (key idx ${keyIdx}, status ${err?.status ?? '?'}):`, err?.message ?? err);
       }
     }
     throw new AiUnavailableError('OpenAI classify failed after retry', lastErr);

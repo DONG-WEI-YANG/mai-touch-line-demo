@@ -48,4 +48,15 @@ describe('OpenAIIntent', () => {
     await expect(ai.classify('hi', { userId: 'U3' })).rejects.toBeInstanceOf(AiUnavailableError);
     expect(create).toHaveBeenCalledTimes(2);
   });
+
+  it('falls back to second apiKey on first key 429', async () => {
+    create.mockRejectedValueOnce(Object.assign(new Error('quota'), { status: 429 }));
+    create.mockResolvedValueOnce(ok({
+      intent: 'small_talk', confidence: 0.99, slots: {}, language: 'zh-TW',
+    }));
+    const ai = new OpenAIIntent({ apiKeys: ['k1', 'k2'], model: 'gpt-4o-mini' });
+    const r = await ai.classify('hi', { userId: 'U4' });
+    expect(r.intent).toBe('small_talk');
+    expect(create).toHaveBeenCalledTimes(2);
+  });
 });
