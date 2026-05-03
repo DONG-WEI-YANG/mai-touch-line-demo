@@ -92,3 +92,5 @@ expo.log
 nlp.log
 model_download.log
 priority_download*.log
+.vercel
+.claude/settings.local.json
