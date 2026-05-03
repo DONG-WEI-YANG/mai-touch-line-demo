@@ -9,6 +9,24 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
 // ── localStorage token helpers ────────────────────────────────────────────────
 const TOKEN_STORAGE_KEY = 'mai_touch_demo_token';
 
+// Synchronous URL→localStorage bootstrap. Runs at module import time, BEFORE
+// any React component or tRPC call. This guarantees the Authorization header
+// is set on the first useQuery in the app — without it, tRPC fires the first
+// request as anonymous and protectedProcedure returns 403, even though the
+// URL had a valid ?token=... that would have worked.
+if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+  try {
+    const url = new URL(window.location.href);
+    const t = url.searchParams.get('token');
+    if (t) {
+      window.localStorage.setItem(TOKEN_STORAGE_KEY, t);
+      url.searchParams.delete('token');
+      const qs = url.searchParams.toString();
+      window.history.replaceState({}, '', url.pathname + (qs ? '?' + qs : '') + url.hash);
+    }
+  } catch { /* non-browser or sandboxed: no-op */ }
+}
+
 function getStoredToken(): string | null {
   if (typeof globalThis.localStorage === 'undefined') return null;
   try { return globalThis.localStorage.getItem(TOKEN_STORAGE_KEY); }

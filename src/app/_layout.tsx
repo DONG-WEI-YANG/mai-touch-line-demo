@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { View, ActivityIndicator, Text } from "react-native";
-import { Tabs, Redirect, usePathname, useRouter } from "expo-router";
+import { Tabs, usePathname, useRouter, useRootNavigationState } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { trpc, createTRPCClient, setStoredToken } from "@/lib/trpc";
+import { trpc, createTRPCClient } from "@/lib/trpc";
 import { AppProvider, useApp } from "@/lib/app-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
@@ -22,56 +22,53 @@ const queryClient = new QueryClient({
 const trpcClient = createTRPCClient();
 
 function Root() {
-  const { data: user, isLoading, refetch } = trpc.auth.me.useQuery();
+  const { data: user, isLoading } = trpc.auth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
   const router = useRouter();
   const pathname = usePathname();
+  const navState = useRootNavigationState();
 
-  const [bootstrapping, setBootstrapping] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try { return new URL(window.location.href).searchParams.has('token'); }
-    catch { return false; }
-  });
+  // Note: URL→localStorage token bootstrap happens synchronously in lib/trpc.ts
+  // at module import (before any useQuery), so by the time this component
+  // mounts, the Authorization header on tRPC calls is already correct. No
+  // separate bootstrap useEffect needed here.
 
-  // Bootstrap: extract ?token from URL into localStorage on first paint
+  // Routing decisions — gated on navState.key so we never call router.replace
+  // before the navigation tree has mounted (avoids the "navigate before mount"
+  // crash that happens when Expo Router's root Slot isn't ready yet).
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    const t = url.searchParams.get('token');
-    if (t) {
-      setStoredToken(t);
-      url.searchParams.delete('token');
-      window.history.replaceState(
-        {},
-        '',
-        url.pathname +
-          (url.searchParams.toString() ? '?' + url.searchParams.toString() : '') +
-          url.hash
-      );
-      void refetch().finally(() => setBootstrapping(false));
-    } else {
-      setBootstrapping(false);
-    }
-  }, [refetch]);
+    if (!navState?.key) return;
+    if (isLoading) return;
 
-  // Routing decisions
-  useEffect(() => {
-    if (isLoading || bootstrapping) return;
+    const expectedForRole = (role: string | undefined) =>
+      role === 'admin' ? '/admin-dashboard' :
+      role === 'logistics' ? '/logistics-dashboard' :
+      '/';
+
     const onLogin = pathname === '/login';
-    if (!user && !onLogin) {
-      router.replace('/login');
+    if (!user) {
+      if (!onLogin) router.replace('/login');
       return;
     }
-    if (user && onLogin) {
-      const landing =
-        user.role === 'admin' ? '/admin-dashboard' :
-        user.role === 'logistics' ? '/logistics-dashboard' :
-        '/';
-      router.replace(landing as any);
+    // Logged in: bounce away from /login + non-resident roles to their landing
+    if (onLogin) {
+      router.replace(expectedForRole(user.role) as any);
       return;
     }
-  }, [user, isLoading, bootstrapping, pathname, router]);
+    if (user.role === 'admin' && pathname !== '/admin-dashboard' && !pathname.startsWith('/admin')) {
+      router.replace('/admin-dashboard');
+      return;
+    }
+    if (user.role === 'logistics' && pathname !== '/logistics-dashboard' && !pathname.startsWith('/logistics')) {
+      router.replace('/logistics-dashboard');
+      return;
+    }
+  }, [navState?.key, user, isLoading, pathname, router]);
 
-  if (isLoading) {
+  // Loading screen until auth.me resolves AND nav tree is ready.
+  if (isLoading || !navState?.key) {
     return (
       <View style={{ flex: 1, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator color="#C9A96E" />
@@ -80,20 +77,10 @@ function Root() {
     );
   }
 
-  if (!user) {
-    return <Redirect href="/login" />;
-  }
-
-  // Role-based routing
-  if (user.role === 'admin') {
-    return <Redirect href="/admin-dashboard" />;
-  }
-
-  if (user.role === 'logistics') {
-    return <Redirect href="/logistics-dashboard" />;
-  }
-
-  // Default to resident view
+  // Always return the navigator (Tabs is a navigator that mounts Slot).
+  // Admin/logistics users will see this for a microsecond before useEffect
+  // above redirects them via router.replace — which is now safe because
+  // the Tabs/Slot tree is mounted.
   return <ResidentLayout />;
 }
 
