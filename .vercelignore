@@ -1,0 +1,63 @@
+# Vercel only needs the Expo Router source + package.json + assets to run
+# `npm ci && npx expo export -p web --output-dir dist`. Everything below is
+# either built on Vercel, runs only on Render, or is dev-only.
+
+# Deps + build outputs (Vercel installs/builds fresh)
+node_modules/
+dist/
+.expo/
+.expo-shared/
+web-build/
+
+# Python NLP microservice (lives on Render, not on Vercel)
+nlp-service/
+
+# Local data (SQLite, downloaded models, demo dbs, large media)
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.mp4
+*.mov
+*.avi
+
+# Tests + scripts not needed for the web bundle
+tests/
+scripts/
+migrations/
+docs/
+nlp-engine/
+
+# CI/IDE/OS junk
+.git/
+.github/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs + caches
+*.log
+.cache/
+.kiro/
+crash.log
+init.log
+migrate.log
+server.log
+server_error.log
+expo.log
+nlp.log
+model_download.log
+
+# Env files (Vercel injects via Project Env vars)
+.env
+.env.*
+
+# Local scratch
+scratch_*.mjs
+scratch_*.js
+web-tokens.txt
+
+# Coverage
+coverage/
+*.tsbuildinfo
