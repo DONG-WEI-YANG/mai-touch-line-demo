@@ -22,7 +22,9 @@
     "test": "vitest run",
     "lint": "eslint src/ --max-warnings 50",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf node_modules dist .expo"
+    "clean": "rm -rf node_modules dist .expo",
+    "web:build": "expo export -p web --output-dir dist",
+    "web:serve": "npx serve dist -l 5173"
   },
   "dependencies": {
     "@line/bot-sdk": "^9.9.0",
