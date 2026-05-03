@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm ci && npx expo export -p web --output-dir dist",
+  "outputDirectory": "dist",
+  "framework": null,
+  "installCommand": "echo skip-install (handled in buildCommand)",
+  "rewrites": [
+    { "source": "/((?!_expo|assets|favicon|.*\\.[a-zA-Z0-9]+$).*)", "destination": "/index.html" }
+  ]
+}
