@@ -78,3 +78,19 @@ export const logisticsProcedure = protectedProcedure.use(async ({ ctx, next }) =
 
   return next({ ctx });
 });
+
+/**
+ * Staff procedure — admin OR logistics. For shared back-office views like the
+ * work-order list (admins triage, logistics execute) where both roles legitimately
+ * need read access. Residents are still excluded.
+ */
+export const staffProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (ctx.user.role !== "admin" && ctx.user.role !== "logistics") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You must be staff (admin or logistics) to access this resource",
+    });
+  }
+
+  return next({ ctx });
+});

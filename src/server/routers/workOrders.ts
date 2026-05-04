@@ -1,4 +1,4 @@
-import { residentProcedure, adminProcedure, router } from "../_core/trpc";
+import { residentProcedure, adminProcedure, staffProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
 
@@ -20,7 +20,7 @@ export const workOrdersRouter = router({
       priority: input.priority,
     })),
 
-  listAll: adminProcedure.query(async () => db.getWorkOrdersWithDetails()),
+  listAll: staffProcedure.query(async () => db.getWorkOrdersWithDetails()),
 
   update: adminProcedure
     .input(z.object({
