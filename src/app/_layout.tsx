@@ -154,12 +154,22 @@ function ResidentLayout() {
           tabBarIcon: ({ color, size }) => <IconSymbol name="gear" size={size} color={color} />,
         }}
       />
-      {/* Hide dashboards and login from resident tabs */}
+      {/* Hide dashboards, login, and feature pages that aren't part of the
+          4-tab resident bottom nav. Without href:null, Expo Router auto-mounts
+          every file in app/ as a tab — those leak into the bar with broken
+          ⏷ ⏷ icons (no tabBarIcon configured). */}
       <Tabs.Screen name="admin-dashboard" options={{ href: null }} />
       <Tabs.Screen name="logistics-dashboard" options={{ href: null }} />
       <Tabs.Screen name="login" options={{ href: null }} />
       <Tabs.Screen name="amenities/[id]" options={{ href: null }} />
       <Tabs.Screen name="my-bookings" options={{ href: null }} />
+      <Tabs.Screen name="wallet" options={{ href: null }} />
+      <Tabs.Screen name="guest-pass" options={{ href: null }} />
+      <Tabs.Screen name="smart-home" options={{ href: null }} />
+      <Tabs.Screen name="profile-edit" options={{ href: null }} />
+      <Tabs.Screen name="admin/index" options={{ href: null }} />
+      <Tabs.Screen name="admin/line" options={{ href: null }} />
+      <Tabs.Screen name="admin/amenity-iot" options={{ href: null }} />
     </Tabs>
   );
 }

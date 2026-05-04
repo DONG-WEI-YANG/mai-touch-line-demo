@@ -75,9 +75,26 @@ async function main() {
     insAmenity.run(id, name, `${name} amenity (demo)`, icon, category, capacity, location);
   }
 
+  // Seed work orders so /logistics-dashboard isn't empty during demos.
+  // userId=1 (resident) — they're the requester; logistics user views the list.
+  // INSERT OR IGNORE on fixed ids 1..5 keeps the seed idempotent across redeploys.
+  const workOrders = [
+    [1, 1, '冷氣不冷', '主臥室冷氣運轉但出風不冷,可能需要補充冷媒。', 'maintenance', 'high',   'open'],
+    [2, 1, '門禁卡失效', '住戶感應卡刷不過 B1 停車場閘門,煩請補卡。',           'security',     'medium', 'in_progress'],
+    [3, 1, '更換燈泡',   '客廳吊燈中央燈泡燒掉一顆,煩請更換。',                  'maintenance', 'low',    'open'],
+    [4, 1, '訪客接待',   '週六晚上 19:00 共 6 位訪客來訪 BBQ 區,請協助引導。',  'concierge',   'medium', 'open'],
+    [5, 1, '清潔加強',   '近期梯廳味道明顯,煩請加強消毒。',                      'housekeeping','low',    'resolved'],
+  ] as const;
+  const insWo = sqliteDb.prepare(`
+    INSERT OR IGNORE INTO work_orders
+      (id, userId, title, description, category, priority, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const row of workOrders) insWo.run(...row);
+
   sqliteDb.close();
 
-  console.log('[demo-init] seeded 3 base users + 6 amenities (idempotent)');
+  console.log('[demo-init] seeded 3 base users + 6 amenities + 5 work orders (idempotent)');
   console.log('[demo-init] done');
   process.exit(0);
 }

@@ -74,7 +74,7 @@ const PRESET_HISTORY_ACTION_LABELS: Record<PresetHistoryAction, string> = {
 export default function AmenityIotScreen() {
   const colors = useColors();
   const router = useRouter();
-  const HARDWARE_POLLING_MS = 5000;
+  const HARDWARE_POLLING_MS = 30000;
   const FALLBACK_SPIKE_WINDOW = 8;
   const FALLBACK_SPIKE_MIN_COUNT = 3;
   const FALLBACK_SPIKE_MIN_RATE = 0.5;

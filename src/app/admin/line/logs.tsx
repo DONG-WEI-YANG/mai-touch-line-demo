@@ -24,7 +24,7 @@ export default function LogsPage() {
       ...(toDirection(direction) ? { direction: toDirection(direction) } : {}),
       ...(lineUserId ? { lineUserId } : {}),
     },
-    { refetchInterval: 5000 }
+    { refetchInterval: 30000 }
   );
 
   return (

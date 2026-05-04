@@ -10,7 +10,11 @@ import { useRouter } from "expo-router";
 export default function AdminDashboardScreen() {
   const colors = useColors();
   const router = useRouter();
-  const HARDWARE_POLLING_MS = 5000;
+  // 30s instead of 5s — at 5s, 3 polled queries on this screen + 2 on
+  // amenity-iot were hitting Render's rate limiter (429) within ~1 minute,
+  // freezing the dashboard mid-demo. 30s is plenty for IoT health/dispatch
+  // updates and stays well under any free-tier limit.
+  const HARDWARE_POLLING_MS = 30000;
   const FALLBACK_SPIKE_WINDOW = 8;
   const FALLBACK_SPIKE_MIN_COUNT = 3;
   const FALLBACK_SPIKE_MIN_RATE = 0.5;
@@ -29,7 +33,7 @@ export default function AdminDashboardScreen() {
   function stopOnError<T>(fallback: number): (data: T | undefined, query: { state: { error: unknown } }) => number | false {
     return (_data, query) => query.state.error ? false : fallback;
   }
-  const { data: logs, refetch: refetchLogs } = trpc.access.liveFeed.useQuery(undefined, { refetchInterval: stopOnError<typeof logs>(5000) });
+  const { data: logs, refetch: refetchLogs } = trpc.access.liveFeed.useQuery(undefined, { refetchInterval: stopOnError<typeof logs>(HARDWARE_POLLING_MS) });
   const { data: gatewayHealth, refetch: refetchGatewayHealth } = trpc.admin.hardwareGatewayHealth.useQuery(undefined, { refetchInterval: stopOnError<typeof gatewayHealth>(HARDWARE_POLLING_MS) });
   const { data: dispatchHistory, refetch: refetchDispatchHistory } = trpc.admin.hardwareDispatchHistory.useQuery({ limit: FALLBACK_SPIKE_WINDOW }, { refetchInterval: stopOnError<typeof dispatchHistory>(HARDWARE_POLLING_MS) });
 
