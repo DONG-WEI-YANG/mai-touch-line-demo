@@ -8,12 +8,22 @@ import { AppProvider, useApp } from "@/lib/app-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 
-// Create query client
+// Create query client.
+// Retry policy: never retry on 4xx (auth/permission/validation errors won't
+// fix themselves); allow one retry on 5xx or network errors. This stops the
+// console from being flooded by repeated 403 retries when a procedure rejects
+// the current role (e.g. admin token hitting a residentProcedure during the
+// brief layout mount before role-based redirect kicks in).
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,
-      retry: 1,
+      retry: (failureCount, error: unknown) => {
+        const e = error as { data?: { httpStatus?: number }; status?: number } | null;
+        const status = e?.data?.httpStatus ?? e?.status ?? 0;
+        if (status >= 400 && status < 500) return false;
+        return failureCount < 1;
+      },
     },
   },
 });
