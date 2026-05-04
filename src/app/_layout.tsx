@@ -67,8 +67,11 @@ function Root() {
     }
   }, [navState?.key, user, isLoading, pathname, router]);
 
-  // Loading screen until auth.me resolves AND nav tree is ready.
-  if (isLoading || !navState?.key) {
+  // Loading screen ONLY while auth.me is in flight. We DON'T gate on
+  // navState.key because useRootNavigationState() only becomes truthy AFTER
+  // a navigator is rendered — gating render on it would create a deadlock
+  // (Loading shows → no navigator → navState never ready → Loading forever).
+  if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator color="#C9A96E" />
@@ -77,10 +80,8 @@ function Root() {
     );
   }
 
-  // Always return the navigator (Tabs is a navigator that mounts Slot).
-  // Admin/logistics users will see this for a microsecond before useEffect
-  // above redirects them via router.replace — which is now safe because
-  // the Tabs/Slot tree is mounted.
+  // Always return the navigator so navState becomes ready, then the useEffect
+  // above redirects admin/logistics to their proper landing within one frame.
   return <ResidentLayout />;
 }
 
