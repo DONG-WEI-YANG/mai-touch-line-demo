@@ -23,9 +23,15 @@ export default function AdminDashboardScreen() {
   const { data: nlpHealth, refetch: refetchHealth } = trpc.admin.nlpHealth.useQuery();
   const { data: modelStats, refetch: refetchModels } = trpc.admin.modelDownloads.useQuery();
   const { data: diag, refetch: refetchDiag } = trpc.system.diagnostics.useQuery();
-  const { data: logs, refetch: refetchLogs } = trpc.access.liveFeed.useQuery(undefined, { refetchInterval: 5000 });
-  const { data: gatewayHealth, refetch: refetchGatewayHealth } = trpc.admin.hardwareGatewayHealth.useQuery(undefined, { refetchInterval: HARDWARE_POLLING_MS });
-  const { data: dispatchHistory, refetch: refetchDispatchHistory } = trpc.admin.hardwareDispatchHistory.useQuery({ limit: FALLBACK_SPIKE_WINDOW }, { refetchInterval: HARDWARE_POLLING_MS });
+  // refetchInterval returns false when the last fetch errored — stops tight 403
+  // loops if backend rejects the procedure (e.g. demo synthetic user missing
+  // some permission).
+  function stopOnError<T>(fallback: number): (data: T | undefined, query: { state: { error: unknown } }) => number | false {
+    return (_data, query) => query.state.error ? false : fallback;
+  }
+  const { data: logs, refetch: refetchLogs } = trpc.access.liveFeed.useQuery(undefined, { refetchInterval: stopOnError<typeof logs>(5000) });
+  const { data: gatewayHealth, refetch: refetchGatewayHealth } = trpc.admin.hardwareGatewayHealth.useQuery(undefined, { refetchInterval: stopOnError<typeof gatewayHealth>(HARDWARE_POLLING_MS) });
+  const { data: dispatchHistory, refetch: refetchDispatchHistory } = trpc.admin.hardwareDispatchHistory.useQuery({ limit: FALLBACK_SPIKE_WINDOW }, { refetchInterval: stopOnError<typeof dispatchHistory>(HARDWARE_POLLING_MS) });
 
   const [refreshing, setRefreshing] = useState(false);
   const [snoozedUntil, setSnoozedUntil] = useState<number>(0);

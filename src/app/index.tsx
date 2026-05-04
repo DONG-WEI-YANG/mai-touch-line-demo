@@ -38,9 +38,15 @@ export default function HomeScreen() {
   
   // HOOKS MUST BE AT TOP LEVEL
   const { data: user, isLoading: userLoading } = trpc.auth.me.useQuery();
-  const { data: activeJobs, refetch: refetchJobs } = trpc.system.activeJobs.useQuery(undefined, { 
+  const { data: activeJobs, refetch: refetchJobs } = trpc.system.activeJobs.useQuery(undefined, {
     enabled: !!user,
-    refetchInterval: (data) => data?.length ? 1000 : 5000 
+    // Stop polling when last fetch errored (e.g. admin token briefly mounts
+    // this resident-only route during role-based redirect — without this stop,
+    // setInterval keeps firing 403s forever).
+    refetchInterval: (data, query) => {
+      if (query.state.error) return false;
+      return data?.length ? 1000 : 5000;
+    },
   });
   const runJobMutation = trpc.system.runJob.useMutation({ onSuccess: () => refetchJobs() });
 

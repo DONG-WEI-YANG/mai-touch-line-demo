@@ -24,6 +24,10 @@ const queryClient = new QueryClient({
         if (status >= 400 && status < 500) return false;
         return failureCount < 1;
       },
+      // Window focus shouldn't refire failed-permission queries — that produced
+      // a continuous 403 loop in the console when the admin landed on resident-
+      // only pages briefly during role-based redirect.
+      refetchOnWindowFocus: false,
     },
   },
 });
