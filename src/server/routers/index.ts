@@ -1,4 +1,5 @@
 import { publicProcedure, residentProcedure, adminProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 
@@ -44,7 +45,12 @@ export const appRouter = router({
       .input(z.object({ type: z.enum(["arrival", "departure", "hosting"]) }))
       .mutation(async ({ ctx, input }) => {
         const user = await db.getUserById(ctx.user.id);
-        if (!user || !user.unitId) throw new Error("User not assigned to a unit");
+        if (!user || !user.unitId) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "User not assigned to a unit",
+          });
+        }
 
         const jobId = await db.createSystemJob({
           userId: ctx.user.id, type: input.type, status: "running", progress: 10,

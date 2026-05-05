@@ -35,10 +35,17 @@ async function main() {
   const resolvedPath = path.resolve(dbPath);
   const sqliteDb = new Database(resolvedPath);
 
+  // Seed unit (needed for runJob mutation — without unitId, /api/trpc/system.runJob
+  // throws "User not assigned to a unit" → 500 when resident clicks any quick action).
+  sqliteDb.prepare(`
+    INSERT OR IGNORE INTO units (id, unitNumber, floor, wing, squareFootage)
+    VALUES (1, '42A', 42, 'East', 1850)
+  `).run();
+
   // id=1 seed@demo.local role='resident' (plan said 'user' but schema requires 'resident')
   sqliteDb.prepare(`
-    INSERT OR IGNORE INTO users (id, openId, name, email, loginMethod, role, tier)
-    VALUES (1, 'demo-seed-001', 'Demo Seed User', 'seed@demo.local', 'demo', 'resident', 'Platinum')
+    INSERT OR IGNORE INTO users (id, openId, name, email, loginMethod, role, tier, unitId)
+    VALUES (1, 'demo-seed-001', 'Demo Seed User', 'seed@demo.local', 'demo', 'resident', 'Platinum', 1)
   `).run();
 
   // id=2 admin@demo.local role='admin'
@@ -74,6 +81,16 @@ async function main() {
   for (const [id, name, category, icon, capacity, location] of amenities) {
     insAmenity.run(id, name, `${name} amenity (demo)`, icon, category, capacity, location);
   }
+
+  // Seed devices for unit 1 so runJob's "arrival" sequence has a climate +
+  // light to flip and a meaningful currentStep message in activeJobs.
+  const insDevice = sqliteDb.prepare(`
+    INSERT OR IGNORE INTO devices (id, unitId, name, type, status)
+    VALUES (?, 1, ?, ?, ?)
+  `);
+  insDevice.run(1, 'Living Room AC', 'climate', '24°C');
+  insDevice.run(2, 'Entryway Light', 'light',   'off');
+  insDevice.run(3, 'Bedroom Curtain','curtain', 'closed');
 
   // Seed work orders so /logistics-dashboard isn't empty during demos.
   // userId=1 (resident) — they're the requester; logistics user views the list.
