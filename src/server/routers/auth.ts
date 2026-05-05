@@ -7,7 +7,13 @@ import crypto from "crypto";
 import * as db from "../db";
 
 const BIND_CODE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const LINE_BOT_BASIC_ID = process.env.LINE_BOT_BASIC_ID || ""; // e.g. "@123abc"
+
+/** Read at call-time, not module-load — Render env additions after the first
+ *  deploy don't trigger a process restart in a predictable way, so caching
+ *  this at import would freeze it to "" for the lifetime of the worker. */
+function getLineBotBasicId(): string {
+  return (process.env.LINE_BOT_BASIC_ID || "").trim();
+}
 
 /** 6-char base32-ish code without ambiguous chars (no 0/O, 1/I/L). */
 function generateBindCode(): string {
@@ -50,8 +56,9 @@ export const authRouter = router({
     `).run(code, ctx.user.id, expiresAt);
     // line.me/R/oaMessage/<basicId>/?<text> opens bot chat with text pre-filled
     const text = `/bind ${code}`;
-    const deepLink = LINE_BOT_BASIC_ID
-      ? `https://line.me/R/oaMessage/${encodeURIComponent(LINE_BOT_BASIC_ID)}/?${encodeURIComponent(text)}`
+    const basicId = getLineBotBasicId();
+    const deepLink = basicId
+      ? `https://line.me/R/oaMessage/${encodeURIComponent(basicId)}/?${encodeURIComponent(text)}`
       : "";
     return { code, expiresAt, deepLink, command: text };
   }),
