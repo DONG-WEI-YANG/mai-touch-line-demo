@@ -73,6 +73,11 @@ export function IconSymbol({ name, size = 24, color = "#000", strokeWidth = 2 }:
     "briefcase": "Briefcase",
     "fitness": "Activity",
     "pool": "Waves",
+    "globe": "Globe",
+    "moon.fill": "Moon",
+    "shield.fill": "Shield",
+    "speaker.wave.3.fill": "Volume2",
+    "speaker.slash.fill": "VolumeX",
   };
 
   const mappedName = iconMap[name] || name;

@@ -34,7 +34,27 @@ const QUICK_ACTIONS = [
 
 export default function HomeScreen() {
   const colors = useColors();
-  const { state, sendMessage, dismissRoutingSuggestion, t } = useApp();
+  const { state, sendMessage, dismissRoutingSuggestion, t, setLanguage } = useApp();
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  // Speak the latest assistant message via the Web Speech API. Only on web —
+  // gated by `window.speechSynthesis` existence so RN-native (iOS/Android)
+  // builds skip silently. Triggered by ttsEnabled + new message detection.
+  const lastSpokenIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ttsEnabled) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const last = state.messages[state.messages.length - 1];
+    if (!last || last.role !== 'assistant') return;
+    if (lastSpokenIdRef.current === last.id) return;
+    lastSpokenIdRef.current = last.id;
+    try {
+      const u = new SpeechSynthesisUtterance(last.content);
+      u.lang = state.language === 'zh' ? 'zh-TW' : 'en-US';
+      u.rate = 1.0;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch { /* speechSynthesis can throw on Safari without user gesture */ }
+  }, [state.messages, ttsEnabled, state.language]);
   
   // HOOKS MUST BE AT TOP LEVEL
   const { data: user, isLoading: userLoading } = trpc.auth.me.useQuery();
@@ -109,7 +129,32 @@ export default function HomeScreen() {
             <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t("home.title")}</Text>
             <View style={styles.statusRow}><View style={[styles.statusDot, { backgroundColor: "#5B9A6F" }]} /><Text style={[styles.headerSubtitle, { color: colors.muted }]}>Active • Elite Resident</Text></View>
           </View>
-          <TouchableOpacity style={[styles.profileBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="person.fill" size={20} color={colors.primary} /></TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              accessibilityLabel="Toggle text-to-speech"
+              onPress={() => {
+                if (ttsEnabled && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                  window.speechSynthesis.cancel();
+                }
+                setTtsEnabled(v => !v);
+              }}
+              style={[styles.profileBtn, { backgroundColor: ttsEnabled ? colors.primary + '30' : colors.surface, borderColor: ttsEnabled ? colors.primary : colors.border }]}
+            >
+              <IconSymbol name={ttsEnabled ? 'speaker.wave.3.fill' : 'speaker.slash.fill'} size={18} color={colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityLabel="Toggle language"
+              onPress={() => setLanguage(state.language === 'en' ? 'zh' : 'en')}
+              style={[styles.profileBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
+                {state.language === 'en' ? '中' : 'EN'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.profileBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <IconSymbol name="person.fill" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {activeJobs?.map(job => (
