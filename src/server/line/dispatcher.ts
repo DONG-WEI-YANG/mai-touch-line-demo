@@ -54,6 +54,22 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       lineUser = deps.lineUserRepo.byLineId(deps.channelId, userId)!;
     }
 
+    // ── 2.5 Lazy web-account bind ──────────────────────────────────────────────
+    // bindWebUser normally fires on `follow`. But Render Free wipes the SQLite
+    // on every deploy → existing followers lose their app_user_id binding and
+    // would fall back to SEED_USER_ID (no push-back, all orders share one user).
+    // Lazy-bind here covers the post-deploy case so the FIRST message from any
+    // already-followed user re-establishes the binding without requiring them
+    // to re-add the bot.
+    if (!lineUser.appUserId) {
+      try {
+        deps.bindWebUser(userId, lineUser.displayName ?? null);
+        lineUser = deps.lineUserRepo.byLineId(deps.channelId, userId)!;
+      } catch (err) {
+        console.error('[LINE] lazy bindWebUser failed (non-fatal)', { userId, err });
+      }
+    }
+
     // ── 3. Log inbound message (before rate-limit so abuse traffic is always auditable) ──
     deps.messageLog.write({
       lineUserId: userId,
