@@ -16,8 +16,12 @@ export type DispatchDeps = {
   lineUserRepo: ReturnType<typeof makeLineUserRepo>;
   messageLog: ReturnType<typeof makeMessageLog>;
   channelId: string;
-  bookFn: (input: { facility: string; date: string; time: string }) => Promise<{ id: string }>;
-  reportFn: (input: { intent: import('./ai/types').IntentName; slots: Record<string, unknown> }) => Promise<{ id: string }>;
+  bookFn: (input: { facility: string; date: string; time: string }, lineUserId?: string) => Promise<{ id: string }>;
+  reportFn: (input: { intent: import('./ai/types').IntentName; slots: Record<string, unknown> }, lineUserId?: string) => Promise<{ id: string }>;
+  /** Bind this LINE user to a personal web account; returns the portal URL. Idempotent. */
+  bindWebUser: (lineUserId: string, displayName?: string | null) => { url: string; isNew: boolean };
+  /** Push a plain-text message to a specific LINE user. Used for status-change notifications. */
+  pushToLineUser: (lineUserId: string, message: string) => Promise<void>;
   pushHousekeepers: (payload: { orderId: string; from: string; intent: string; summary: string }) => Promise<void>;
   updateOrder: (orderId: string, patch: {
     status: 'open'|'in_progress'|'resolved'|'closed';
@@ -73,11 +77,25 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
     }
 
     try {
-      // ── 4.5 Follow event → send welcome (only fires when user adds bot as friend) ──
+      // ── 4.5 Follow event → bind web account + send welcome with portal URL ──
       if (ev.type === 'follow') {
         const lang = (lineUser.language ?? 'zh-TW') as Lang;
+        let portalUrl: string | null = null;
+        try {
+          const bound = deps.bindWebUser(userId, lineUser.displayName ?? null);
+          portalUrl = bound.url;
+        } catch (err) {
+          console.error('[LINE] bindWebUser on follow failed (continuing with plain welcome)', { userId, err });
+        }
         try {
           await deps.lineClient.replyOrPush(ev.replyToken, userId, welcome(lang));
+          if (portalUrl) {
+            const portalMsg = lang === 'en'
+              ? `Your private resident portal:\n${portalUrl}`
+              : lang === 'ja' ? `あなた専用の住戶ポータル:\n${portalUrl}`
+                              : `您的專屬住戶後台:\n${portalUrl}`;
+            await deps.lineClient.replyOrPush(undefined, userId, { type: 'text', text: portalMsg });
+          }
         } catch (err) {
           console.error('[LINE] failed to send welcome on follow', { userId, err });
         }

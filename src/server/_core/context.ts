@@ -9,7 +9,7 @@ import type { makeRuntimeConfig } from '../line/runtime-config';
 import type { makeLineUserRepo } from '../line/line-user-repo';
 import type { makeMessageLog } from '../line/message-log';
 import type Database from 'better-sqlite3';
-import { userFromToken } from './token-auth';
+import { userFromToken, userFromPersonalToken } from './token-auth';
 
 export type LineAdminContext = {
   db: Database.Database;
@@ -18,6 +18,10 @@ export type LineAdminContext = {
   messageLog: ReturnType<typeof makeMessageLog>;
   lineClient: LineClient;
   channelId: string;
+  /** Push a plain-text message to a specific LINE user. Optional so test/non-LINE
+   *  builds can omit it. Used by mutation handlers to notify the original
+   *  resident when their work order or booking status changes. */
+  pushToLineUser?: (lineUserId: string, message: string) => Promise<void>;
 };
 
 let lineAdminCtx: LineAdminContext | null = null;
@@ -46,10 +50,16 @@ export async function createContext({ req, res }: { req: Request; res: Response 
   const authHeader = String(req.headers['authorization'] ?? '');
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice('Bearer '.length).trim();
-    const synth = userFromToken(token);
+    // 1. Env-mapped demo tokens (admin / logistics / resident shared)
+    let synth = userFromToken(token);
+    // 2. Per-LINE-user personal tokens (issued on follow, stored in web_tokens)
+    if (!synth) {
+      const adminCtx = getLineAdminContext();
+      if (adminCtx?.db) synth = userFromPersonalToken(token, adminCtx.db);
+    }
     if (synth) {
       return {
-        user: synth as unknown as User,  // SyntheticUser supplies all fields existing procedures access; tier/unitId default to null/Platinum for web token sessions
+        user: synth as unknown as User,
         req,
         res,
         lineAdmin: getLineAdminContext() ?? undefined,

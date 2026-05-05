@@ -475,6 +475,13 @@ export async function createBooking(data: InsertBooking) {
   return Array.isArray(result) ? result[0].insertId : (result as any).lastInsertRowid;
 }
 
+export async function getBookingById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
+  return rows[0];
+}
+
 export async function updateBookingStatus(id: number, status: "confirmed" | "pending" | "cancelled" | "completed") {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -516,6 +523,13 @@ export async function createWorkOrder(data: InsertWorkOrder) {
   if (!(data as any).updatedAt) (data as any).updatedAt = sql`CURRENT_TIMESTAMP`;
   const result = await db.insert(workOrders).values(data);
   return Array.isArray(result) ? result[0].insertId : (result as any).lastInsertRowid;
+}
+
+export async function getWorkOrderById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(workOrders).where(eq(workOrders.id, id)).limit(1);
+  return rows[0];
 }
 
 export async function updateWorkOrder(id: number, data: Partial<InsertWorkOrder>) {

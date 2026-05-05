@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'crypto';
 import { createServer } from 'http';
 import net from 'net';
 import { createApp } from './app';
@@ -104,8 +105,71 @@ async function startServer() {
 
       const SEED_USER_ID = 1;
 
+      // ── Per-LINE-user web account binding ────────────────────────────────────
+      // On `follow` (or first interaction), provision a `users` row + a personal
+      // web token for the LINE friend, store it in web_tokens, and link the
+      // line_user.app_user_id. Returns the personalized portal URL the bot can
+      // DM back so the resident can open their own dashboard.
+      const insertUserStmt = rawSqlite.prepare(`
+        INSERT INTO users (openId, name, email, loginMethod, role, tier, unitId)
+        VALUES (?, ?, ?, 'line', 'resident', 'Platinum', 1)
+      `);
+      const insertWebTokenStmt = rawSqlite.prepare(
+        `INSERT INTO web_tokens (token, user_id) VALUES (?, ?)`
+      );
+      const setLineAppUserStmt = rawSqlite.prepare(
+        `UPDATE line_user SET app_user_id = ? WHERE channel_id = ? AND line_user_id = ?`
+      );
+      const tokenForUserStmt = rawSqlite.prepare(
+        `SELECT token FROM web_tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`
+      );
+      const webBaseUrl = process.env.WEB_BASE_URL ?? 'https://mai-touch-web.vercel.app';
+
+      const bindWebUser = (lineUserId: string, displayName?: string | null): { url: string; isNew: boolean } => {
+        let row = lineUserRepo.byLineId(channelId, lineUserId);
+        if (!row) {
+          lineUserRepo.upsert({ channelId, lineUserId, displayName: displayName ?? null });
+          row = lineUserRepo.byLineId(channelId, lineUserId)!;
+        }
+        // Already bound — reuse existing token (prevents accidental token rotation)
+        if (row.appUserId) {
+          const existing = tokenForUserStmt.get(row.appUserId) as { token: string } | undefined;
+          if (existing) return { url: `${webBaseUrl}/?token=${existing.token}`, isNew: false };
+        }
+        // Provision: new users row + token, link line_user
+        const openId = `line-${lineUserId}`;
+        const userInsert = insertUserStmt.run(
+          openId, displayName ?? 'LINE Resident', `${openId}@line.local`,
+        );
+        const newUserId = Number(userInsert.lastInsertRowid);
+        const token = crypto.randomBytes(16).toString('hex');
+        insertWebTokenStmt.run(token, newUserId);
+        setLineAppUserStmt.run(newUserId, channelId, lineUserId);
+        return { url: `${webBaseUrl}/?token=${token}`, isNew: true };
+      };
+
+      // Resolve LINE user id → app_user_id for write paths. Falls back to the
+      // shared SEED_USER_ID when the LINE user hasn't been bound yet (e.g. a
+      // legacy session before this feature shipped).
+      const resolveAppUserId = (lineUserId: string | undefined): number => {
+        if (!lineUserId) return SEED_USER_ID;
+        const row = lineUserRepo.byLineId(channelId, lineUserId);
+        return row?.appUserId ?? SEED_USER_ID;
+      };
+
+      // Push a text message to a specific LINE user via lineUserId. Used by the
+      // status-change push-back so when logistics moves a work order, the
+      // original requester gets a notification on their LINE.
+      const pushToLineUser = async (lineUserId: string, message: string): Promise<void> => {
+        try {
+          await lineClient.replyOrPush(undefined, lineUserId, { type: 'text', text: message });
+        } catch (err) {
+          console.error('[LINE] push to user failed', { lineUserId, err });
+        }
+      };
+
       // Real bookFn — calls db.createBooking directly (skip tRPC ctx auth for demo)
-      const bookFn = async (input: { facility: string; date: string; time: string }): Promise<{ id: string }> => {
+      const bookFn = async (input: { facility: string; date: string; time: string }, lineUserId?: string): Promise<{ id: string }> => {
         const amenityId = facilityToAmenityId.get(input.facility);
         if (!amenityId) {
           console.warn('[LINE] no amenity mapped for facility', input.facility, '— using fallback id=1');
@@ -115,7 +179,7 @@ async function startServer() {
         const endH = (h + 1) % 24;
         const endTime = `${String(endH).padStart(2, '0')}:${String(m ?? 0).padStart(2, '0')}`;
         const bookingId = await db.createBooking({
-          userId: SEED_USER_ID,
+          userId: resolveAppUserId(lineUserId),
           amenityId: amenityId ?? 1,
           date: input.date,
           startTime: input.time,
@@ -174,7 +238,7 @@ async function startServer() {
         if (intentShort === 'complaint')                                                 return 'other';
         return 'other';
       };
-      const reportFn = async (input: { intent: string; slots: Record<string, unknown> }): Promise<{ id: string }> => {
+      const reportFn = async (input: { intent: string; slots: Record<string, unknown> }, lineUserId?: string): Promise<{ id: string }> => {
         const s: any = input.slots ?? {};
         const urgency = String(s.urgency ?? 'med');
         const priority: 'low' | 'medium' | 'high' | 'urgent' =
@@ -187,7 +251,7 @@ async function startServer() {
         const blob = `${input.intent} ${summaryParts.join(' ')} ${JSON.stringify(s)}`;
         const category = inferCategory(intentShort, blob);
         const orderId = await db.createWorkOrder({
-          userId: SEED_USER_ID,
+          userId: resolveAppUserId(lineUserId),
           title: `[${intentShort}] ${summaryParts[0] ?? 'demo'}`,
           description: JSON.stringify(s),
           category,
@@ -297,6 +361,8 @@ async function startServer() {
         commandHandler,
         rateLimiter,
         eventDedupe,
+        bindWebUser,
+        pushToLineUser,
       });
 
       // ── Admin dashboard context — must be set BEFORE createApp() ─────────
@@ -307,6 +373,7 @@ async function startServer() {
         messageLog,
         lineClient,
         channelId,
+        pushToLineUser,
       });
 
       console.log('[LINE] dispatcher configured');

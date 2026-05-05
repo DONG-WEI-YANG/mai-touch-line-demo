@@ -1,4 +1,4 @@
-import { residentProcedure, adminProcedure, staffProcedure, router } from "../_core/trpc";
+import { residentProcedure, staffProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
 
@@ -22,15 +22,36 @@ export const workOrdersRouter = router({
 
   listAll: staffProcedure.query(async () => db.getWorkOrdersWithDetails()),
 
-  update: adminProcedure
+  update: staffProcedure
     .input(z.object({
       id: z.number(),
       status: z.enum(["open", "in_progress", "resolved", "closed"]).optional(),
       assignedTo: z.string().optional(),
       priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+      const before = await db.getWorkOrderById(id);
       await db.updateWorkOrder(id, data);
+      // Push status change back to the original LINE requester (if bound).
+      // Best-effort: log + swallow errors so the mutation always succeeds for
+      // logistics even when the LINE webhook is degraded.
+      if (input.status && before && ctx.lineAdmin?.pushToLineUser) {
+        try {
+          const adminDb = ctx.lineAdmin.db;
+          const row = adminDb.prepare(
+            `SELECT line_user_id FROM line_user WHERE app_user_id = ? AND channel_id = ? LIMIT 1`
+          ).get(before.userId, ctx.lineAdmin.channelId) as { line_user_id: string } | undefined;
+          if (row?.line_user_id) {
+            const statusZh: Record<string, string> = {
+              open: '已建立', in_progress: '處理中', resolved: '已完成', closed: '已關閉',
+            };
+            const msg = `工單 #WO-${id}「${before.title}」狀態更新:${statusZh[input.status] ?? input.status}`;
+            await ctx.lineAdmin.pushToLineUser(row.line_user_id, msg);
+          }
+        } catch (err) {
+          console.error('[workOrders.update] LINE push-back failed', { id, err });
+        }
+      }
     }),
 });

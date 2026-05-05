@@ -21,10 +21,10 @@ export type ResidentDeps = {
   store: SessionStore;
   channelId: string;
   lineUser: { lineUserId: string; role: 'resident' | 'housekeeper' | 'admin'; language: Lang };
-  bookFn: (input: { facility: string; date: string; time: string }) => Promise<{ id: string }>;
+  bookFn: (input: { facility: string; date: string; time: string }, lineUserId?: string) => Promise<{ id: string }>;
   // Generic work-order creator for non-facility intents (repair/visitor/complaint).
   // Returns the new order id for echo-back to the user.
-  reportFn: (input: { intent: IntentName; slots: Record<string, unknown> }) => Promise<{ id: string }>;
+  reportFn: (input: { intent: IntentName; slots: Record<string, unknown> }, lineUserId?: string) => Promise<{ id: string }>;
   pushHousekeepers: (payload: { orderId: string; from: string; intent: string; summary: string }) => Promise<void>;
 };
 
@@ -63,7 +63,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
       session = { ...session, step: 'EXECUTING' };
       deps.store.set(userId, session);
       try {
-        const order = await deps.bookFn(session.slots as any);
+        const order = await deps.bookFn(session.slots as any, userId);
         await deps.client.replyOrPush(ev.replyToken, userId, bookingDone({ orderId: order.id }, lang));
         await deps.pushHousekeepers({
           orderId: order.id, from: userId, intent: session.intent,
@@ -161,7 +161,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     session = { ...session, step: 'EXECUTING' };
     deps.store.set(userId, session);
     try {
-      const order = await deps.reportFn({ intent: session.intent, slots: session.slots });
+      const order = await deps.reportFn({ intent: session.intent, slots: session.slots }, userId);
       const labels: Partial<Record<IntentName, string>> = {
         'repair.report':  '報修',
         'visitor.notify': '訪客通知',
