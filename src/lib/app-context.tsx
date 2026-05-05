@@ -187,14 +187,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     enabled: true,
     refetchOnWindowFocus: false,
   });
-  
+
+  // myOrders and myBookings are residentProcedure-gated. AppProvider wraps
+  // every route (admin/logistics/resident), so without a role gate these
+  // queries fire 403 for non-resident tokens and spam the console. The
+  // resident dashboard is the only consumer of remoteWorkOrders/remoteBookings,
+  // so admins/logistics don't need them at all.
+  const isResident = (userProfile as { role?: string } | undefined)?.role === 'resident';
+
   const { data: remoteWorkOrders } = trpc.workOrders.myOrders.useQuery(undefined, {
-    enabled: !!userProfile, // Only fetch if user is logged in
+    enabled: !!userProfile && isResident,
     refetchOnWindowFocus: false,
   });
-  
+
   const { data: remoteBookings } = trpc.bookings.myBookings.useQuery(undefined, {
-    enabled: !!userProfile,
+    enabled: !!userProfile && isResident,
     refetchOnWindowFocus: false,
   });
 
