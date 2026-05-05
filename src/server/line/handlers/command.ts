@@ -2,6 +2,7 @@ import type { LineClient } from '../line-client';
 import type { Lang } from '../ai/types';
 import type { SessionStore } from '../session-store';
 import type { makeLineUserRepo } from '../line-user-repo';
+import { getLineAdminContext } from '../../_core/context';
 
 export function isCommand(text: string): boolean {
   if (!text) return false;
@@ -82,6 +83,49 @@ export async function handleCommand(rawText: string, ev: any, d: CommandDeps): P
   const scriptMatch = text.match(/^\/demo\s+(\w+)$/);
   if (scriptMatch) {
     await d.startDemo(scriptMatch[1]);
+    return true;
+  }
+
+  // /bind <code> — links this LINE user to the web account that issued
+  // the code. Looks up bind_codes (created by auth.startLineBind on the web
+  // side), validates not-expired, sets line_user.app_user_id = web user id,
+  // then deletes the code (single-use).
+  const bindMatch = rawText.trim().match(/^\/bind\s+([A-Za-z0-9]{4,12})$/);
+  if (bindMatch) {
+    const code = bindMatch[1].toUpperCase();
+    const adminCtx = getLineAdminContext();
+    if (!adminCtx?.db) {
+      await reply({ type: 'text', text: 'Bind unavailable (server misconfigured)' });
+      return true;
+    }
+    const row = adminCtx.db.prepare(`
+      SELECT user_id, expires_at FROM bind_codes WHERE code = ?
+    `).get(code) as { user_id: number; expires_at: string } | undefined;
+    if (!row) {
+      await reply({ type: 'text', text: lang === 'en'
+        ? 'Invalid bind code. Open the web app and tap "Bind LINE" to get a fresh code.'
+        : '綁定碼無效或已使用。請至網頁版重新產生綁定碼。' });
+      return true;
+    }
+    if (new Date(row.expires_at) < new Date()) {
+      adminCtx.db.prepare(`DELETE FROM bind_codes WHERE code = ?`).run(code);
+      await reply({ type: 'text', text: lang === 'en'
+        ? 'Bind code expired. Generate a new one in the web app.'
+        : '綁定碼已過期。請至網頁版重新產生。' });
+      return true;
+    }
+    adminCtx.db.prepare(`
+      UPDATE line_user SET app_user_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE channel_id = ? AND line_user_id = ?
+    `).run(row.user_id, d.channelId, userId);
+    adminCtx.db.prepare(`DELETE FROM bind_codes WHERE code = ?`).run(code);
+    const userRow = adminCtx.db.prepare(
+      `SELECT name FROM users WHERE id = ?`
+    ).get(row.user_id) as { name: string | null } | undefined;
+    const name = userRow?.name ?? 'your account';
+    await reply({ type: 'text', text: lang === 'en'
+      ? `✓ LINE successfully linked to ${name}. Status updates will now arrive here.`
+      : `✓ 已成功綁定到「${name}」。日後派工狀態變更將推送到此 LINE。` });
     return true;
   }
 
