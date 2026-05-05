@@ -102,6 +102,15 @@ function Root() {
 function ResidentLayout() {
   const colors = useColors();
   const { t } = useApp();
+  // Hide the bottom tab bar for non-resident roles. The Tabs container still
+  // mounts (so admin/logistics screens render inside the same shell), but the
+  // 4-tab bar would just be dead buttons for them — Concierge/Timeline/etc.
+  // bounce back to their dashboard via the role guard in Root().
+  const { data: user } = trpc.auth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const isResident = (user as { role?: string } | undefined)?.role === 'resident';
 
   return (
     <Tabs
@@ -109,7 +118,7 @@ function ResidentLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: {
+        tabBarStyle: !isResident ? { display: 'none' } : {
           backgroundColor: colors.background,
           borderTopColor: colors.border,
           borderTopWidth: 0.5,

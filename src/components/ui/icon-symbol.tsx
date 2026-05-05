@@ -57,6 +57,22 @@ export function IconSymbol({ name, size = 24, color = "#000", strokeWidth = 2 }:
     "pencil": "Edit",
     "arrow.right": "ArrowRight",
     "arrow.left": "ArrowLeft",
+    "arrow.clockwise": "RotateCw",
+    "brain": "Brain",
+    "bolt.fill": "Zap",
+    "wifi": "Wifi",
+    "plus.circle.fill": "PlusCircle",
+    "thermometer.sun.fill": "ThermometerSun",
+    "qrcode": "QrCode",
+    "sensor.tag.radiowaves.forward.fill": "Radio",
+    "square.and.arrow.up": "Share2",
+    "eye.slash.fill": "EyeOff",
+    "sparkles": "Sparkles",
+    "flame": "Flame",
+    "sofa": "Sofa",
+    "briefcase": "Briefcase",
+    "fitness": "Activity",
+    "pool": "Waves",
   };
 
   const mappedName = iconMap[name] || name;
