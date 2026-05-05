@@ -35,12 +35,29 @@ export function getAi(): IntentClassifier {
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
+
+    // Auto-detect: if any key is a Gemini key (AIzaSy…), or baseURL points at
+    // Google's OpenAI-compatible endpoint, AND OPENAI_MODEL still names an
+    // OpenAI model (gpt-…), swap to a Gemini model name. Gemini's compat
+    // endpoint returns 404 for unknown models like gpt-4o-mini, breaking
+    // every classify() call. This fallback keeps demos working without
+    // requiring the operator to remember to set OPENAI_MODEL alongside the
+    // baseURL — the most common misconfiguration.
+    const explicitModel = process.env.OPENAI_MODEL;
+    const baseURL = process.env.OPENAI_BASE_URL || undefined;
+    const looksLikeGemini =
+      apiKeys.some(k => k.startsWith('AIzaSy')) ||
+      (baseURL ?? '').includes('generativelanguage.googleapis.com');
+    const isOpenAiModelName = !explicitModel || /^gpt-/i.test(explicitModel);
+    const model = (looksLikeGemini && isOpenAiModelName)
+      ? (process.env.GEMINI_MODEL ?? 'gemini-2.5-flash')
+      : (explicitModel ?? 'gpt-4o-mini');
+
     aiCache = new OpenAIIntent({
       apiKeys,
-      model:       process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+      model,
       temperature: Number(process.env.OPENAI_TEMPERATURE ?? '0.1'),
-      // Optional: point at OpenAI-compatible endpoint (e.g. Gemini, Together, etc.)
-      baseURL:     process.env.OPENAI_BASE_URL || undefined,
+      baseURL,
     });
   } else {
     aiCache = new NlpBridge({
