@@ -161,6 +161,19 @@ async function startServer() {
 
       // Generic work-order writer for non-facility intents (repair/visitor/complaint).
       // Returns the new order id for echo-back to the user.
+      type WoCategory = 'maintenance' | 'security' | 'concierge' | 'housekeeping' | 'laundry' | 'vehicle' | 'other';
+      const inferCategory = (intentShort: string, blob: string): WoCategory => {
+        // Keyword sniff first — overrides intent for housekeeping/laundry/vehicle
+        // since LINE NLP often classifies these as 'complaint' or 'concierge'.
+        const t = blob.toLowerCase();
+        if (/送洗|乾洗|洗衣|laundry/.test(t))                                            return 'laundry';
+        if (/打掃|清潔|housekeeping|cleaning/.test(t))                                   return 'housekeeping';
+        if (/接送|機場|車輛|代駕|外出|airport|pickup|drop[- ]?off/.test(t))               return 'vehicle';
+        if (intentShort === 'repair')                                                    return 'maintenance';
+        if (intentShort === 'visitor')                                                   return 'concierge';
+        if (intentShort === 'complaint')                                                 return 'other';
+        return 'other';
+      };
       const reportFn = async (input: { intent: string; slots: Record<string, unknown> }): Promise<{ id: string }> => {
         const s: any = input.slots ?? {};
         const urgency = String(s.urgency ?? 'med');
@@ -171,10 +184,13 @@ async function startServer() {
           s.issue, s.location, s.visitor_name && `visitor=${s.visitor_name}`,
           s.visitor_count && `count=${s.visitor_count}`, s.date, s.time,
         ].filter(Boolean);
+        const blob = `${input.intent} ${summaryParts.join(' ')} ${JSON.stringify(s)}`;
+        const category = inferCategory(intentShort, blob);
         const orderId = await db.createWorkOrder({
           userId: SEED_USER_ID,
           title: `[${intentShort}] ${summaryParts[0] ?? 'demo'}`,
           description: JSON.stringify(s),
+          category,
           priority,
         });
         const prefix = intentShort === 'repair' ? 'WO' : intentShort === 'visitor' ? 'V' : 'C';

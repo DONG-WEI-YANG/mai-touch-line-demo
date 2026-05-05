@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
   userId INTEGER NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
-  category TEXT NOT NULL DEFAULT 'maintenance' CHECK(category IN ('maintenance', 'security', 'concierge', 'housekeeping', 'other')),
+  category TEXT NOT NULL DEFAULT 'maintenance' CHECK(category IN ('maintenance', 'security', 'concierge', 'housekeeping', 'laundry', 'vehicle', 'other')),
   priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high', 'urgent')),
   status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'in_progress', 'resolved', 'closed')),
   assignedTo TEXT,

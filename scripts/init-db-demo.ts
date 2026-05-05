@@ -92,15 +92,19 @@ async function main() {
   insDevice.run(2, 'Entryway Light', 'light',   'off');
   insDevice.run(3, 'Bedroom Curtain','curtain', 'closed');
 
-  // Seed work orders so /logistics-dashboard isn't empty during demos.
-  // userId=1 (resident) — they're the requester; logistics user views the list.
-  // INSERT OR IGNORE on fixed ids 1..5 keeps the seed idempotent across redeploys.
+  // Seed work orders covering all 7 categories so /logistics-dashboard
+  // exercises every category badge (維修/保全/禮賓/打掃/送洗/車輛接送/其他).
+  // INSERT OR IGNORE on fixed ids keeps the seed idempotent across redeploys.
   const workOrders = [
-    [1, 1, '冷氣不冷', '主臥室冷氣運轉但出風不冷,可能需要補充冷媒。', 'maintenance', 'high',   'open'],
-    [2, 1, '門禁卡失效', '住戶感應卡刷不過 B1 停車場閘門,煩請補卡。',           'security',     'medium', 'in_progress'],
-    [3, 1, '更換燈泡',   '客廳吊燈中央燈泡燒掉一顆,煩請更換。',                  'maintenance', 'low',    'open'],
-    [4, 1, '訪客接待',   '週六晚上 19:00 共 6 位訪客來訪 BBQ 區,請協助引導。',  'concierge',   'medium', 'open'],
-    [5, 1, '清潔加強',   '近期梯廳味道明顯,煩請加強消毒。',                      'housekeeping','low',    'resolved'],
+    [1, 1, '冷氣不冷',     '主臥室冷氣運轉但出風不冷,可能需要補充冷媒。',          'maintenance', 'high',   'open'],
+    [2, 1, '門禁卡失效',   '住戶感應卡刷不過 B1 停車場閘門,煩請補卡。',            'security',    'medium', 'in_progress'],
+    [3, 1, '更換燈泡',     '客廳吊燈中央燈泡燒掉一顆,煩請更換。',                  'maintenance', 'low',    'open'],
+    [4, 1, '訪客接待',     '週六晚上 19:00 共 6 位訪客來訪 BBQ 區,請協助引導。',  'concierge',   'medium', 'open'],
+    [5, 1, '清潔加強',     '近期梯廳味道明顯,煩請加強消毒。',                      'housekeeping','low',    'resolved'],
+    [6, 1, '深度打掃',     '本週六 10:00 預約三房廚衛深度清潔,共 3 小時。',        'housekeeping','medium', 'open'],
+    [7, 1, '送洗西裝',     '兩套西裝 + 一件大衣,需週四前完成,已放在玄關。',      'laundry',     'medium', 'in_progress'],
+    [8, 1, '車輛接送-機場','明日 06:30 桃機 T1 送機,2 位乘客 + 3 件大行李。',     'vehicle',     'high',   'open'],
+    [9, 1, '訪客車位',     '今晚 19:00-22:00 安排訪客 1 個臨停車位 (B2)。',         'concierge',   'low',    'open'],
   ] as const;
   const insWo = sqliteDb.prepare(`
     INSERT OR IGNORE INTO work_orders
@@ -108,6 +112,24 @@ async function main() {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   for (const row of workOrders) insWo.run(...row);
+
+  // Seed bookings so logistics dashboard's bookings section has data.
+  // amenityId 1=gym, 2=pool, 3=meeting_room, 4=lounge, 5=bbq, 6=sauna.
+  const today = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
+  const bookings = [
+    [1, 1, 1, fmt(today),     '18:00', '19:00', 1, '晚間健身',           'confirmed'],
+    [2, 1, 5, fmt(tomorrow),  '19:00', '21:00', 6, '訪客 BBQ 烤肉聚會',  'pending'],
+    [3, 1, 3, fmt(dayAfter),  '14:00', '16:00', 4, '會議室 — 商務洽談',  'confirmed'],
+  ] as const;
+  const insBk = sqliteDb.prepare(`
+    INSERT OR IGNORE INTO bookings
+      (id, userId, amenityId, date, startTime, endTime, guestCount, notes, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const row of bookings) insBk.run(...row);
 
   sqliteDb.close();
 

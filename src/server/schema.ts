@@ -92,7 +92,7 @@ export const workOrders = mysqlTable("work_orders", {
   userId: int("userId").notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  category: mysqlEnum("category", ["maintenance", "security", "concierge", "housekeeping", "other"]).default("maintenance").notNull(),
+  category: mysqlEnum("category", ["maintenance", "security", "concierge", "housekeeping", "laundry", "vehicle", "other"]).default("maintenance").notNull(),
   priority: mysqlEnum("priority", ["low", "medium", "high", "urgent"]).default("medium").notNull(),
   status: mysqlEnum("status", ["open", "in_progress", "resolved", "closed"]).default("open").notNull(),
   assignedTo: varchar("assignedTo", { length: 255 }),

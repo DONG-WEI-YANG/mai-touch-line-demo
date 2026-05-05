@@ -1,4 +1,4 @@
-import { residentProcedure, adminProcedure, router } from "../_core/trpc";
+import { residentProcedure, adminProcedure, staffProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
 
@@ -43,7 +43,7 @@ export const bookingsRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => db.updateBookingStatus(input.id, "cancelled")),
 
-  listAll: adminProcedure.query(async () => db.getBookingsWithDetails()),
+  listAll: staffProcedure.query(async () => db.getBookingsWithDetails()),
 
   updateStatus: adminProcedure
     .input(z.object({
