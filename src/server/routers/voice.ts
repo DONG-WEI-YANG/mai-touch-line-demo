@@ -1,7 +1,6 @@
 import { publicProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { transcribeAudio } from "../_core/voiceTranscription";
-import { storagePut } from "../storage";
 
 const LANGUAGE_LABELS: Record<string, string> = {
   en: "English", zh: "中文", ja: "日本語", ko: "한국어",
@@ -39,11 +38,11 @@ export const voiceRouter = router({
       language: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      // Direct upload to Whisper — bypasses the Forge storage proxy that the
+      // legacy path used. The intermediate URL hop required env vars (forgeApi*)
+      // not provisioned on Render Free, so transcribe was failing silently and
+      // text never came back to the client.
       const buffer = Buffer.from(input.audioBase64, "base64");
-      const ext = input.mimeType.includes("wav") ? "wav"
-        : input.mimeType.includes("mp4") || input.mimeType.includes("m4a") ? "m4a" : "webm";
-      const fileName = `voice/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { url } = await storagePut(fileName, buffer, input.mimeType);
 
       const bilingualPrompt = input.language
         ? input.language === "zh"
@@ -51,7 +50,12 @@ export const voiceRouter = router({
           : `Transcribe the user's voice command for a luxury property management app. The user speaks ${LANGUAGE_LABELS[input.language] || input.language}.`
         : "Transcribe the user's voice command. The user may speak in English or Chinese (中文). 請準確辨識使用者的語音，可能是英文或中文。This is for a luxury property management concierge app (高端物業管理應用).";
 
-      const result = await transcribeAudio({ audioUrl: url, language: input.language, prompt: bilingualPrompt });
+      const result = await transcribeAudio({
+        audioBuffer: buffer,
+        audioMime: input.mimeType,
+        language: input.language,
+        prompt: bilingualPrompt,
+      });
       if ("error" in result) throw new Error(result.error);
 
       const normalizedLang = normalizeLanguageCode(result.language || "en");

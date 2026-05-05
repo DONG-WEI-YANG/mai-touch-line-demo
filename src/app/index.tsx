@@ -81,10 +81,12 @@ export default function HomeScreen() {
   // input so the user can review before sending.
   const voice = useWebVoiceRecorder();
   const transcribeMutation = trpc.voice.transcribe.useMutation();
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const handleMicTap = useCallback(async () => {
     if (voice.state === 'recording') {
       const result = await voice.stop();
       if (!result) return;
+      setVoiceError(null);
       try {
         const r = await transcribeMutation.mutateAsync({
           audioBase64: result.audioBase64,
@@ -94,11 +96,16 @@ export default function HomeScreen() {
         const text = (r.text ?? '').trim();
         if (text) {
           setInputText(prev => (prev ? prev + ' ' : '') + text);
+        } else {
+          setVoiceError(state.language === 'zh' ? '沒聽清楚,請再說一次' : "Didn't catch that — try again");
         }
-      } catch (err) {
+      } catch (err: any) {
+        const msg = err?.message ?? 'Transcription failed';
         console.error('[voice] transcribe failed', err);
+        setVoiceError(msg);
       }
     } else if (voice.state === 'idle' || voice.state === 'error') {
+      setVoiceError(null);
       await voice.start();
     }
   }, [voice, transcribeMutation, state.language]);
@@ -230,6 +237,18 @@ export default function HomeScreen() {
               {state.language === 'zh' ? '辨識中…' : 'Transcribing…'}
             </Text>
           </View>
+        )}
+
+        {voiceError && voice.state !== 'recording' && !transcribeMutation.isPending && (
+          <TouchableOpacity onPress={() => setVoiceError(null)}>
+            <View style={[styles.voiceOverlay, { backgroundColor: colors.error + '20', borderColor: colors.error }]}>
+              <IconSymbol name="exclamationmark.triangle.fill" size={14} color={colors.error} />
+              <Text style={[styles.voiceLabel, { color: colors.error, marginLeft: 8, flex: 1 }]} numberOfLines={2}>
+                {voiceError}
+              </Text>
+              <Text style={[styles.voiceHint, { color: colors.muted }]}>{state.language === 'zh' ? '點此關閉' : 'Tap to dismiss'}</Text>
+            </View>
+          </TouchableOpacity>
         )}
 
         {activeJobs?.map(job => (

@@ -5,7 +5,12 @@
 import { ENV } from "./env";
 
 export type TranscriptionOptions = {
-  audioUrl: string;
+  /** Either a public URL we can fetch (legacy path via storage proxy)
+   *  or a raw Buffer to upload directly to Whisper. Direct buffer is
+   *  preferred — avoids the intermediate Forge storage hop. */
+  audioUrl?: string;
+  audioBuffer?: Buffer;
+  audioMime?: string;
   language?: string;
   prompt?: string;
   model?: string;
@@ -35,25 +40,42 @@ export type TranscriptionError = {
 export async function transcribeAudio(
   options: TranscriptionOptions
 ): Promise<TranscriptionResult | TranscriptionError> {
-  const { audioUrl, language, prompt, model = "whisper-1" } = options;
+  const { audioUrl, audioBuffer, audioMime, language, prompt, model = "whisper-1" } = options;
 
   if (!ENV.openaiApiKey) {
     return { error: "OpenAI API key not configured" };
   }
 
-  try {
-    // Download audio file
-    const audioResponse = await fetch(audioUrl);
-    if (!audioResponse.ok) {
-      return { error: `Failed to download audio: ${audioResponse.statusText}` };
-    }
+  if (!audioUrl && !audioBuffer) {
+    return { error: "Either audioUrl or audioBuffer must be provided" };
+  }
 
-    const audioBlob = await audioResponse.blob();
+  try {
+    let audioBlob: Blob;
+    let mimeType: string;
+    let fileName: string;
+
+    if (audioBuffer) {
+      // Direct upload path — preferred, no storage hop
+      mimeType = audioMime || "audio/webm";
+      audioBlob = new Blob([audioBuffer as any], { type: mimeType });
+      const ext = mimeType.includes("wav") ? "wav"
+        : mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a" : "webm";
+      fileName = `audio.${ext}`;
+    } else {
+      // Legacy URL path — used when audio sits behind a public storage URL
+      const audioResponse = await fetch(audioUrl!);
+      if (!audioResponse.ok) {
+        return { error: `Failed to download audio: ${audioResponse.statusText}` };
+      }
+      audioBlob = await audioResponse.blob();
+      mimeType = audioBlob.type || "audio/webm";
+      fileName = "audio.webm";
+    }
 
     // Prepare form data
     const formData = new FormData();
-    // Create a File object from the Blob with a filename
-    const audioFile = new File([audioBlob], "audio.webm", { type: audioBlob.type || "audio/webm" } as any);
+    const audioFile = new File([audioBlob], fileName, { type: mimeType } as any);
     formData.append("file", audioFile);
     formData.append("model", model);
     formData.append("response_format", "verbose_json");
