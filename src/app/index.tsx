@@ -38,11 +38,13 @@ export default function HomeScreen() {
   
   // HOOKS MUST BE AT TOP LEVEL
   const { data: user, isLoading: userLoading } = trpc.auth.me.useQuery();
+  // system.activeJobs is residentProcedure-gated. Even though Brain only
+  // renders for residents, Expo Router briefly mounts this screen during
+  // role-based <Redirect> transitions for admin/logistics tokens too —
+  // gate by role so it doesn't 403 in those windows.
+  const isResident = (user as { role?: string } | undefined)?.role === 'resident';
   const { data: activeJobs, refetch: refetchJobs } = trpc.system.activeJobs.useQuery(undefined, {
-    enabled: !!user,
-    // Stop polling when last fetch errored (e.g. admin token briefly mounts
-    // this resident-only route during role-based redirect — without this stop,
-    // setInterval keeps firing 403s forever).
+    enabled: !!user && isResident,
     refetchInterval: (data, query) => {
       if (query.state.error) return false;
       return data?.length ? 1000 : 5000;
