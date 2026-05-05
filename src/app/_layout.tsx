@@ -179,6 +179,7 @@ function ResidentLayout() {
       <Tabs.Screen name="admin/index" options={{ href: null }} />
       <Tabs.Screen name="admin/line" options={{ href: null }} />
       <Tabs.Screen name="admin/amenity-iot" options={{ href: null }} />
+      <Tabs.Screen name="social-mediation" options={{ href: null }} />
     </Tabs>
   );
 }

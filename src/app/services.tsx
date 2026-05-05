@@ -44,6 +44,7 @@ const SERVICES: Service[] = [
     descKey: "services.social.desc",
     icon: "person.3.fill",
     category: "operations",
+    route: "/social-mediation",
   },
   
   // Lifestyle Experience
