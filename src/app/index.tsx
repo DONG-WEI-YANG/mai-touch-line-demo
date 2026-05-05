@@ -22,6 +22,7 @@ import { useApp } from "@/lib/app-context";
 import { RoutingSuggestionCard } from "@/components/routing-suggestion-card";
 import { trpc } from "@/lib/trpc";
 import AdminDashboardScreen from "./admin-dashboard";
+import { useWebVoiceRecorder } from "@/hooks/use-web-voice-recorder";
 
 const { width } = Dimensions.get("window");
 
@@ -74,6 +75,33 @@ export default function HomeScreen() {
 
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);
+
+  // Voice input + 聲紋 visualizer. Records via MediaRecorder, visualizes via
+  // AnalyserNode, sends to voice.transcribe, drops the result into the chat
+  // input so the user can review before sending.
+  const voice = useWebVoiceRecorder();
+  const transcribeMutation = trpc.voice.transcribe.useMutation();
+  const handleMicTap = useCallback(async () => {
+    if (voice.state === 'recording') {
+      const result = await voice.stop();
+      if (!result) return;
+      try {
+        const r = await transcribeMutation.mutateAsync({
+          audioBase64: result.audioBase64,
+          mimeType: result.mimeType,
+          language: state.language === 'zh' ? 'zh' : 'en',
+        });
+        const text = (r.text ?? '').trim();
+        if (text) {
+          setInputText(prev => (prev ? prev + ' ' : '') + text);
+        }
+      } catch (err) {
+        console.error('[voice] transcribe failed', err);
+      }
+    } else if (voice.state === 'idle' || voice.state === 'error') {
+      await voice.start();
+    }
+  }, [voice, transcribeMutation, state.language]);
 
   const handleSend = useCallback(async (text: string) => {
     if (!text.trim()) return;
@@ -131,6 +159,19 @@ export default function HomeScreen() {
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
+              accessibilityLabel="Voice input"
+              onPress={handleMicTap}
+              disabled={voice.state === 'stopping' || transcribeMutation.isPending}
+              style={[styles.profileBtn, {
+                backgroundColor: voice.state === 'recording' ? colors.error + '30' : colors.surface,
+                borderColor: voice.state === 'recording' ? colors.error : colors.border,
+              }]}
+            >
+              {transcribeMutation.isPending
+                ? <ActivityIndicator size="small" color={colors.primary} />
+                : <IconSymbol name="mic.fill" size={18} color={voice.state === 'recording' ? colors.error : colors.primary} />}
+            </TouchableOpacity>
+            <TouchableOpacity
               accessibilityLabel="Toggle text-to-speech"
               onPress={() => {
                 if (ttsEnabled && typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -156,6 +197,40 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {voice.state === 'recording' && (
+          <View style={[styles.voiceOverlay, { backgroundColor: colors.surface, borderColor: colors.error }]}>
+            <View style={styles.voiceHeader}>
+              <View style={[styles.voiceDot, { backgroundColor: colors.error }]} />
+              <Text style={[styles.voiceLabel, { color: colors.foreground }]}>{state.language === 'zh' ? '聆聽中…' : 'Listening…'}</Text>
+              <Text style={[styles.voiceHint, { color: colors.muted }]}>{state.language === 'zh' ? '再點麥克風結束' : 'Tap mic to stop'}</Text>
+            </View>
+            <View style={styles.waveRow}>
+              {voice.bands.map((v, i) => (
+                <View
+                  key={i}
+                  style={{
+                    width: 4,
+                    marginHorizontal: 2,
+                    borderRadius: 2,
+                    backgroundColor: colors.primary,
+                    height: Math.max(3, v * 36),
+                    opacity: 0.4 + v * 0.6,
+                  }}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {transcribeMutation.isPending && (
+          <View style={[styles.voiceOverlay, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.voiceLabel, { color: colors.foreground, marginLeft: 8 }]}>
+              {state.language === 'zh' ? '辨識中…' : 'Transcribing…'}
+            </Text>
+          </View>
+        )}
 
         {activeJobs?.map(job => (
           <View key={job.id} style={[styles.jobOverlay, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
@@ -214,6 +289,12 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
   profileBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   jobOverlay: { margin: 16, padding: 16, borderRadius: 20, borderWidth: 1.5, gap: 10, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
+  voiceOverlay: { marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 16, borderWidth: 1.5, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  voiceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 0 },
+  voiceDot: { width: 8, height: 8, borderRadius: 4 },
+  voiceLabel: { fontSize: 13, fontWeight: '700' },
+  voiceHint: { fontSize: 11, fontWeight: '500' },
+  waveRow: { flexDirection: 'row', alignItems: 'center', flex: 1, height: 40, justifyContent: 'flex-end' },
   jobHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
   jobTitle: { flex: 1, fontSize: 12, fontWeight: "800", textTransform: "uppercase" },
   jobProgress: { fontSize: 12, fontWeight: "900" },
