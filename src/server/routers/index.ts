@@ -15,6 +15,9 @@ import { financeRouter } from "./finance";
 import { accessRouter } from "./access";
 import { adminDashboardRouter } from "./adminRouter";
 import { lineAdminRouter } from "./lineAdminRouter";
+import { announcementsRouter } from "./announcements";
+import { packagesRouter } from "./packages";
+import { parkingRouter } from "./parking";
 
 export const appRouter = router({
   system: router({
@@ -94,6 +97,9 @@ export const appRouter = router({
   access: accessRouter,
   admin: adminDashboardRouter,
   lineAdmin: lineAdminRouter,
+  announcements: announcementsRouter,
+  packages: packagesRouter,
+  parking: parkingRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -3,10 +3,11 @@ import { View, ActivityIndicator, Text } from "react-native";
 import { Tabs, usePathname, useRouter, useRootNavigationState } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { trpc, createTRPCClient } from "@/lib/trpc";
+import { trpc, createTRPCClient, trpcProxy } from "@/lib/trpc";
 import { AppProvider, useApp } from "@/lib/app-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import { offlineService, type OfflineOperation } from "@/lib/offline";
 
 // Create query client.
 // Retry policy: never retry on 4xx (auth/permission/validation errors won't
@@ -34,6 +35,43 @@ const queryClient = new QueryClient({
 
 // Create tRPC client
 const trpcClient = createTRPCClient();
+
+// ── Offline operation handler ────────────────────────────────────────────────
+// Register once at module load so any queued operations from a previous session
+// can drain on next online tick. The handler dispatches by op.type to the
+// matching tRPC mutation. Throw to trigger retry; resolve to mark complete.
+offlineService.setOperationHandler(async (op: OfflineOperation) => {
+  switch (op.type) {
+    // Resident-side operations
+    case 'cancel_booking':
+      await trpcProxy.bookings.cancel.mutate({ id: op.data.id });
+      return;
+    case 'create_booking':
+      await trpcProxy.bookings.create.mutate(op.data);
+      return;
+    case 'create_work_order':
+      await trpcProxy.workOrders.create.mutate(op.data);
+      return;
+    case 'send_message':
+      await trpcProxy.chat.send.mutate(op.data);
+      return;
+    // Staff-side operations (logistics tablet, admin dashboard)
+    case 'update_booking':
+      await trpcProxy.bookings.updateStatus.mutate(op.data);
+      return;
+    case 'update_work_order':
+      await trpcProxy.workOrders.update.mutate(op.data);
+      return;
+    // Exhaustiveness guard — TypeScript will catch any new OfflineOperationType
+    // that's added without a case here. The unreachable cast lets the runtime
+    // surface the bad type clearly if op.type ever escapes the union.
+    default: {
+      const _exhaustive: never = op.type;
+      throw new Error(`offline: unhandled op.type=${String(_exhaustive)}`);
+    }
+  }
+});
+offlineService.startAutoSync(30_000);
 
 function Root() {
   const { data: user, isLoading } = trpc.auth.me.useQuery(undefined, {
@@ -179,6 +217,18 @@ function ResidentLayout() {
       <Tabs.Screen name="admin/index" options={{ href: null }} />
       <Tabs.Screen name="admin/line" options={{ href: null }} />
       <Tabs.Screen name="admin/amenity-iot" options={{ href: null }} />
+      <Tabs.Screen name="admin/bookings" options={{ href: null }} />
+      <Tabs.Screen name="admin/work-orders" options={{ href: null }} />
+      <Tabs.Screen name="admin/amenities" options={{ href: null }} />
+      <Tabs.Screen name="admin/residents" options={{ href: null }} />
+      <Tabs.Screen name="admin/announcements" options={{ href: null }} />
+      <Tabs.Screen name="announcements" options={{ href: null }} />
+      <Tabs.Screen name="admin/packages" options={{ href: null }} />
+      <Tabs.Screen name="packages" options={{ href: null }} />
+      <Tabs.Screen name="admin/parking" options={{ href: null }} />
+      <Tabs.Screen name="parking" options={{ href: null }} />
+      <Tabs.Screen name="admin/billing" options={{ href: null }} />
+      <Tabs.Screen name="bills" options={{ href: null }} />
       <Tabs.Screen name="social-mediation" options={{ href: null }} />
     </Tabs>
   );
