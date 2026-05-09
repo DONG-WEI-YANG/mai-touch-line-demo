@@ -8,6 +8,7 @@ import { AppProvider, useApp } from "@/lib/app-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { offlineService, type OfflineOperation } from "@/lib/offline";
+import { DemoRoleSwitcher } from "@/components/demo-role-switcher";
 
 // Create query client.
 // Retry policy: never retry on 4xx (auth/permission/validation errors won't
@@ -241,6 +242,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AppProvider>
             <Root />
+            <DemoRoleSwitcher />
           </AppProvider>
         </QueryClientProvider>
       </trpc.Provider>
