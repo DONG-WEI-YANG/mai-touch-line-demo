@@ -9,6 +9,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
+import { offlineService } from "@/lib/offline";
 
 type Booking = {
   id: number;
@@ -39,11 +40,36 @@ export default function MyBookingsScreen() {
           text: "Yes, Cancel",
           style: "destructive",
           onPress: async () => {
+            // Offline-first: if the device is currently offline, queue the
+            // cancel and surface a "will sync later" message instead of a
+            // hard error. The sync handler in _layout.tsx replays it via
+            // trpcProxy when the network comes back.
+            if (!offlineService.isDeviceOnline()) {
+              await offlineService.queueOperation({
+                type: 'cancel_booking',
+                data: { id: bookingId },
+              });
+              Alert.alert("Queued", "You're offline — cancellation will sync when you reconnect");
+              return;
+            }
             try {
               await cancelBookingMutation.mutateAsync({ id: bookingId });
               refetch();
               Alert.alert("Success", "Booking cancelled successfully");
             } catch (error) {
+              // Network errors during a "should-be-online" call still benefit
+              // from the queue — they often mean the server blipped or the
+              // device's online flag is stale.
+              const isNetworkErr = error instanceof TypeError ||
+                (error as { message?: string })?.message?.toLowerCase().includes('network');
+              if (isNetworkErr) {
+                await offlineService.queueOperation({
+                  type: 'cancel_booking',
+                  data: { id: bookingId },
+                });
+                Alert.alert("Queued", "Network hiccup — cancellation will retry automatically");
+                return;
+              }
               Alert.alert("Error", "Failed to cancel booking");
             }
           },

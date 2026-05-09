@@ -7,15 +7,31 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { EventEmitter } from 'events';
 
+export type OfflineOperationType =
+  | 'create_booking'
+  | 'update_booking'
+  | 'cancel_booking'
+  | 'create_work_order'
+  | 'update_work_order'
+  | 'send_message';
+
 export type OfflineOperation = {
   id: string;
-  type: 'create_booking' | 'update_booking' | 'create_work_order' | 'update_work_order' | 'send_message';
+  type: OfflineOperationType;
   data: any;
   timestamp: number;
   retryCount: number;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   error?: string;
 };
+
+/** Caller-supplied function that actually executes the queued operation against
+ *  whatever transport (tRPC, REST, etc.) the app uses. Throws on failure to
+ *  trigger retry; resolves on success. App registers this at boot via
+ *  `offlineService.setOperationHandler(...)`. */
+export type OfflineOperationHandler = (op: OfflineOperation) => Promise<void>;
+
+const MAX_RETRIES = 3;
 
 export type OfflineData = {
   amenities: any[];
@@ -31,8 +47,11 @@ export class OfflineService extends EventEmitter {
   private syncQueue: OfflineOperation[] = [];
   private isSyncing = false;
   private syncInterval: NodeJS.Timeout | null = null;
+  private operationHandler: OfflineOperationHandler | null = null;
 
-  private constructor() {
+  // Public for testability — but treat `getInstance()` as the canonical entry
+  // point in app code so we share one queue + one network listener.
+  constructor() {
     super();
     this.setupNetworkListener();
     this.loadSyncQueue();
@@ -43,6 +62,18 @@ export class OfflineService extends EventEmitter {
       OfflineService.instance = new OfflineService();
     }
     return OfflineService.instance;
+  }
+
+  /** Register the function that actually performs each queued operation.
+   *  App boot (`_layout.tsx`) calls this once with a closure that knows how
+   *  to dispatch each op type via tRPC. Without a handler, queued operations
+   *  simply remain pending until one is registered or the queue is cleared. */
+  setOperationHandler(handler: OfflineOperationHandler | null): void {
+    this.operationHandler = handler;
+  }
+
+  hasOperationHandler(): boolean {
+    return this.operationHandler !== null;
   }
 
   /**
@@ -137,10 +168,13 @@ export class OfflineService extends EventEmitter {
     this.emit('sync:started');
 
     try {
-      // Process operations in order
+      // Process operations in order. Skip failed ops that have exhausted
+      // retries — they need user intervention (clearOperations) or reset.
       for (let i = 0; i < this.syncQueue.length; i++) {
         const op = this.syncQueue[i];
-        if (op.status === 'pending' || op.status === 'failed') {
+        if (op.status === 'pending') {
+          await this.processOperation(op);
+        } else if (op.status === 'failed' && op.retryCount < MAX_RETRIES) {
           await this.processOperation(op);
         }
       }
@@ -159,29 +193,38 @@ export class OfflineService extends EventEmitter {
   }
 
   /**
-   * Process a single operation
+   * Process a single operation by delegating to the registered handler.
+   * Without a handler, the op stays pending — we never silently mark it
+   * completed (the previous implementation did, which was a data-loss bug).
    */
   private async processOperation(op: OfflineOperation): Promise<void> {
+    if (!this.operationHandler) {
+      op.status = 'pending';
+      this.emit('operation:pending', op);
+      return;
+    }
+
+    op.status = 'processing';
+    this.emit('operation:processing', op);
+
     try {
-      op.status = 'processing';
-      this.emit('operation:processing', op);
-
-      // Simulate API call - in real implementation, this would call your actual API
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Mark as completed
+      await this.operationHandler(op);
       op.status = 'completed';
+      op.error = undefined;
       this.emit('operation:completed', op);
     } catch (error) {
       op.status = 'failed';
       op.error = error instanceof Error ? error.message : 'Unknown error';
       op.retryCount++;
 
-      if (op.retryCount >= 3) {
+      if (op.retryCount >= MAX_RETRIES) {
         this.emit('operation:failed', op);
       } else {
-        // Retry later
-        setTimeout(() => this.startSync(), 5000);
+        // Retry later — but only if still online; otherwise wait for the
+        // network:online event to retrigger startSync().
+        if (this.isOnline) {
+          setTimeout(() => this.startSync(), 5000);
+        }
       }
     }
   }

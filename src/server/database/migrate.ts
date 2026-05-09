@@ -177,13 +177,22 @@ export async function runMigrations(): Promise<void> {
 
 /**
  * 回滾最後一次遷移（僅用於開發）
+ *
+ * Currently unimplemented — there is no per-migration "down" SQL on disk and
+ * no recorded inverse for the migrations under migrations/sqlite. Throwing
+ * loudly is safer than logging a warning and silently doing nothing, which
+ * could leave a dev expecting their schema to revert.
+ *
+ * To implement: pair each `0NNN_*.sql` with `0NNN_*.down.sql` (or define
+ * inverse statements in the migration file with a `-- @ROLLBACK` divider)
+ * and read the latest applied row from `_migrations` to drive replay.
  */
 export async function rollbackLastMigration(): Promise<void> {
-  console.log('[Migration] Rolling back last migration...');
-  console.warn('[Migration] WARNING: Rollback is not fully implemented. Manual intervention may be required.');
-  
-  // TODO: 實現回滾邏輯
-  // 這需要為每個遷移創建對應的回滾 SQL
+  throw new Error(
+    '[Migration] rollbackLastMigration is not implemented. ' +
+    'Use db:reset to wipe + re-migrate, or restore from a DB backup. ' +
+    'See src/server/database/migrate.ts for the design sketch.',
+  );
 }
 
 /**

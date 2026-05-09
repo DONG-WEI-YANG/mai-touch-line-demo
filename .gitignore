@@ -94,3 +94,15 @@ model_download.log
 priority_download*.log
 .vercel
 .claude/settings.local.json
+
+# Local QA / demo screenshots (kept locally for reference, not committed).
+# Anchored to repo root so app icons/assets under subdirs are unaffected.
+/admin-dashboard.png
+/demo-*.png
+/final-*.png
+/verify-*.png
+/vercel-*.png
+
+# Playwright MCP local artifacts
+.playwright-mcp/
+/product*.playwright-mcpbundle.js

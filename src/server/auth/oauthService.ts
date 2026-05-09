@@ -333,11 +333,19 @@ export class OAuthService {
 
   /**
    * Revoke token
+   *
+   * TODO(prod-auth): currently a no-op that returns true. To implement,
+   * dispatch on `provider` and POST to the matching revoke endpoint:
+   *   - Google:    https://oauth2.googleapis.com/revoke
+   *   - Microsoft: https://login.microsoftonline.com/common/oauth2/v2.0/logout
+   *   - GitHub:    DELETE https://api.github.com/applications/{id}/token
+   *   - Apple:     https://appleid.apple.com/auth/revoke
+   * Apple/GitHub support both access and refresh tokens; Google takes either.
+   * Returning true unconditionally today means the caller cannot rely on the
+   * upstream session actually being invalidated — only the local DB session is.
    */
   async revokeToken(provider: string, _token: string, tokenType: 'access_token' | 'refresh_token' = 'access_token'): Promise<boolean> {
-    // Not all providers support token revocation
-    // This is a placeholder implementation
-    console.log(`Token revoked for ${provider}: ${tokenType}`);
+    console.log(`[OAuth] revokeToken (no-op stub) provider=${provider} type=${tokenType}`);
     return true;
   }
 

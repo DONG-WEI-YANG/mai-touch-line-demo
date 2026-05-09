@@ -10,14 +10,9 @@ const BIND_CODE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /** Read at call-time, not module-load — Render env additions after the first
  *  deploy don't trigger a process restart in a predictable way, so caching
- *  this at import would freeze it to "" for the lifetime of the worker.
- *
- *  Hardcoded fallback (@679ntrul) covers the demo-window case where the env
- *  var was set but didn't propagate. Once the env var is stable in Render,
- *  remove the fallback. */
-const DEMO_BOT_BASIC_ID_FALLBACK = "@679ntrul";
+ *  this at import would freeze it to "" for the lifetime of the worker. */
 function getLineBotBasicId(): string {
-  return (process.env.LINE_BOT_BASIC_ID || DEMO_BOT_BASIC_ID_FALLBACK).trim();
+  return (process.env.LINE_BOT_BASIC_ID ?? "").trim();
 }
 
 /** 6-char base32-ish code without ambiguous chars (no 0/O, 1/I/L). */

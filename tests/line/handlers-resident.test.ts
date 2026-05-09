@@ -63,7 +63,7 @@ describe('resident handler — facility.book happy path', () => {
       bookFn, pushHousekeepers,
     });
 
-    expect(bookFn).toHaveBeenCalledWith({ facility: 'gym', date: '2026-05-09', time: '19:00' });
+    expect(bookFn).toHaveBeenCalledWith({ facility: 'gym', date: '2026-05-09', time: '19:00' }, 'U1');
     expect(pushHousekeepers).toHaveBeenCalled();
     expect(store.get('U1')?.step).toBe('IDLE');
   });
@@ -155,7 +155,7 @@ describe('resident handler — facility.book happy path', () => {
     expect(reportFn).toHaveBeenCalledWith({
       intent: 'complaint.file',
       slots: { issue: '隔壁鄰居半夜大聲講電話' },
-    });
+    }, 'U1');
   });
 
   it('on bookFn error, rolls back to CONFIRMING and replies busy', async () => {

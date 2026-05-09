@@ -7,7 +7,7 @@ import * as db from './db';
 import { startAuditCleanupScheduler } from './audit-cleanup-scheduler';
 import { setDispatchDeps } from './line/dispatcher';
 import { LineClient } from './line/line-client';
-import { sessionStore } from './line/session-store';
+import { sessionStore, SqliteSessionBackend } from './line/session-store';
 import { makeLineUserRepo } from './line/line-user-repo';
 import { makeMessageLog } from './line/message-log';
 import { setLineAdminContext } from './_core/context';
@@ -61,6 +61,17 @@ async function startServer() {
       // ── Runtime config — must load BEFORE any dep that reads from it ──────
       const runtimeConfig = makeRuntimeConfig(rawSqlite);
       await runtimeConfig.load();
+
+      // ── Persist LINE session state across restarts ───────────────────────
+      // Replace the default in-memory Map with a SQLite-backed store so that
+      // mid-conversation slot-filling survives a Render redeploy. Requires
+      // migration 0010_line_sessions to have run; tolerate failure (fall
+      // back to in-memory) so a missing migration doesn't crash boot.
+      try {
+        sessionStore.setBackend(new SqliteSessionBackend(rawSqlite));
+      } catch (err) {
+        console.warn('[LINE] SqliteSessionBackend unavailable, using in-memory:', (err as Error).message);
+      }
 
       const lineUserRepo = makeLineUserRepo(rawSqlite);
       const lineClient = new LineClient({

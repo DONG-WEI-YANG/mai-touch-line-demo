@@ -1,5 +1,5 @@
 import { createTRPCReact } from "@trpc/react-query";
-import { httpBatchLink } from "@trpc/client";
+import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "../server/routers/index";
 
@@ -73,3 +73,27 @@ export function createTRPCClient() {
         ],
     });
 }
+
+/**
+ * Vanilla (non-React) proxy client for code that needs to call tRPC procedures
+ * outside the React tree — e.g. the offline sync handler in `lib/offline.ts`.
+ * Uses the same Authorization header / credentials behaviour as the React client.
+ */
+export const trpcProxy = createTRPCProxyClient<AppRouter>({
+    transformer: superjson,
+    links: [
+        httpBatchLink({
+            url: `${API_BASE_URL}/api/trpc`,
+            async headers() {
+                const token = getStoredToken();
+                return token ? { Authorization: `Bearer ${token}` } : {};
+            },
+            fetch(url, options) {
+                return fetch(url, {
+                    ...options,
+                    credentials: "include",
+                });
+            },
+        }),
+    ],
+});

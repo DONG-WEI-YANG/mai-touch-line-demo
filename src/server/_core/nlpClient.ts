@@ -104,7 +104,7 @@ export async function analyzeText(request: NLPRequest): Promise<NLPResponse> {
       throw new Error(`NLP service error: ${response.status} ${response.statusText}`);
     }
 
-    return await response.json();
+    return (await response.json()) as NLPResponse;
   } catch (error) {
     console.error("[NLP Client] Error:", error);
 
@@ -157,7 +157,7 @@ export async function batchAnalyzeText(requests: NLPRequest[]): Promise<NLPRespo
       throw new Error(`NLP service error: ${response.status}`);
     }
 
-    const result = await response.json();
+    const result = (await response.json()) as { results?: NLPResponse[] };
     return result.results || [];
   } catch (error) {
     console.error("[NLP Client] Batch error:", error);
@@ -200,7 +200,7 @@ export async function checkNLPHealth(): Promise<{
       };
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as { status?: string; pool_stats?: unknown };
     return {
       status: data.status || "unknown",
       available: true,
