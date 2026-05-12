@@ -9,7 +9,8 @@ export type I18nKey =
   | 'workorder.new.title' | 'workorder.new.from' | 'workorder.new.btn.accept' | 'workorder.new.btn.reassign' | 'workorder.new.btn.reject'
   | 'workorder.status.title' | 'workorder.status.empty'
   | 'ask.facility' | 'ask.date' | 'ask.time' | 'ask.issue' | 'ask.location' | 'ask.urgency' | 'ask.visitor.name' | 'ask.visitor.count'
-  | 'msg.smallTalk' | 'msg.unknown' | 'msg.busy' | 'msg.rateLimited' | 'msg.demoEnded' | 'msg.sessionReset';
+  | 'msg.smallTalk' | 'msg.unknown' | 'msg.busy' | 'msg.rateLimited' | 'msg.demoEnded' | 'msg.sessionReset'
+  | 'menu.prompt' | 'menu.facility' | 'menu.repair' | 'menu.visitor' | 'menu.complaint' | 'menu.status';
 
 const dict: Record<I18nKey, Record<Lang, string>> = {
   'booking.confirm.title':    { 'zh-TW':'預約確認', en:'Booking confirmation', ja:'予約確認' },
@@ -53,6 +54,12 @@ const dict: Record<I18nKey, Record<Lang, string>> = {
   'msg.rateLimited':          { 'zh-TW':'已達 demo 用量上限,請稍後再試', en:'Demo rate limit reached', ja:'デモ利用上限に達しました' },
   'msg.demoEnded':            { 'zh-TW':'Demo 已終止',  en:'Demo ended',       ja:'デモ終了' },
   'msg.sessionReset':         { 'zh-TW':'對話已重置,請重新開始', en:'Session reset, please start over', ja:'セッションをリセットしました' },
+  'menu.prompt':              { 'zh-TW':'不太確定您的意思 🤔 請問需要哪項服務?', en:"Not sure what you mean 🤔 What can I help with?", ja:'ご用件が分かりませんでした 🤔 どのサービスをご利用ですか?' },
+  'menu.facility':            { 'zh-TW':'設施預約',   en:'Book a facility',   ja:'施設予約' },
+  'menu.repair':              { 'zh-TW':'報修',       en:'Report a repair',   ja:'修理依頼' },
+  'menu.visitor':             { 'zh-TW':'訪客登記',   en:'Register visitor',  ja:'訪問者登録' },
+  'menu.complaint':           { 'zh-TW':'反映問題',   en:'File a complaint',  ja:'問題を報告' },
+  'menu.status':              { 'zh-TW':'查詢工單',   en:'Check my orders',   ja:'依頼状況' },
 };
 
 export function t(key: I18nKey, lang: Lang): string {

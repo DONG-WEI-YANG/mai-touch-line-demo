@@ -82,7 +82,7 @@ describe('resident handler — facility.book happy path', () => {
     expect(client.replyOrPush).toHaveBeenCalled();
   });
 
-  it('low confidence intent triggers clarification message', async () => {
+  it('low confidence intent replies with quick-reply service menu', async () => {
     const ai = mkAi({ intent: 'facility.book', confidence: 0.4, slots: {}, language: 'zh-TW' });
     const client = mkClient();
     await handleResident(baseEv('呃'), {
@@ -90,8 +90,10 @@ describe('resident handler — facility.book happy path', () => {
       lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
       bookFn: vi.fn(), pushHousekeepers: vi.fn(),
     });
-    expect(client.replyOrPush).toHaveBeenCalledWith(expect.anything(), 'U1',
-      expect.objectContaining({ type: 'text' }));
+    const msg = (client.replyOrPush as any).mock.calls.at(-1)?.[2];
+    expect(msg.type).toBe('text');
+    expect(msg.quickReply.items).toHaveLength(5);
+    expect(msg.quickReply.items.map((i: any) => i.action.text)).toContain('我要報修');
   });
 
   it('small_talk replies with greeting, no slot filling', async () => {

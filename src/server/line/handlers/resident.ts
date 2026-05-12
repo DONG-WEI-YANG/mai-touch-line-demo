@@ -6,6 +6,7 @@ import { facilityCarousel } from '../flex/facilityCarousel';
 import { dateTimePicker } from '../flex/dateTimePicker';
 import { bookingConfirm } from '../flex/bookingConfirm';
 import { bookingDone } from '../flex/bookingDone';
+import { serviceMenu } from '../flex/serviceMenu';
 import { t } from '../flex/i18n';
 
 const REQUIRED_SLOTS: Partial<Record<IntentName, string[]>> = {
@@ -132,11 +133,11 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
       return;
     }
     if (r.intent === 'unknown' || r.confidence < 0.6) {
-      // Intentionally clear: ambiguous input is treated as conversational reset.
-      // Partial slots from this turn are discarded so the next turn can start fresh.
+      // Ambiguous input → reset and offer a quick-reply service menu so the user
+      // is one tap from any flow instead of stuck re-phrasing. Each button sends
+      // a phrase the classifier then handles confidently.
       deps.store.clear(userId);
-      await deps.client.replyOrPush(ev.replyToken, userId,
-        { type: 'text', text: t('msg.unknown', lang) });
+      await deps.client.replyOrPush(ev.replyToken, userId, serviceMenu(lang));
       return;
     }
   }
