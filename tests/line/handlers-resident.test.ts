@@ -96,6 +96,55 @@ describe('resident handler — facility.book happy path', () => {
     expect(msg.quickReply.items.map((i: any) => i.action.text)).toContain('我要報修');
   });
 
+  it('facility.list replies with facility carousel, no work order', async () => {
+    const ai = mkAi({ intent: 'facility.list', confidence: 0.9, slots: {}, language: 'zh-TW' });
+    const client = mkClient();
+    const reportFn = vi.fn();
+    await handleResident(baseEv('有哪些設施'), {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn: vi.fn(), reportFn, pushHousekeepers: vi.fn(), listMyOrders: vi.fn().mockResolvedValue([]),
+    });
+    const msg = (client.replyOrPush as any).mock.calls.at(-1)?.[2];
+    expect(msg.type).toBe('flex'); // carousel
+    expect(reportFn).not.toHaveBeenCalled();
+    expect(store.get('U1')?.step).toBe('IDLE');
+  });
+
+  it('facility.cancel replies with text guidance, no work order', async () => {
+    const ai = mkAi({ intent: 'facility.cancel', confidence: 0.9, slots: {}, language: 'zh-TW' });
+    const client = mkClient();
+    const reportFn = vi.fn();
+    await handleResident(baseEv('我要取消預約'), {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn: vi.fn(), reportFn, pushHousekeepers: vi.fn(), listMyOrders: vi.fn().mockResolvedValue([]),
+    });
+    const msg = (client.replyOrPush as any).mock.calls.at(-1)?.[2];
+    expect(msg.type).toBe('text');
+    expect(reportFn).not.toHaveBeenCalled();
+  });
+
+  it('workorder.status calls listMyOrders and replies with the list, no work order', async () => {
+    const ai = mkAi({ intent: 'workorder.status', confidence: 0.95, slots: {}, language: 'zh-TW' });
+    const client = mkClient();
+    const reportFn = vi.fn();
+    const listMyOrders = vi.fn().mockResolvedValue([
+      { ref: 'WO-13', label: '報修', detail: '跑步機壞了', status: '處理中' },
+    ]);
+    await handleResident(baseEv('查我的工單'), {
+      ai, client: client as any, store, channelId: 'C',
+      lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' } as any,
+      bookFn: vi.fn(), reportFn, pushHousekeepers: vi.fn(), listMyOrders,
+    });
+    expect(listMyOrders).toHaveBeenCalledWith('U1');
+    const msg = (client.replyOrPush as any).mock.calls.at(-1)?.[2];
+    expect(msg.type).toBe('text');
+    expect(msg.text).toContain('WO-13');
+    expect(reportFn).not.toHaveBeenCalled();
+    expect(store.get('U1')?.step).toBe('IDLE');
+  });
+
   it('small_talk replies with greeting, no slot filling', async () => {
     const ai = mkAi({ intent: 'small_talk', confidence: 0.99, slots: {}, language: 'zh-TW' });
     const client = mkClient();

@@ -23,6 +23,8 @@ export type DispatchDeps = {
   /** Push a plain-text message to a specific LINE user. Used for status-change notifications. */
   pushToLineUser: (lineUserId: string, message: string) => Promise<void>;
   pushHousekeepers: (payload: { orderId: string; from: string; intent: string; summary: string }) => Promise<void>;
+  /** List the resident's work orders + facility bookings (for the workorder.status intent). */
+  listMyOrders: (lineUserId: string) => Promise<import('./flex/myOrders').MyOrderItem[]>;
   updateOrder: (orderId: string, patch: {
     status: 'open'|'in_progress'|'resolved'|'closed';
     acceptedBy?: string;
@@ -157,6 +159,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
           bookFn: deps.bookFn,
           reportFn: deps.reportFn,
           pushHousekeepers: deps.pushHousekeepers,
+          listMyOrders: deps.listMyOrders,
         });
       }
       if (lineUser.role === 'housekeeper') {

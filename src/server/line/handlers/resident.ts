@@ -7,6 +7,7 @@ import { dateTimePicker } from '../flex/dateTimePicker';
 import { bookingConfirm } from '../flex/bookingConfirm';
 import { bookingDone } from '../flex/bookingDone';
 import { serviceMenu } from '../flex/serviceMenu';
+import { myOrders, type MyOrderItem } from '../flex/myOrders';
 import { t } from '../flex/i18n';
 
 const REQUIRED_SLOTS: Partial<Record<IntentName, string[]>> = {
@@ -27,6 +28,8 @@ export type ResidentDeps = {
   // Returns the new order id for echo-back to the user.
   reportFn: (input: { intent: IntentName; slots: Record<string, unknown> }, lineUserId?: string) => Promise<{ id: string }>;
   pushHousekeepers: (payload: { orderId: string; from: string; intent: string; summary: string }) => Promise<void>;
+  // Returns the resident's work orders + facility bookings for the workorder.status intent.
+  listMyOrders: (lineUserId: string) => Promise<MyOrderItem[]>;
 };
 
 export async function handleResident(ev: any, deps: ResidentDeps): Promise<void> {
@@ -140,6 +143,34 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
       await deps.client.replyOrPush(ev.replyToken, userId, serviceMenu(lang));
       return;
     }
+  }
+
+  // ──── Query / list intents — terminal, never create work orders ────
+  // (workorder.status / facility.list / facility.cancel have no required slots,
+  //  so they'd otherwise fall through to the reportFn branch and create a junk
+  //  "[workorder] demo" / "[facility] demo" order.)
+  if (session.intent === 'facility.list') {
+    deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+    await deps.client.replyOrPush(ev.replyToken, userId, facilityCarousel(lang));
+    return;
+  }
+  if (session.intent === 'facility.cancel') {
+    deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+    await deps.client.replyOrPush(ev.replyToken, userId, { type: 'text', text: t('facility.cancel.howto', lang) });
+    return;
+  }
+  if (session.intent === 'workorder.status') {
+    deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+    let items: MyOrderItem[] = [];
+    try {
+      items = await deps.listMyOrders(userId);
+    } catch (err) {
+      console.error('[LINE] listMyOrders failed', { userId, err });
+      await deps.client.replyOrPush(ev.replyToken, userId, { type: 'text', text: t('msg.busy', lang) });
+      return;
+    }
+    await deps.client.replyOrPush(ev.replyToken, userId, myOrders(items, lang));
+    return;
   }
 
   // ──── Slot accumulation + state advance ────

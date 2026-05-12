@@ -10,7 +10,8 @@ export type I18nKey =
   | 'workorder.status.title' | 'workorder.status.empty'
   | 'ask.facility' | 'ask.date' | 'ask.time' | 'ask.issue' | 'ask.location' | 'ask.urgency' | 'ask.visitor.name' | 'ask.visitor.count'
   | 'msg.smallTalk' | 'msg.unknown' | 'msg.busy' | 'msg.rateLimited' | 'msg.demoEnded' | 'msg.sessionReset'
-  | 'menu.prompt' | 'menu.facility' | 'menu.repair' | 'menu.visitor' | 'menu.complaint' | 'menu.status';
+  | 'menu.prompt' | 'menu.facility' | 'menu.repair' | 'menu.visitor' | 'menu.complaint' | 'menu.status'
+  | 'myorders.title' | 'myorders.empty' | 'facility.cancel.howto';
 
 const dict: Record<I18nKey, Record<Lang, string>> = {
   'booking.confirm.title':    { 'zh-TW':'預約確認', en:'Booking confirmation', ja:'予約確認' },
@@ -60,6 +61,9 @@ const dict: Record<I18nKey, Record<Lang, string>> = {
   'menu.visitor':             { 'zh-TW':'訪客登記',   en:'Register visitor',  ja:'訪問者登録' },
   'menu.complaint':           { 'zh-TW':'反映問題',   en:'File a complaint',  ja:'問題を報告' },
   'menu.status':              { 'zh-TW':'查詢工單',   en:'Check my orders',   ja:'依頼状況' },
+  'myorders.title':           { 'zh-TW':'您目前的工單與預約', en:'Your work orders & bookings', ja:'依頼・予約一覧' },
+  'myorders.empty':           { 'zh-TW':'您目前沒有進行中的工單或預約。', en:'You have no active work orders or bookings.', ja:'進行中の依頼・予約はありません。' },
+  'facility.cancel.howto':    { 'zh-TW':'要取消預約嗎?請回覆「查詢工單」查看您的預約編號,再聯繫管理室,或從 App 的「我的預約」操作。', en:'To cancel a booking, reply "Check my orders" to see the booking ref, then contact the front desk or use the app.', ja:'予約をキャンセルするには「依頼状況」と返信して予約番号を確認し、フロントまたはアプリでお手続きください。' },
 };
 
 export function t(key: I18nKey, lang: Lang): string {

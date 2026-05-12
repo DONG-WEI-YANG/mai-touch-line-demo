@@ -272,6 +272,38 @@ async function startServer() {
         return { id: `${prefix}-${orderId}` };
       };
 
+      // workorder.status intent → the resident's work orders + facility bookings.
+      const amenityNameById = new Map<number, string>(
+        [...facilityToAmenityId.entries()].map(([name, id]) => [id, name]),
+      );
+      const WO_CAT_LABEL: Record<string, string> = {
+        maintenance: '報修', security: '保全', concierge: '禮賓',
+        housekeeping: '清潔', laundry: '送洗', vehicle: '車輛', other: '其他',
+      };
+      const WO_STATUS_LABEL: Record<string, string> = {
+        open: '待處理', in_progress: '處理中', resolved: '已完成', closed: '已關閉',
+      };
+      const BK_STATUS_LABEL: Record<string, string> = {
+        confirmed: '已確認', pending: '待確認', cancelled: '已取消', completed: '已完成',
+      };
+      const listMyOrders = async (lineUserId: string) => {
+        const uid = resolveAppUserId(lineUserId);
+        const [wos, bks] = await Promise.all([db.getUserWorkOrders(uid), db.getUserBookings(uid)]);
+        const woItems = wos.map((w: any) => ({
+          ref: `WO-${w.id}`,
+          label: WO_CAT_LABEL[w.category] ?? '工單',
+          detail: String(w.title ?? '').slice(0, 40),
+          status: WO_STATUS_LABEL[w.status] ?? String(w.status),
+        }));
+        const bkItems = bks.map((b: any) => ({
+          ref: `BK-${b.id}`,
+          label: '設施預約',
+          detail: `${amenityNameById.get(b.amenityId) ?? `#${b.amenityId}`} ${b.date} ${b.startTime}`,
+          status: BK_STATUS_LABEL[b.status] ?? String(b.status),
+        }));
+        return [...woItems, ...bkItems];
+      };
+
       // Demo side-effect dispatcher — resolves (router, procedure) → direct db call
       // Avoids tRPC ctx complexity; mirrors the bookFn / updateOrder pattern above.
       const runSideEffect = async (call: { router: string; procedure: string; input: any }): Promise<void> => {
@@ -367,6 +399,7 @@ async function startServer() {
         bookFn,
         reportFn,
         pushHousekeepers,
+        listMyOrders,
         updateOrder,
         runSideEffect,
         commandHandler,
