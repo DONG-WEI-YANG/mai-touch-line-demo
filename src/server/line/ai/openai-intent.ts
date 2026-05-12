@@ -86,7 +86,7 @@ const Schema = z.object({
 
 export class OpenAIIntent implements IntentClassifier {
   private clients: OpenAI[];
-  constructor(private opts: { apiKey?: string; apiKeys?: string[]; model: string; temperature?: number; baseURL?: string }) {
+  constructor(private opts: { apiKey?: string; apiKeys?: string[]; model: string; temperature?: number; baseURL?: string; maxAttempts?: number; retryBaseDelayMs?: number }) {
     // baseURL allows pointing at OpenAI-compatible endpoints (e.g. Gemini at
     // https://generativelanguage.googleapis.com/v1beta/openai/). When unset,
     // SDK defaults to the official OpenAI endpoint.
@@ -105,10 +105,11 @@ export class OpenAIIntent implements IntentClassifier {
     ];
 
     let lastErr: unknown;
-    // Always make at least 2 attempts (preserves single-key retry behavior). When
-    // multiple keys are configured, walk through them all so a 429 on one key is
-    // immediately covered by the next.
-    const totalAttempts = Math.max(2, this.clients.length);
+    // Walk through all keys at least twice, with exponential backoff between
+    // attempts — covers both per-key 429s and transient upstream 5xx/connection
+    // blips (Gemini's free tier + Render egress can be flaky).
+    const totalAttempts = this.opts.maxAttempts ?? Math.max(8, this.clients.length * 2);
+    const retryBaseDelayMs = this.opts.retryBaseDelayMs ?? 250;
     for (let attempt = 0; attempt < totalAttempts; attempt++) {
       const keyIdx = attempt % this.clients.length;
       try {
@@ -122,19 +123,36 @@ export class OpenAIIntent implements IntentClassifier {
         // Strip markdown code fences if model wrapped JSON in them (Gemini does this sometimes)
         const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
         const obj = JSON.parse(cleaned);
-        // Normalize intent aliases (snake_case, hyphen) to canonical dotted form
+        // Gemini returns explicit `null` for unfilled slots; Zod `.optional()` rejects
+        // null (only accepts undefined). Strip null/empty-string slot values before parse.
         if (obj && typeof obj === 'object') {
           (obj as { intent?: unknown }).intent = normalizeIntent((obj as { intent?: unknown }).intent);
+          const s = (obj as { slots?: Record<string, unknown> }).slots;
+          if (s && typeof s === 'object') {
+            for (const k of Object.keys(s)) {
+              if (s[k] === null || s[k] === '') delete s[k];
+            }
+          }
         }
         const parsed = Schema.safeParse(obj);
         if (!parsed.success) {
-          console.warn('[AI] schema parse fail, raw=', raw);
+          console.warn('[AI] schema parse fail, raw=', raw, 'zodErr=', JSON.stringify(parsed.error.issues));
           return { intent: 'unknown', confidence: 0, slots: {}, language: 'zh-TW' };
         }
+        if (attempt > 0) console.log(`[AI] succeeded on attempt ${attempt + 1}/${totalAttempts} (key idx ${keyIdx})`);
         return parsed.data as IntentResult;
       } catch (err: any) {
         lastErr = err;
-        console.warn(`[AI] attempt ${attempt + 1}/${totalAttempts} failed (key idx ${keyIdx}, status ${err?.status ?? '?'}):`, err?.message ?? err);
+        // Full diagnostic dump — status alone ("400 no body") hides whether this is
+        // quota, auth, region-block, or a malformed-request issue.
+        let bodyDetail: string | undefined;
+        try { bodyDetail = JSON.stringify({ error: err?.error, code: err?.code, type: err?.type, headers: err?.headers }); } catch { /* ignore */ }
+        console.warn(`[AI] attempt ${attempt + 1}/${totalAttempts} failed (key idx ${keyIdx}, status ${err?.status ?? '?'}): ${err?.message ?? err} | detail=${bodyDetail ?? 'n/a'}`);
+        // Exponential backoff (capped) before the next attempt — but not after the last
+        if (attempt < totalAttempts - 1 && retryBaseDelayMs > 0) {
+          const delayMs = Math.min(8000, retryBaseDelayMs * 2 ** attempt);
+          await new Promise(r => setTimeout(r, delayMs));
+        }
       }
     }
     throw new AiUnavailableError('OpenAI classify failed after retry', lastErr);

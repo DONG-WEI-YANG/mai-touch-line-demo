@@ -38,13 +38,14 @@ describe('OpenAIIntent', () => {
     expect(r.confidence).toBe(0);
   });
 
-  it('retries once then throws AiUnavailableError', async () => {
-    // Use Once×2 instead of persistent mockRejectedValue to avoid unhandled-rejection
+  it('retries then throws AiUnavailableError after exhausting attempts', async () => {
+    // Use Once×N instead of persistent mockRejectedValue to avoid unhandled-rejection
     // tracking in Vitest 4 (the permanent form leaves a standing rejected-promise object
     // that the runner marks as leaked even though classify() awaits and catches both).
     create.mockRejectedValueOnce(new Error('429'));
     create.mockRejectedValueOnce(new Error('429'));
-    const ai = new OpenAIIntent({ apiKey: 'k', model: 'gpt-4o-mini' });
+    // maxAttempts:2 + retryBaseDelayMs:0 keeps this fast and deterministic.
+    const ai = new OpenAIIntent({ apiKey: 'k', model: 'gpt-4o-mini', maxAttempts: 2, retryBaseDelayMs: 0 });
     await expect(ai.classify('hi', { userId: 'U3' })).rejects.toBeInstanceOf(AiUnavailableError);
     expect(create).toHaveBeenCalledTimes(2);
   });
@@ -54,9 +55,23 @@ describe('OpenAIIntent', () => {
     create.mockResolvedValueOnce(ok({
       intent: 'small_talk', confidence: 0.99, slots: {}, language: 'zh-TW',
     }));
-    const ai = new OpenAIIntent({ apiKeys: ['k1', 'k2'], model: 'gpt-4o-mini' });
+    const ai = new OpenAIIntent({ apiKeys: ['k1', 'k2'], model: 'gpt-4o-mini', retryBaseDelayMs: 0 });
     const r = await ai.classify('hi', { userId: 'U4' });
     expect(r.intent).toBe('small_talk');
     expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it('strips null/empty slot values before schema parse (Gemini returns explicit null)', async () => {
+    create.mockResolvedValueOnce(ok({
+      intent: 'repair.report', confidence: 0.95,
+      slots: { date: null, time: null, facility: null, location: '客廳', issue: '冷氣壞了', urgency: null },
+      language: 'zh-TW', rephrase: '客廳冷氣維修',
+    }));
+    const ai = new OpenAIIntent({ apiKey: 'k', model: 'gemini-flash-latest', retryBaseDelayMs: 0 });
+    const r = await ai.classify('客廳冷氣壞了', { userId: 'U5' });
+    expect(r.intent).toBe('repair.report');
+    expect(r.slots.location).toBe('客廳');
+    expect(r.slots.issue).toBe('冷氣壞了');
+    expect(r.slots.date).toBeUndefined();
   });
 });
