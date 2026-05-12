@@ -18,7 +18,7 @@ describe('runtime-config', () => {
   it('reads seeded value', async () => {
     await cfg.load();
     expect(cfg.get<number>('line.rateLimit.perMinute', 999)).toBe(10);
-    expect(cfg.get<string>('ai.openai.model', 'fallback')).toBe('gpt-4o-mini');
+    expect(cfg.get<string>('ai.openai.model', 'fallback')).toBe('gemini-flash-latest');
     expect(cfg.get<boolean>('demo.bannerEnabled', false)).toBe(true);
   });
 
@@ -40,9 +40,9 @@ describe('runtime-config', () => {
   it('snapshot returns shallow copy of cache', async () => {
     await cfg.load();
     const snap = cfg.snapshot();
-    expect(snap['ai.openai.model']).toBe('gpt-4o-mini');
+    expect(snap['ai.openai.model']).toBe('gemini-flash-latest');
     snap['ai.openai.model'] = 'mutated';
-    expect(cfg.get<string>('ai.openai.model', 'x')).toBe('gpt-4o-mini'); // not affected
+    expect(cfg.get<string>('ai.openai.model', 'x')).toBe('gemini-flash-latest'); // not affected
   });
 
   it('throws if get called before load', () => {

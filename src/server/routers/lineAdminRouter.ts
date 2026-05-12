@@ -172,8 +172,10 @@ function validateConfigValue(key: string, value: unknown): ValidationResult {
         return { ok: false, error: 'must be a number between 1 and 100000' };
       return { ok: true, value };
     case 'ai.openai.model':
-      if (typeof value !== 'string' || !/^gpt-[\w.-]+$/.test(value))
-        return { ok: false, error: 'must be a string matching gpt-* pattern' };
+      // Accepts OpenAI (gpt-*) and Gemini (gemini-*) model names. Note: this row
+      // is display-only — the live classifier reads OPENAI_MODEL env, not this.
+      if (typeof value !== 'string' || !/^(gpt|gemini)[\w.-]+$/.test(value))
+        return { ok: false, error: 'must be a string matching gpt-* or gemini-* pattern' };
       return { ok: true, value };
     case 'ai.openai.temperature':
       if (typeof value !== 'number' || value < 0 || value > 2)

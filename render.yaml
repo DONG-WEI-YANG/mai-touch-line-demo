@@ -1,3 +1,8 @@
+# NOTE: the LIVE LINE backend is now the Oregon service `mai-touch-line-us`
+# (created via Render API, not this blueprint). Singapore's shared egress IP
+# couldn't reach Google's Gemini endpoint (HTTP 400 on every call), so the
+# backend was migrated to us-west. If recreating from a blueprint, use a US
+# region — keep this file's `region: singapore` only for the legacy service.
 services:
   - type: web
     name: mai-touch-demo
@@ -24,10 +29,15 @@ services:
         sync: false
       - key: LINE_CHANNEL_ID
         value: default
+      # Gemini keys (AIzaSy…) + Google's OpenAI-compat endpoint. profile.ts
+      # auto-swaps gpt-* model names to a Gemini model when it sees this combo,
+      # but set the Gemini model explicitly so there's no ambiguity.
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai/
       - key: OPENAI_MODEL
-        value: gpt-4o-mini
+        value: gemini-flash-latest
       - key: OPENAI_TEMPERATURE
         value: "0.1"
       - key: BASE_URL
