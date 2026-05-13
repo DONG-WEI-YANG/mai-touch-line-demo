@@ -213,14 +213,24 @@ async function startServer() {
       const STATUS_ZH: Record<LineStatus, string> = {
         open: '已建立', in_progress: '處理中', resolved: '已完成', closed: '已關閉',
       };
+      // Friendly label for a housekeeper LINE userId — prefers their display name,
+      // falls back to "管家 <short-id>" so the logistics/admin dashboard never shows a raw LINE U-hash.
+      const friendlyHousekeeperLabel = (lineUserId: string): string => {
+        const hk = lineUserRepo.byLineId(channelId, lineUserId);
+        const name = hk?.displayName?.trim();
+        if (name) return name;
+        return `管家 ${lineUserId.slice(1, 7)}`;
+      };
       // Notify the LINE user who originally filed work order app_user_id=`appUserId` (if any) — best-effort.
-      const pushStatusBackToRequester = async (appUserId: number, orderRef: string, title: string, status: LineStatus): Promise<void> => {
+      // Includes the assignee name in the message when a housekeeper just accepted.
+      const pushStatusBackToRequester = async (appUserId: number, orderRef: string, title: string, status: LineStatus, assigneeName?: string): Promise<void> => {
         try {
           const row = rawSqlite.prepare(
             `SELECT line_user_id FROM line_user WHERE app_user_id = ? AND channel_id = ? LIMIT 1`
           ).get(appUserId, channelId) as { line_user_id: string } | undefined;
           if (row?.line_user_id) {
-            await pushToLineUser(row.line_user_id, `工單 #${orderRef}「${title}」狀態更新:${STATUS_ZH[status]}`);
+            const suffix = assigneeName ? `(處理人:${assigneeName})` : '';
+            await pushToLineUser(row.line_user_id, `工單 #${orderRef}「${title}」狀態更新:${STATUS_ZH[status]}${suffix}`);
           }
         } catch (err) {
           console.error('[LINE] status push-back to requester failed', { orderRef, appUserId, err });
@@ -255,10 +265,17 @@ async function startServer() {
         if (woMatch) {
           const numId = Number(woMatch[1]);
           const before = await db.getWorkOrderById(numId);
+          // When a housekeeper accepts, stamp `assignedTo` with their friendly name
+          // so logistics/admin dashboards (and `WO_STATUS_LABEL` consumers) can show
+          // "誰在處理"; on reject we leave assignedTo alone (it's a cancellation).
+          const assigneeName = patch.acceptedBy ? friendlyHousekeeperLabel(patch.acceptedBy) : undefined;
           // work_orders.status enum === LineStatus union — no mapping needed.
-          await db.updateWorkOrder(numId, { status: patch.status });
-          console.log('[LINE] work order status updated', { id: numId, status: patch.status, by: patch.acceptedBy ?? patch.rejectedBy });
-          if (before) await pushStatusBackToRequester(before.userId, orderId, String(before.title ?? ''), patch.status);
+          await db.updateWorkOrder(numId, {
+            status: patch.status,
+            ...(assigneeName ? { assignedTo: assigneeName } : {}),
+          });
+          console.log('[LINE] work order status updated', { id: numId, status: patch.status, assignedTo: assigneeName, by: patch.acceptedBy ?? patch.rejectedBy });
+          if (before) await pushStatusBackToRequester(before.userId, orderId, String(before.title ?? ''), patch.status, assigneeName);
           return;
         }
 

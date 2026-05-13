@@ -13,6 +13,7 @@ type WorkOrder = {
     category: "maintenance" | "security" | "concierge" | "housekeeping" | "laundry" | "vehicle" | "other";
     status: "open" | "in_progress" | "resolved" | "closed";
     priority: "low" | "medium" | "high" | "urgent";
+    assignedTo: string | null;
     createdAt: string;
   };
   userName: string | null;
@@ -130,6 +131,11 @@ export default function LogisticsDashboardScreen() {
           <Text style={[styles.cardMeta, { color: colors.muted }]}>From: {item.userName || 'N/A'}</Text>
           <Text style={[styles.cardMeta, { color: colors.muted }]}>{new Date(wo.createdAt).toLocaleDateString()}</Text>
         </View>
+        {wo.assignedTo ? (
+          <Text style={[styles.assigneeRow, { color: colors.primary }]} numberOfLines={1}>
+            🧑‍🔧 處理人:{wo.assignedTo}
+          </Text>
+        ) : null}
         {/* Status workflow — tap to advance. workOrders.update also pushes the
             change back to the resident's LINE chat (see workOrders router). */}
         <View style={styles.actionRow}>
@@ -299,6 +305,11 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  assigneeRow: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 8,
   },
   actionRow: {
     flexDirection: 'row',
