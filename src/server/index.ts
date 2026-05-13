@@ -204,34 +204,65 @@ async function startServer() {
       // Real pushHousekeepers — fan-out to all housekeepers in the channel
       const pushHousekeepers = makePushHousekeepers({ lineUserRepo, client: lineClient, channelId });
 
-      // updateOrder: maps BK-<id> → bookings table status update
-      // LINE statuses map to booking status enum: confirmed|pending|cancelled|completed
+      // updateOrder: housekeeper accept/reject from LINE → write the shared 單號
+      // back to the right table, then push the status change to the original
+      // LINE requester so the loop (resident ⇄ housekeeper ⇄ logistics) closes.
+      //   BK-<id>            → bookings table (status enum: confirmed|pending|cancelled|completed)
+      //   WO-/V-/C-<id>      → work_orders table (status enum is the LineStatus union 1:1)
+      type LineStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+      const STATUS_ZH: Record<LineStatus, string> = {
+        open: '已建立', in_progress: '處理中', resolved: '已完成', closed: '已關閉',
+      };
+      // Notify the LINE user who originally filed work order app_user_id=`appUserId` (if any) — best-effort.
+      const pushStatusBackToRequester = async (appUserId: number, orderRef: string, title: string, status: LineStatus): Promise<void> => {
+        try {
+          const row = rawSqlite.prepare(
+            `SELECT line_user_id FROM line_user WHERE app_user_id = ? AND channel_id = ? LIMIT 1`
+          ).get(appUserId, channelId) as { line_user_id: string } | undefined;
+          if (row?.line_user_id) {
+            await pushToLineUser(row.line_user_id, `工單 #${orderRef}「${title}」狀態更新:${STATUS_ZH[status]}`);
+          }
+        } catch (err) {
+          console.error('[LINE] status push-back to requester failed', { orderRef, appUserId, err });
+        }
+      };
+      const WORK_ORDER_REF = /^(?:WO|V|C)-(\d+)$/;
       const updateOrder = async (orderId: string, patch: {
-        status: 'open'|'in_progress'|'resolved'|'closed';
+        status: LineStatus;
         acceptedBy?: string;
         rejectedBy?: string;
       }): Promise<void> => {
-        if (!orderId.startsWith('BK-')) {
-          console.warn('[LINE] unknown orderId format', orderId);
+        // ── Facility booking ─────────────────────────────────────────────────
+        if (orderId.startsWith('BK-')) {
+          const numId = Number(orderId.slice(3));
+          if (!Number.isFinite(numId)) return;
+          // DbBookingStatus mirrors updateBookingStatus()'s inline parameter type in db.ts.
+          type DbBookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed';
+          const dbStatusMap: Record<LineStatus, DbBookingStatus> = {
+            open:        'pending',    // re-queued → pending
+            in_progress: 'confirmed',  // housekeeper accepted → booking confirmed
+            resolved:    'completed',  // completed
+            closed:      'cancelled',  // housekeeper rejected → booking cancelled
+          };
+          const dbStatus = dbStatusMap[patch.status];
+          await db.updateBookingStatus(numId, dbStatus);
+          console.log('[LINE] booking status updated', { id: numId, lineStatus: patch.status, dbStatus, by: patch.acceptedBy ?? patch.rejectedBy });
           return;
         }
-        const numId = Number(orderId.slice(3));
-        if (!Number.isFinite(numId)) return;
-        // Map LINE work-order statuses to bookings.status enum.
-        // LineStatus mirrors the 'status' union in the updateOrder patch parameter above.
-        // DbBookingStatus mirrors updateBookingStatus()'s inline parameter type in db.ts
-        // (consider exporting a named BookingStatus type from db.ts for reuse).
-        type LineStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
-        type DbBookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed';
-        const dbStatusMap: Record<LineStatus, DbBookingStatus> = {
-          open:        'pending',    // re-queued → pending
-          in_progress: 'confirmed',  // housekeeper accepted → booking confirmed
-          resolved:    'completed',  // completed
-          closed:      'cancelled',  // housekeeper rejected → booking cancelled
-        };
-        const dbStatus = dbStatusMap[patch.status];
-        await db.updateBookingStatus(numId, dbStatus);
-        console.log('[LINE] booking status updated', { id: numId, lineStatus: patch.status, dbStatus, by: patch.acceptedBy ?? patch.rejectedBy });
+
+        // ── Work order (repair / visitor / complaint) ────────────────────────
+        const woMatch = orderId.match(WORK_ORDER_REF);
+        if (woMatch) {
+          const numId = Number(woMatch[1]);
+          const before = await db.getWorkOrderById(numId);
+          // work_orders.status enum === LineStatus union — no mapping needed.
+          await db.updateWorkOrder(numId, { status: patch.status });
+          console.log('[LINE] work order status updated', { id: numId, status: patch.status, by: patch.acceptedBy ?? patch.rejectedBy });
+          if (before) await pushStatusBackToRequester(before.userId, orderId, String(before.title ?? ''), patch.status);
+          return;
+        }
+
+        console.warn('[LINE] unknown orderId format', orderId);
       };
 
       // Generic work-order writer for non-facility intents (repair/visitor/complaint).
