@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, Alert } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -38,6 +38,14 @@ export default function LogisticsDashboardScreen() {
   const { data: workOrders, isLoading, refetch } = trpc.workOrders.listAll.useQuery();
   const { data: bookings, refetch: refetchBookings } = trpc.bookings.listAll.useQuery();
 
+  // Advance a work order's status. The server (workOrders.update) also pushes a
+  // "工單 #WO-N 狀態更新:…" message back to the original LINE requester, so the
+  // resident sees the change in real time on LINE — that's the demo money shot.
+  const updateWO = trpc.workOrders.update.useMutation({
+    onSuccess: () => { refetch(); Alert.alert('已更新', '住戶已收到 LINE 通知 📲'); },
+    onError: (err) => Alert.alert('更新失敗', err.message),
+  });
+
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = async () => {
@@ -67,6 +75,20 @@ export default function LogisticsDashboardScreen() {
     vehicle:      "車輛接送",
     other:        "其他",
   };
+  const ALL_WO_STATUS: WorkOrder["workOrder"]["status"][] = ["open", "in_progress", "resolved", "closed"];
+  const woStatusLabel: Record<WorkOrder["workOrder"]["status"], string> = {
+    open:        "待處理",
+    in_progress: "處理中",
+    resolved:    "已完成",
+    closed:      "已關閉",
+  };
+  const woStatusColor: Record<WorkOrder["workOrder"]["status"], string> = {
+    open:        colors.warning,
+    in_progress: colors.primary,
+    resolved:    colors.success,
+    closed:      colors.muted,
+  };
+
   const bookingStatusLabel: Record<BookingRow["booking"]["status"], string> = {
     confirmed: "已確認",
     pending:   "待確認",
@@ -80,34 +102,55 @@ export default function LogisticsDashboardScreen() {
     completed: colors.primary,
   };
 
-  const WorkOrderCard = ({ item }: { item: WorkOrder }) => (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.cardHeader}>
-        <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={1}>{item.workOrder.title}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: priorityColors[item.workOrder.priority] + '20' }]}>
-          <Text style={[styles.statusText, { color: priorityColors[item.workOrder.priority] }]}>{item.workOrder.priority.toUpperCase()}</Text>
+  const WorkOrderCard = ({ item }: { item: WorkOrder }) => {
+    const wo = item.workOrder;
+    return (
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={1}>{wo.title}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: woStatusColor[wo.status] + '22' }]}>
+            <Text style={[styles.statusText, { color: woStatusColor[wo.status] }]}>{woStatusLabel[wo.status]}</Text>
+          </View>
+        </View>
+        <View style={styles.chipRow}>
+          <View style={[styles.chip, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}>
+            <Text style={[styles.chipText, { color: colors.primary }]}>#WO-{wo.id}</Text>
+          </View>
+          <View style={[styles.chip, { backgroundColor: colors.muted + '15', borderColor: colors.muted + '40' }]}>
+            <Text style={[styles.chipText, { color: colors.foreground }]}>{categoryLabel[wo.category]}</Text>
+          </View>
+          <View style={[styles.chip, { backgroundColor: priorityColors[wo.priority] + '15', borderColor: priorityColors[wo.priority] + '40' }]}>
+            <Text style={[styles.chipText, { color: priorityColors[wo.priority] }]}>{wo.priority.toUpperCase()}</Text>
+          </View>
+        </View>
+        <Text style={[styles.cardDescription, { color: colors.muted }]} numberOfLines={2}>
+          {wo.description || "No description provided."}
+        </Text>
+        <View style={styles.cardFooter}>
+          <Text style={[styles.cardMeta, { color: colors.muted }]}>From: {item.userName || 'N/A'}</Text>
+          <Text style={[styles.cardMeta, { color: colors.muted }]}>{new Date(wo.createdAt).toLocaleDateString()}</Text>
+        </View>
+        {/* Status workflow — tap to advance. workOrders.update also pushes the
+            change back to the resident's LINE chat (see workOrders router). */}
+        <View style={styles.actionRow}>
+          {ALL_WO_STATUS.filter((s) => s !== wo.status).map((s) => (
+            <TouchableOpacity
+              key={s}
+              disabled={updateWO.isPending}
+              onPress={() => updateWO.mutate({ id: wo.id, status: s })}
+              style={[styles.actionBtn, {
+                backgroundColor: woStatusColor[s] + '1A',
+                borderColor: woStatusColor[s] + '55',
+                opacity: updateWO.isPending ? 0.5 : 1,
+              }]}
+            >
+              <Text style={[styles.actionBtnText, { color: woStatusColor[s] }]}>→ {woStatusLabel[s]}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
-      <View style={styles.chipRow}>
-        <View style={[styles.chip, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}>
-          <Text style={[styles.chipText, { color: colors.primary }]}>#WO-{item.workOrder.id}</Text>
-        </View>
-        <View style={[styles.chip, { backgroundColor: colors.muted + '15', borderColor: colors.muted + '40' }]}>
-          <Text style={[styles.chipText, { color: colors.foreground }]}>{categoryLabel[item.workOrder.category]}</Text>
-        </View>
-        <View style={[styles.chip, { backgroundColor: colors.muted + '15', borderColor: colors.muted + '40' }]}>
-          <Text style={[styles.chipText, { color: colors.muted }]}>{item.workOrder.status}</Text>
-        </View>
-      </View>
-      <Text style={[styles.cardDescription, { color: colors.muted }]} numberOfLines={2}>
-        {item.workOrder.description || "No description provided."}
-      </Text>
-      <View style={styles.cardFooter}>
-        <Text style={[styles.cardMeta, { color: colors.muted }]}>From: {item.userName || 'N/A'}</Text>
-        <Text style={[styles.cardMeta, { color: colors.muted }]}>{new Date(item.workOrder.createdAt).toLocaleDateString()}</Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   const BookingCard = ({ item }: { item: BookingRow }) => (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -256,5 +299,24 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(127,127,127,0.25)',
+  },
+  actionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  actionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
