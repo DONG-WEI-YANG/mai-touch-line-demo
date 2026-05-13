@@ -1,0 +1,35 @@
+name: keep-render-warm
+
+# Render Free spins the instance down after ~15 min of no inbound HTTP traffic.
+# When it's asleep, a LINE webhook delivery hits a cold-starting server (30-60s),
+# LINE times out, and — because LINE does not retry webhooks by default — the
+# customer's message is silently dropped and the bot never replies.
+# This workflow pings /health frequently enough to keep the instance awake.
+#
+# NOTE: GitHub-hosted scheduled workflows can be delayed several minutes under
+# load, so a 10-min cron occasionally slips past Render's 15-min idle window.
+# For a hard guarantee also add an external pinger (cron-job.org) and/or enable
+# "Webhook redelivery" in the LINE Developers console as a safety net.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # every 10 minutes (UTC)
+  workflow_dispatch: {}       # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping Render /health (with cold-start retries)
+        run: |
+          URL="https://mai-touch-line-us.onrender.com/health"
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 60 "$URL" || echo 000)
+            echo "attempt $i -> HTTP $code"
+            cat /tmp/body; echo
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 15
+          done
+          echo "::error::/health did not return 200 after retries"
+          exit 1
