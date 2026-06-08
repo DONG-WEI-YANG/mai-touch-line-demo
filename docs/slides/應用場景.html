@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>智慧住宅・應用場景</title>
+<style>
+  :root{
+    --ink:#0c1322;        /* 深夜藍 */
+    --ink-2:#12203a;
+    --gold:#c9a35a;       /* 香檳金 */
+    --gold-soft:#e6cf9a;
+    --line:#27406b;
+    --paper:#f6f3ec;
+    --resident:#6fb1ff;   /* 住戶 */
+    --center:#c9a35a;     /* 管理中心 */
+    --property:#69d6a8;   /* 物業 */
+    --muted:#9fb0cc;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:#070b14;
+    font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;padding:24px;color:var(--paper);
+  }
+  /* 16:9 投影片畫布 */
+  .slide{
+    position:relative;width:1280px;height:720px;border-radius:18px;overflow:hidden;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #1a2c4d 0%, var(--ink) 55%, #070d18 100%);
+    box-shadow:0 40px 120px rgba(0,0,0,.6), inset 0 0 0 1px rgba(201,163,90,.18);
+  }
+  .frame{position:absolute;inset:18px;border:1px solid rgba(201,163,90,.22);border-radius:12px;pointer-events:none}
+
+  header{position:absolute;top:40px;left:56px;right:56px;display:flex;justify-content:space-between;align-items:flex-end}
+  .kicker{font-size:14px;letter-spacing:.42em;color:var(--gold);font-weight:600}
+  h1{margin:6px 0 0;font-size:34px;letter-spacing:.04em;font-weight:700}
+  h1 small{display:block;font-size:15px;font-weight:400;color:var(--muted);letter-spacing:.06em;margin-top:6px}
+  .brandtag{text-align:right;font-size:12.5px;color:var(--muted);line-height:1.7}
+  .brandtag b{color:var(--gold-soft);font-weight:600}
+
+  /* 三角色帶 */
+  .stage{position:absolute;top:150px;left:56px;right:56px;height:250px}
+  .role{position:absolute;top:0;width:230px;text-align:center}
+  .role .chip{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;font-size:13px;font-weight:600;letter-spacing:.06em}
+  .role h3{margin:14px 0 4px;font-size:20px;letter-spacing:.04em}
+  .role p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .r-left{left:0}
+  .r-center{left:50%;transform:translateX(-50%);width:300px}
+  .r-right{right:0}
+  .chip-res{background:rgba(111,177,255,.12);color:var(--resident);border:1px solid rgba(111,177,255,.4)}
+  .chip-prop{background:rgba(105,214,168,.12);color:var(--property);border:1px solid rgba(105,214,168,.4)}
+
+  /* 三場景 */
+  .flows{position:absolute;left:56px;right:56px;bottom:46px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .flow{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+    border:1px solid rgba(201,163,90,.22);border-radius:14px;padding:16px 16px 14px;position:relative}
+  .flow .no{position:absolute;top:-13px;left:16px;width:26px;height:26px;border-radius:50%;
+    background:var(--gold);color:#1a1304;font-weight:800;font-size:13px;display:grid;place-items:center;
+    box-shadow:0 4px 12px rgba(201,163,90,.45)}
+  .flow h4{margin:4px 0 12px;font-size:16px;letter-spacing:.03em}
+  .flow h4 span{color:var(--gold-soft)}
+  .steps{display:flex;align-items:center;gap:8px}
+  .step{flex:1;text-align:center}
+  .step .ic{width:42px;height:42px;margin:0 auto 6px;display:grid;place-items:center;border-radius:11px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+  .step small{display:block;font-size:11px;color:#cdd8ec;line-height:1.4;font-weight:500}
+  .arrow{color:var(--gold);flex:0 0 16px;font-size:16px;opacity:.8}
+  .flow .ex{margin-top:11px;font-size:11.5px;color:var(--muted);border-top:1px dashed rgba(201,163,90,.22);padding-top:9px}
+  .flow .ex b{color:var(--gold-soft);font-weight:600}
+
+  .foot{position:absolute;bottom:14px;left:56px;right:56px;display:flex;justify-content:space-between;font-size:11px;color:#5e74a0}
+
+  @media print{
+    body{background:#fff;padding:0}
+    .slide{box-shadow:none;border-radius:0}
+    @page{size:1280px 720px;margin:0}
+  }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="frame"></div>
+
+  <header>
+    <div>
+      <div class="kicker">LUXURY RESIDENCE · INTELLIGENT OPERATIONS</div>
+      <h1>一顆聰明大腦，串起住戶的每個生活需求
+        <small>從「口說設備」到「任務分派」— 三大生活場景，同一智能中樞</small>
+      </h1>
+    </div>
+    <div class="brandtag">
+      建商級住宅管理平台<br>
+      <b>LINE × IoT × 智能派工</b><br>
+      住戶 · 管理中心 · 物業
+    </div>
+  </header>
+
+  <!-- 三角色舞台 + 連線 -->
+  <div class="stage">
+    <svg width="100%" height="100%" viewBox="0 0 1168 250" preserveAspectRatio="none" style="position:absolute;inset:0">
+      <defs>
+        <linearGradient id="lr" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#6fb1ff"/><stop offset="1" stop-color="#c9a35a"/>
+        </linearGradient>
+        <linearGradient id="rp" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#c9a35a"/><stop offset="1" stop-color="#69d6a8"/>
+        </linearGradient>
+        <radialGradient id="brainGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0" stop-color="rgba(201,163,90,.55)"/><stop offset="1" stop-color="rgba(201,163,90,0)"/>
+        </radialGradient>
+      </defs>
+      <!-- 需求上行 / 回饋下行 -->
+      <path d="M150,150 C 340,110 430,110 560,150" fill="none" stroke="url(#lr)" stroke-width="2.5" stroke-dasharray="2 7" stroke-linecap="round"/>
+      <path d="M608,150 C 740,110 840,110 1018,150" fill="none" stroke="url(#rp)" stroke-width="2.5" stroke-dasharray="2 7" stroke-linecap="round"/>
+      <text x="355" y="100" fill="#9fb0cc" font-size="12" text-anchor="middle">需求事件 ↗</text>
+      <text x="815" y="100" fill="#9fb0cc" font-size="12" text-anchor="middle">智能派工 ↘</text>
+      <path d="M1018,182 C 600,250 560,250 150,182" fill="none" stroke="#27406b" stroke-width="2" stroke-dasharray="2 6"/>
+      <text x="584" y="244" fill="#5e74a0" font-size="11.5" text-anchor="middle">完成回報・滿意度回饋 ←</text>
+      <!-- 中央大腦光暈 -->
+      <circle cx="584" cy="150" r="120" fill="url(#brainGlow)"/>
+    </svg>
+
+    <!-- 住戶 -->
+    <div class="role r-left">
+      <svg width="86" height="86" viewBox="0 0 86 86" aria-label="住戶">
+        <circle cx="43" cy="43" r="40" fill="rgba(111,177,255,.10)" stroke="#6fb1ff" stroke-width="1.5"/>
+        <circle cx="43" cy="35" r="13" fill="none" stroke="#6fb1ff" stroke-width="2.4"/>
+        <path d="M22 64 C 22 50, 64 50, 64 64" fill="none" stroke="#6fb1ff" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+      <h3>住戶</h3>
+      <span class="chip chip-res">●　多元生活需求</span>
+      <p>用最自然的方式提出：<br>說一句話、按一個鍵、掃一個碼</p>
+    </div>
+
+    <!-- 管理中心：聰明大腦 -->
+    <div class="role r-center">
+      <svg width="150" height="150" viewBox="0 0 150 150" aria-label="管理中心 智能大腦">
+        <circle cx="75" cy="75" r="60" fill="rgba(201,163,90,.10)" stroke="#c9a35a" stroke-width="2"/>
+        <circle cx="75" cy="75" r="60" fill="none" stroke="#e6cf9a" stroke-width="1" stroke-dasharray="3 6" opacity=".6"/>
+        <!-- 大腦輪廓 -->
+        <path d="M75 38
+                 C 58 38, 50 50, 53 60
+                 C 44 64, 44 78, 53 82
+                 C 52 95, 64 102, 75 98
+                 C 86 102, 98 95, 97 82
+                 C 106 78, 106 64, 97 60
+                 C 100 50, 92 38, 75 38 Z"
+              fill="rgba(230,207,154,.08)" stroke="#e6cf9a" stroke-width="2.2"/>
+        <path d="M75 40 L75 98 M75 56 C 66 56, 64 66, 70 70 M75 72 C 84 72, 88 80, 82 86 M75 56 C 84 56, 88 64, 82 68"
+              fill="none" stroke="#c9a35a" stroke-width="1.6" stroke-linecap="round" opacity=".9"/>
+        <!-- 節點 -->
+        <circle cx="70" cy="70" r="3" fill="#fff"/><circle cx="82" cy="86" r="3" fill="#fff"/><circle cx="82" cy="68" r="2.4" fill="#e6cf9a"/>
+      </svg>
+      <h3>管理中心<span style="color:var(--gold);font-weight:400;font-size:14px">　智能中樞</span></h3>
+      <p style="color:#cdd8ec">建商打造的住宅管理大腦<br>聽懂需求 · 自動判斷 · 智能調度</p>
+    </div>
+
+    <!-- 物業 -->
+    <div class="role r-right">
+      <svg width="86" height="86" viewBox="0 0 86 86" aria-label="物業">
+        <circle cx="43" cy="43" r="40" fill="rgba(105,214,168,.10)" stroke="#69d6a8" stroke-width="1.5"/>
+        <path d="M28 60 V40 L43 30 L58 40 V60 Z" fill="none" stroke="#69d6a8" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M38 60 V49 H48 V60" fill="none" stroke="#69d6a8" stroke-width="2.2"/>
+        <circle cx="43" cy="24" r="3" fill="#69d6a8"/>
+      </svg>
+      <h3>物業</h3>
+      <span class="chip chip-prop">●　駐點執行團隊</span>
+      <p>進駐各社區，手機收到清楚<br>派工，到場服務、即時回報</p>
+    </div>
+  </div>
+
+  <!-- 三場景 -->
+  <div class="flows">
+    <!-- 場景 1：口說設備 -->
+    <div class="flow">
+      <div class="no">1</div>
+      <h4>口說設備　<span>說一句話就完成</span></h4>
+      <div class="steps">
+        <div class="step">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6fb1ff" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4" stroke-linecap="round"/></svg></div>
+          <small>住戶口說<br>「冷氣壞了」</small>
+        </div>
+        <div class="arrow">→</div>
+        <div class="step">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c9a35a" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9" stroke-linecap="round"/><circle cx="12" cy="12" r="3"/></svg></div>
+          <small>大腦聽懂<br>建立報修工單</small>
+        </div>
+        <div class="arrow">→</div>
+        <div class="step">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#69d6a8" stroke-width="2"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <small>物業到府<br>維修並回報</small>
+        </div>
+      </div>
+      <div class="ex">情境：<b>免下載 App</b>，對 LINE 或智能音箱說話，系統自動轉成工單派給駐點師傅。</div>
+    </div>
+
+    <!-- 場景 2：智能生活 -->
+    <div class="flow">
+      <div class="no">2</div>
+      <h4>智能生活　<span>動口不動手</span></h4>
+      <div class="steps">
+        <div class="step">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6fb1ff" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12h6M12 9v6" stroke-linecap="round"/></svg></div>
+          <small>預約公設<br>包裹 · 訪客</small>
+        </div>
+        <div class="arrow">→</div>
+        <div class="step">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c9a35a" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></div>
+          <small>大腦排程<br>連動 IoT 設備</small>
+        </div>
+        <div class="arrow">→</div>
+        <div class="step">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#69d6a8" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <small>準時就緒<br>主動通知</small>
+        </div>
+      </div>
+      <div class="ex">情境：預約健身房自動<b>開燈開空調</b>；包裹到件、訪客到訪即時推播，生活零等待。</div>
+    </div>
+
+    <!-- 場景 3：任務分派 -->
+    <div class="flow">
+      <div class="no">3</div>
+      <h4>任務分派　<span>大腦自動調度</span></h4>
+      <div class="steps">
+        <div class="step">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6fb1ff" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h7" stroke-linecap="round"/></svg></div>
+          <small>多筆需求<br>同時湧入</small>
+        </div>
+        <div class="arrow">→</div>
+        <div class="step">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c9a35a" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5 11 16M18 8.5 13 16" stroke-linecap="round"/></svg></div>
+          <small>判斷優先級<br>就近指派</small>
+        </div>
+        <div class="arrow">→</div>
+        <div class="step">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#69d6a8" stroke-width="2"><path d="M12 2 4 7v6c0 5 8 9 8 9s8-4 8-9V7z"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <small>進度可追蹤<br>結案存證</small>
+        </div>
+      </div>
+      <div class="ex">情境：報修、清潔、巡檢自動分派給<b>合適物業人員</b>，管理中心全程儀表板掌握。</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>高級住宅・智慧管理應用場景</span>
+    <span>住戶提出 → 管理中心理解 → 物業執行 → 回饋住戶　｜　同一顆大腦，三種場景</span>
+  </div>
+</div>
+</body>
+</html>
