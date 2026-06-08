@@ -80,7 +80,10 @@ function readMigrationFiles(migrationsDir: string): MigrationFile[] {
   return files.map(filename => {
     const filePath = path.join(migrationsDir, filename);
     const sql = fs.readFileSync(filePath, 'utf-8');
-    const version = filename.replace('.sql', '');
+    // Use the numeric prefix as the version to stay consistent with migrate.ts
+    // (the canonical runner used at boot + db:init). Recording the full filename
+    // here would make the two runners disagree and double-apply every migration.
+    const version = filename.split('_')[0];
 
     return { version, filename, sql };
   });

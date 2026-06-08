@@ -14,6 +14,7 @@ import { setLineAdminContext } from './_core/context';
 import { makePushHousekeepers } from './line/push-housekeepers';
 import { getAi } from './_core/profile';
 import { dbManager } from './database/adapter';
+import { runMigrations } from './database/migrate';
 import { makeRateLimiter } from './line/rate-limit';
 import { makeEventDedupe } from './line/event-dedupe';
 import { makeRuntimeConfig } from './line/runtime-config';
@@ -37,6 +38,18 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Apply any pending schema migrations at boot. Without this, migrations on disk
+  // only ever ran via the `db:init*` scripts, so any DB created/migrated earlier
+  // drifted out of sync (recorded versions lagged the files; missing tables were
+  // papered over by per-repo self-heal). Every migration is CREATE TABLE/INDEX
+  // IF NOT EXISTS, so this is idempotent. Tolerate failure — a bad migration must
+  // not block boot, but it should be loud.
+  try {
+    await runMigrations();
+  } catch (err) {
+    console.warn('[Server] runMigrations failed (continuing on existing schema):', (err as Error).message);
+  }
+
   // seedSystemIfEmpty uses now() SQL function which is MySQL-specific and crashes on
   // SQLite. In demo profile we already seeded via `npm run db:init:demo` at build time,
   // so it's safe to skip. In prod we still call it but tolerate failure (don't block boot).
@@ -465,6 +478,8 @@ async function startServer() {
         messageLog,
         lineClient,
         channelId,
+        sessionStore,
+        runSideEffect,
         pushToLineUser,
       });
 
