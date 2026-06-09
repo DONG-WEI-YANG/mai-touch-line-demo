@@ -37,6 +37,153 @@ export async function getDb() {
   }
 }
 
+function isMissingAccessLogsTable(error: unknown): boolean {
+  return error instanceof Error && /no such table: access_logs/i.test(error.message);
+}
+
+function isMissingDevicesTable(error: unknown): boolean {
+  return error instanceof Error && /no such table: devices/i.test(error.message);
+}
+
+function isMissingUnitsTable(error: unknown): boolean {
+  return error instanceof Error && /no such table: units/i.test(error.message);
+}
+
+function isMissingWalletsTable(error: unknown): boolean {
+  return error instanceof Error && /no such table: wallets/i.test(error.message);
+}
+
+function isMissingTransactionsTable(error: unknown): boolean {
+  return error instanceof Error && /no such table: transactions/i.test(error.message);
+}
+
+function isMissingSystemJobsTable(error: unknown): boolean {
+  return error instanceof Error && /no such table: system_jobs/i.test(error.message);
+}
+
+/**
+ * Normalize an INSERT result's generated id across dialects. better-sqlite3
+ * returns `{ changes, lastInsertRowid }`; the mysql driver returns
+ * `[{ insertId }]`. createWorkOrder/createBooking inline this check — this
+ * helper is for the paths that previously assumed only the mysql shape.
+ */
+function insertedId(result: unknown): number {
+  return Array.isArray(result)
+    ? Number((result[0] as { insertId: number }).insertId)
+    : Number((result as { lastInsertRowid: number }).lastInsertRowid);
+}
+
+async function ensureAccessLogsTable() {
+  if (ENV.dbType !== "sqlite") return;
+  const db = await getDb();
+  if (!db) return;
+  await db.run(
+    sql.raw(`
+      CREATE TABLE IF NOT EXISTS access_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER,
+        passId INTEGER,
+        entryPoint TEXT NOT NULL,
+        result TEXT NOT NULL,
+        createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+  );
+}
+
+async function ensureDevicesTable() {
+  if (ENV.dbType !== "sqlite") return;
+  const db = await getDb();
+  if (!db) return;
+  await db.run(
+    sql.raw(`
+      CREATE TABLE IF NOT EXISTS devices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        unitId INTEGER,
+        amenityId INTEGER,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'off',
+        lastSeen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+  );
+}
+
+async function ensureUnitsTable() {
+  if (ENV.dbType !== "sqlite") return;
+  const db = await getDb();
+  if (!db) return;
+  await db.run(
+    sql.raw(`
+      CREATE TABLE IF NOT EXISTS units (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        unitNumber TEXT NOT NULL UNIQUE,
+        floor INTEGER NOT NULL,
+        wing TEXT,
+        squareFootage INTEGER,
+        createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+  );
+}
+
+async function ensureWalletsTable() {
+  if (ENV.dbType !== "sqlite") return;
+  const db = await getDb();
+  if (!db) return;
+  await db.run(
+    sql.raw(`
+      CREATE TABLE IF NOT EXISTS wallets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER NOT NULL UNIQUE,
+        balance INTEGER NOT NULL DEFAULT 0,
+        points INTEGER NOT NULL DEFAULT 0,
+        updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+  );
+}
+
+async function ensureTransactionsTable() {
+  if (ENV.dbType !== "sqlite") return;
+  const db = await getDb();
+  if (!db) return;
+  await db.run(
+    sql.raw(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        walletId INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'TWD',
+        description TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'success',
+        createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+  );
+}
+
+async function ensureSystemJobsTable() {
+  if (ENV.dbType !== "sqlite") return;
+  const db = await getDb();
+  if (!db) return;
+  await db.run(
+    sql.raw(`
+      CREATE TABLE IF NOT EXISTS system_jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        progress INTEGER NOT NULL DEFAULT 0,
+        currentStep TEXT,
+        createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+  );
+}
+
 type BatchControlAuditQuery = {
   limit?: number;
   offset?: number;
@@ -146,13 +293,20 @@ export async function createBatchControlAuditLog(input: BatchControlAuditRecordI
     ...input,
   };
 
-  await db.insert(batchControlAuditLogs).values({
+  // SQLite can't bind JS booleans, and createdAt is defaultNow() → now() (which
+  // SQLite lacks). Normalize both so the audit insert works under SQLite (same
+  // class of fix as createAmenity's isActive → 1/0). Cast via Record because the
+  // mysql-typed insert shape expects a boolean for pinRequired.
+  const auditValues: Record<string, unknown> = {
     ...entry,
+    createdAt: new Date(),
+    pinRequired: entry.pinRequired ? 1 : 0,
     riskReasons: JSON.stringify(entry.riskReasons ?? []),
     adminOpenId: entry.adminOpenId ?? null,
     errorCode: entry.errorCode ?? null,
     errorMessage: entry.errorMessage ?? null,
-  });
+  };
+  await db.insert(batchControlAuditLogs).values(auditValues as typeof batchControlAuditLogs.$inferInsert);
 
   return entry;
 }
@@ -286,7 +440,7 @@ export async function cleanupBatchControlAuditLogs(input?: {
     .select({ id: batchControlAuditLogs.id })
     .from(batchControlAuditLogs)
     .where(lte(batchControlAuditLogs.createdAt, cutoffDate));
-  const staleIds = staleRows.map((row) => row.id);
+  const staleIds = staleRows.map((row: { id: number }) => row.id);
   const deletedByDays = staleIds.length;
   if (!dryRun && staleIds.length > 0) {
     await db
@@ -299,7 +453,7 @@ export async function cleanupBatchControlAuditLogs(input?: {
     .from(batchControlAuditLogs)
     .orderBy(desc(batchControlAuditLogs.createdAt));
   const overflowCount = Math.max(0, rowsAfterDays.length - maxRecords);
-  const overflowIds = overflowCount > 0 ? rowsAfterDays.slice(maxRecords).map((row) => row.id) : [];
+  const overflowIds = overflowCount > 0 ? rowsAfterDays.slice(maxRecords).map((row: { id: number }) => row.id) : [];
   const deletedByCount = overflowIds.length;
   if (!dryRun && overflowIds.length > 0) {
     await db
@@ -359,10 +513,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     }
     
     // Fallback explicitly to prevent Drizzle passing MySQL `now()` to SQLite dynamically
-    if (!values.createdAt) values.createdAt = sql`CURRENT_TIMESTAMP` as any;
-    if (!values.updatedAt) values.updatedAt = sql`CURRENT_TIMESTAMP` as any;
-    if (!values.lastSignedIn) values.lastSignedIn = sql`CURRENT_TIMESTAMP` as any;
-    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = sql`CURRENT_TIMESTAMP` as any;
+    if (!values.createdAt) values.createdAt = sql`CURRENT_TIMESTAMP` as unknown as Date;
+    if (!values.updatedAt) values.updatedAt = sql`CURRENT_TIMESTAMP` as unknown as Date;
+    if (!values.lastSignedIn) values.lastSignedIn = sql`CURRENT_TIMESTAMP` as unknown as Date;
+    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = sql`CURRENT_TIMESTAMP` as unknown as Date;
     
     const query = db.insert(users).values(values);
     if (typeof query.onDuplicateKeyUpdate === 'function') {
@@ -422,14 +576,15 @@ export async function getAmenityById(id: number) {
 export async function createAmenity(data: InsertAmenity) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  if (!(data as any).createdAt) (data as any).createdAt = sql`CURRENT_TIMESTAMP`;
-  if (!(data as any).updatedAt) (data as any).updatedAt = sql`CURRENT_TIMESTAMP`;
+  const values = data as Record<string, unknown>;
+  if (!values.createdAt) values.createdAt = sql`CURRENT_TIMESTAMP`;
+  if (!values.updatedAt) values.updatedAt = sql`CURRENT_TIMESTAMP`;
   // SQLite strict binding fix for MySQL booleans
-  if (data.isActive === undefined || data.isActive === true) (data as any).isActive = 1;
-  else if (data.isActive === false) (data as any).isActive = 0;
+  if (data.isActive === undefined || data.isActive === true) values.isActive = 1;
+  else if (data.isActive === false) values.isActive = 0;
   
   const result = await db.insert(amenities).values(data);
-  return Array.isArray(result) ? result[0].insertId : (result as any).lastInsertRowid;
+  return Array.isArray(result) ? result[0].insertId : (result as { lastInsertRowid: number }).lastInsertRowid;
 }
 
 export async function updateAmenity(id: number, data: Partial<InsertAmenity>) {
@@ -444,7 +599,7 @@ export async function deleteAmenity(id: number) {
   await db.delete(amenities).where(eq(amenities.id, id));
 }
 
-// ─── Bookings ────────────────────────────────────────────────────────────────
+// ─── Bookings ───────────────────────────────────────────────────────────────
 
 export async function getUserBookings(userId: number) {
   const db = await getDb();
@@ -466,20 +621,21 @@ export async function getBookingsByAmenityAndDate(amenityId: number, date: strin
   );
 }
 
-export async function createBooking(data: InsertBooking) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  if (!(data as any).createdAt) (data as any).createdAt = sql`CURRENT_TIMESTAMP`;
-  if (!(data as any).updatedAt) (data as any).updatedAt = sql`CURRENT_TIMESTAMP`;
-  const result = await db.insert(bookings).values(data);
-  return Array.isArray(result) ? result[0].insertId : (result as any).lastInsertRowid;
-}
-
 export async function getBookingById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
   const rows = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
   return rows[0];
+}
+
+export async function createBooking(data: InsertBooking) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const values = data as Record<string, unknown>;
+  if (!values.createdAt) values.createdAt = sql`CURRENT_TIMESTAMP`;
+  if (!values.updatedAt) values.updatedAt = sql`CURRENT_TIMESTAMP`;
+  const result = await db.insert(bookings).values(data);
+  return Array.isArray(result) ? result[0].insertId : (result as { lastInsertRowid: number }).lastInsertRowid;
 }
 
 export async function updateBookingStatus(id: number, status: "confirmed" | "pending" | "cancelled" | "completed") {
@@ -519,10 +675,11 @@ export async function getAllWorkOrders() {
 export async function createWorkOrder(data: InsertWorkOrder) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  if (!(data as any).createdAt) (data as any).createdAt = sql`CURRENT_TIMESTAMP`;
-  if (!(data as any).updatedAt) (data as any).updatedAt = sql`CURRENT_TIMESTAMP`;
+  const values = data as Record<string, unknown>;
+  if (!values.createdAt) values.createdAt = sql`CURRENT_TIMESTAMP`;
+  if (!values.updatedAt) values.updatedAt = sql`CURRENT_TIMESTAMP`;
   const result = await db.insert(workOrders).values(data);
-  return Array.isArray(result) ? result[0].insertId : (result as any).lastInsertRowid;
+  return Array.isArray(result) ? result[0].insertId : (result as { lastInsertRowid: number }).lastInsertRowid;
 }
 
 export async function getWorkOrderById(id: number) {
@@ -563,8 +720,12 @@ export async function getUserChatMessages(userId: number, limit = 50) {
 export async function createChatMessage(data: InsertChatMessage) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const values = data as Record<string, unknown>;
+  // chat_messages.createdAt is defaultNow() → now() on SQLite. Match the
+  // createBooking/createWorkOrder idiom and supply CURRENT_TIMESTAMP.
+  if (!values.createdAt) values.createdAt = sql`CURRENT_TIMESTAMP`;
   const result = await db.insert(chatMessages).values(data);
-  return result[0].insertId;
+  return insertedId(result);
 }
 
 export async function getChatMessageCount() {
@@ -689,23 +850,34 @@ export async function getUserByEmail(email: string) {
 export async function getUserById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  
-  const result = await db
-    .select({
-      user: users,
-      unit: units,
-    })
-    .from(users)
-    .leftJoin(units, eq(users.unitId, units.id))
-    .where(eq(users.id, id))
-    .limit(1);
-    
-  if (result.length === 0) return undefined;
-  
-  return {
-    ...result[0].user,
-    unitNumber: result[0].unit?.unitNumber || "Unassigned",
-  };
+
+  try {
+    const result = await db
+      .select({
+        user: users,
+        unit: units,
+      })
+      .from(users)
+      .leftJoin(units, eq(users.unitId, units.id))
+      .where(eq(users.id, id))
+      .limit(1);
+
+    if (result.length === 0) return undefined;
+
+    return {
+      ...result[0].user,
+      unitNumber: result[0].unit?.unitNumber || "Unassigned",
+    };
+  } catch (error) {
+    if (!isMissingUnitsTable(error)) throw error;
+    await ensureUnitsTable();
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    if (result.length === 0) return undefined;
+    return {
+      ...result[0],
+      unitNumber: "Unassigned",
+    };
+  }
 }
 
 export async function createUser(data: {
@@ -718,17 +890,25 @@ export async function createUser(data: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
+  const now = new Date();
   const result = await db.insert(users).values({
     email: data.email,
     name: data.name,
     picture: data.picture,
     loginMethod: data.loginMethod,
     openId: data.openId,
-    lastSignedIn: new Date(),
-            role: 'resident',  });
+    lastSignedIn: now,
+    // createdAt/updatedAt are declared defaultNow() in the (mysql) schema, which
+    // emits now() — a function SQLite doesn't have. Pass explicit Dates so the
+    // insert never relies on the server-side default. See [[migrations-at-boot]]
+    // sibling: same MySQL-vs-SQLite dialect trap as seedSystemIfEmpty.
+    createdAt: now,
+    updatedAt: now,
+    role: 'resident',
+  });
   
   return {
-    id: Number(result[0].insertId),
+    id: insertedId(result),
     ...data,
     lastSignedIn: new Date(),
             role: 'resident' as const,  };
@@ -745,34 +925,69 @@ export async function updateUser(id: number, data: Partial<{
   await db.update(users).set(data).where(eq(users.id, id));
 }
 
+export async function deleteUser(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(users).where(eq(users.id, id));
+}
+
+export async function deleteWorkOrder(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(workOrders).where(eq(workOrders.id, id));
+}
+
 // ─── IoT Devices ──────────────────────────────────────────────────────────────
 
 export async function getDevicesByUnit(unitId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(devices).where(eq(devices.unitId, unitId));
+  try {
+    return await db.select().from(devices).where(eq(devices.unitId, unitId));
+  } catch (error) {
+    if (!isMissingDevicesTable(error)) throw error;
+    await ensureDevicesTable();
+    return [];
+  }
 }
 
 export async function getDevicesByAmenity(amenityId?: number) {
   const db = await getDb();
   if (!db) return [];
-  if (amenityId) {
-    return db.select().from(devices).where(eq(devices.amenityId, amenityId));
+  try {
+    if (amenityId) {
+      return await db.select().from(devices).where(eq(devices.amenityId, amenityId));
+    }
+    return await db.select().from(devices).where(sql`${devices.amenityId} IS NOT NULL`);
+  } catch (error) {
+    if (!isMissingDevicesTable(error)) throw error;
+    await ensureDevicesTable();
+    return [];
   }
-  return db.select().from(devices).where(sql`${devices.amenityId} IS NOT NULL`);
 }
 
 export async function getDeviceById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(devices).where(eq(devices.id, id)).limit(1);
-  return result[0];
+  try {
+    const result = await db.select().from(devices).where(eq(devices.id, id)).limit(1);
+    return result[0];
+  } catch (error) {
+    if (!isMissingDevicesTable(error)) throw error;
+    await ensureDevicesTable();
+    return undefined;
+  }
 }
 
 export async function updateDeviceStatus(deviceId: number, status: string) {
   const db = await getDb();
   if (!db) return;
-  await db.update(devices).set({ status, lastSeen: new Date() }).where(eq(devices.id, deviceId));
+  try {
+    await db.update(devices).set({ status, lastSeen: new Date() }).where(eq(devices.id, deviceId));
+  } catch (error) {
+    if (!isMissingDevicesTable(error)) throw error;
+    await ensureDevicesTable();
+  }
 }
 
 // ─── Financial System ────────────────────────────────────────────────────────
@@ -780,11 +995,16 @@ export async function updateDeviceStatus(deviceId: number, status: string) {
 export async function getUserWallet(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
-  const result = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
-  if (result.length > 0) return result[0];
-  
-  const newWallet = { userId, balance: 0, points: 1000 };
+
+  try {
+    const result = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+    if (result.length > 0) return result[0];
+  } catch (error) {
+    if (!isMissingWalletsTable(error)) throw error;
+    await ensureWalletsTable();
+  }
+
+  const newWallet = { userId, balance: 0, points: 1000, updatedAt: new Date() };
   await db.insert(wallets).values(newWallet);
   const created = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
   return created[0];
@@ -793,9 +1013,21 @@ export async function getUserWallet(userId: number) {
 export async function getUserTransactions(userId: number) {
   const db = await getDb();
   if (!db) return [];
+  try {
+    await ensureWalletsTable();
+    await ensureTransactionsTable();
+  } catch {
+    // Table self-heal is best-effort for local SQLite dev only.
+  }
   const wallet = await getUserWallet(userId);
   if (!wallet) return [];
-  return db.select().from(transactions).where(eq(transactions.walletId, wallet.id)).orderBy(desc(transactions.createdAt));
+  try {
+    return await db.select().from(transactions).where(eq(transactions.walletId, wallet.id)).orderBy(desc(transactions.createdAt));
+  } catch (error) {
+    if (!isMissingTransactionsTable(error)) throw error;
+    await ensureTransactionsTable();
+    return [];
+  }
 }
 
 // ─── Access Control ──────────────────────────────────────────────────────────
@@ -803,13 +1035,29 @@ export async function getUserTransactions(userId: number) {
 export async function createAccessLog(data: Partial<AccessLogInsert>) {
   const db = await getDb();
   if (!db) return;
-  await db.insert(accessLogs).values(data);
+  // createdAt is defaultNow() in the (mysql) schema → emits now(), which SQLite
+  // lacks. Supply an explicit Date so the insert never hits the server-side
+  // default (same dialect trap as createUser / seedSystemIfEmpty).
+  const values = { ...data, createdAt: data.createdAt ?? new Date() };
+  try {
+    await db.insert(accessLogs).values(values);
+  } catch (error) {
+    if (!isMissingAccessLogsTable(error)) throw error;
+    await ensureAccessLogsTable();
+    await db.insert(accessLogs).values(values);
+  }
 }
 
 export async function getLatestAccessLogs(limit = 20) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(accessLogs).orderBy(desc(accessLogs.createdAt)).limit(limit);
+  try {
+    return await db.select().from(accessLogs).orderBy(desc(accessLogs.createdAt)).limit(limit);
+  } catch (error) {
+    if (!isMissingAccessLogsTable(error)) throw error;
+    await ensureAccessLogsTable();
+    return [];
+  }
 }
 
 // ─── AI Dispatching (Jobs) ───────────────────────────────────────────────────
@@ -817,21 +1065,44 @@ export async function getLatestAccessLogs(limit = 20) {
 export async function createSystemJob(data: SystemJobInsert) {
   const db = await getDb();
   if (!db) return 0;
-  const result = await db.insert(systemJobs).values(data);
-  return result[0].insertId;
+  // createdAt is defaultNow() → now() on SQLite. Set it once so BOTH the primary
+  // insert and the post-self-heal retry avoid the server-side default. (Before,
+  // only the retry set it — but the primary's now() error isn't a missing-table
+  // error, so it rethrew and any resident *with* a unit hit `no such function: now`.)
+  const values = { ...data, createdAt: data.createdAt ?? new Date() };
+  try {
+    const result = await db.insert(systemJobs).values(values);
+    return insertedId(result);
+  } catch (error) {
+    if (!isMissingSystemJobsTable(error)) throw error;
+    await ensureSystemJobsTable();
+    const result = await db.insert(systemJobs).values(values);
+    return insertedId(result);
+  }
 }
 
 export async function updateJobProgress(id: number, progress: number, currentStep: string) {
   const db = await getDb();
   if (!db) return;
   const status = progress >= 100 ? "completed" : "running";
-  await db.update(systemJobs).set({ progress, currentStep, status }).where(eq(systemJobs.id, id));
+  try {
+    await db.update(systemJobs).set({ progress, currentStep, status }).where(eq(systemJobs.id, id));
+  } catch (error) {
+    if (!isMissingSystemJobsTable(error)) throw error;
+    await ensureSystemJobsTable();
+  }
 }
 
 export async function getActiveJobsByUser(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(systemJobs).where(and(eq(systemJobs.userId, userId), eq(systemJobs.status, "running")));
+  try {
+    return await db.select().from(systemJobs).where(and(eq(systemJobs.userId, userId), eq(systemJobs.status, "running")));
+  } catch (error) {
+    if (!isMissingSystemJobsTable(error)) throw error;
+    await ensureSystemJobsTable();
+    return [];
+  }
 }
 
 // ─── System Seeding ─────────────────────────────────────────────────────────
@@ -839,20 +1110,46 @@ export async function getActiveJobsByUser(userId: number) {
 export async function seedSystemIfEmpty() {
   const db = await getDb();
   if (!db) return;
+  const now = new Date();
 
-  const existingUnits = await db.select().from(units).limit(1);
+  let existingUnits: typeof units.$inferSelect[] = [];
+  try {
+    existingUnits = await db.select().from(units).limit(1);
+  } catch (error) {
+    if (!isMissingUnitsTable(error)) throw error;
+    await ensureUnitsTable();
+  }
   if (existingUnits.length === 0) {
     await db.insert(units).values([
-      { unitNumber: "42A", floor: 42, wing: "East", squareFootage: 2500 },
-      { unitNumber: "42B", floor: 42, wing: "West", squareFootage: 2200 },
+      { unitNumber: "42A", floor: 42, wing: "East", squareFootage: 2500, createdAt: now },
+      { unitNumber: "42B", floor: 42, wing: "West", squareFootage: 2200, createdAt: now },
     ]);
   }
 
   const existingAmenities = await db.select().from(amenities).limit(1);
   if (existingAmenities.length === 0) {
     await db.insert(amenities).values([
-      { name: "Private Dining Room", icon: "fork.knife", category: "dining", capacity: 12, openTime: "11:00", closeTime: "23:00", minTier: "Black" },
-      { name: "Sky Infinity Pool", icon: "waves", category: "recreation", capacity: 25, openTime: "06:00", closeTime: "22:00" },
+      {
+        name: "Private Dining Room",
+        icon: "fork.knife",
+        category: "dining",
+        capacity: 12,
+        openTime: "11:00",
+        closeTime: "23:00",
+        minTier: "Black",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        name: "Sky Infinity Pool",
+        icon: "waves",
+        category: "recreation",
+        capacity: 25,
+        openTime: "06:00",
+        closeTime: "22:00",
+        createdAt: now,
+        updatedAt: now,
+      },
     ]);
   }
 
@@ -864,8 +1161,8 @@ export async function seedSystemIfEmpty() {
     const existingDevices = await db.select().from(devices).where(eq(devices.unitId, unitId)).limit(1);
     if (existingDevices.length === 0) {
       await db.insert(devices).values([
-        { unitId, name: "Living Room AC", type: "climate", status: "22°C" },
-        { unitId, name: "Main Gallery Lights", type: "light", status: "on" },
+        { unitId, name: "Living Room AC", type: "climate", status: "22°C", lastSeen: now },
+        { unitId, name: "Main Gallery Lights", type: "light", status: "on", lastSeen: now },
       ]);
     }
   }
@@ -875,15 +1172,21 @@ export async function seedSystemIfEmpty() {
     if (existingAmenityDevices.length === 0) {
       console.log("[Seeder] Initializing IoT devices for Amenities...");
       await db.insert(devices).values([
-        { amenityId: allAmenities[0].id, name: "Chef's Kitchen Range", type: "power", status: "off" },
-        { amenityId: allAmenities[1].id, name: "Pool Filtration System", type: "power", status: "active" },
-        { amenityId: allAmenities[1].id, name: "Rooftop Floodlights", type: "light", status: "off" },
+        { amenityId: allAmenities[0].id, name: "Chef's Kitchen Range", type: "power", status: "off", lastSeen: now },
+        { amenityId: allAmenities[1].id, name: "Pool Filtration System", type: "power", status: "active", lastSeen: now },
+        { amenityId: allAmenities[1].id, name: "Rooftop Floodlights", type: "light", status: "off", lastSeen: now },
       ]);
     }
   }
 
   // 4. Seed Access Logs (For Live Feed Demo)
-  const existingLogs = await db.select().from(accessLogs).limit(1);
+  let existingLogs: typeof accessLogs.$inferSelect[] = [];
+  try {
+    existingLogs = await db.select().from(accessLogs).limit(1);
+  } catch (error) {
+    if (!isMissingAccessLogsTable(error)) throw error;
+    await ensureAccessLogsTable();
+  }
   if (existingLogs.length === 0) {
     console.log("[Seeder] Initializing access logs...");
     await db.insert(accessLogs).values([
