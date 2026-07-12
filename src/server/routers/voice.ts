@@ -1,4 +1,4 @@
-import { publicProcedure, residentProcedure, router } from "../_core/trpc";
+import { publicProcedure, residentProcedure, staffProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { transcribeAudio } from "../_core/voiceTranscription";
@@ -139,4 +139,72 @@ export const voiceRouter = router({
         },
       });
     }),
+
+  // ── Property-desk (staff-on-behalf) variants ────────────────────────────────
+  // The tablet at the front desk lets 物業 file a booking / work order FOR a
+  // resident. Same core, but the acting identity is the chosen `targetUserId`.
+
+  // Resident directory for the desk's "代哪一戶" picker.
+  residents: staffProcedure.query(async () => {
+    const users = await db.getAllUsers();
+    return users
+      .filter((u: any) => u.role === "resident")
+      .map((u: any) => ({
+        id: u.id as number,
+        name: (u.name ?? u.displayName ?? `住戶 #${u.id}`) as string,
+        unitNumber: (u.unitNumber ?? null) as string | null,
+      }));
+  }),
+
+  staffCommand: staffProcedure
+    .input(z.object({
+      audioBase64: z.string(),
+      mimeType: z.string().default("audio/webm"),
+      language: z.string().optional(),
+      targetUserId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      await assertResident(input.targetUserId);
+      const buffer = Buffer.from(input.audioBase64, "base64");
+      const result = await transcribeAudio({
+        audioBuffer: buffer,
+        audioMime: input.mimeType,
+        language: input.language,
+        prompt: "Transcribe the user's voice command for a luxury property management app. 請準確辨識,可能是中文或英文。",
+      });
+      if ("error" in result) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
+      }
+      return buildVoiceProposal({
+        transcript: result.text || "",
+        classifier: getAi(),
+        userId: String(input.targetUserId),
+      });
+    }),
+
+  staffCommit: staffProcedure
+    .input(z.object({ intent: intentSchema, slots: slotSchema, targetUserId: z.number() }))
+    .mutation(async ({ input }) => {
+      await assertResident(input.targetUserId);
+      const facilityMap = buildFacilityMap(await db.getAllAmenities());
+      return commitVoiceProposal({
+        intent: input.intent as IntentName,
+        slots: input.slots as Slot,
+        userId: input.targetUserId,
+        deps: {
+          resolveAmenityId: (f) => facilityMap.get(f),
+          createBooking: async (i) => Number(await db.createBooking(i as any)),
+          createWorkOrder: async (i) => Number(await db.createWorkOrder(i as any)),
+        },
+      });
+    }),
 });
+
+// Property-desk commits write as a resident — refuse any target that isn't one,
+// so staff can't accidentally file bookings against an admin/logistics account.
+async function assertResident(userId: number): Promise<void> {
+  const target = await db.getUserById(userId);
+  if (!target || target.role !== "resident") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `Target user ${userId} is not a resident.` });
+  }
+}
