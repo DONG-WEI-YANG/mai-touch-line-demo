@@ -14,7 +14,7 @@ let ctx: any;
 
 beforeEach(async () => {
   db = new Database(':memory:');
-  db.prepare('CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, role TEXT)').run();
+  db.prepare('CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, role TEXT, name TEXT)').run();
   for (const stmt of SQL_006.split(';').map(s => s.trim()).filter(Boolean)) db.prepare(stmt).run();
   for (const stmt of SQL_007.split(';').map(s => s.trim()).filter(Boolean)) db.prepare(stmt).run();
 
@@ -83,8 +83,10 @@ describe('lineAdminRouter', () => {
 
   it('scriptsSetEnabled toggles row', async () => {
     await callerOf().scriptsSetEnabled({ id: 'facility', enabled: false });
-    const list = await callerOf().scriptsList();
-    expect(list.find(s => s.id === 'facility')?.enabled).toBe(0);
+    // enabled lives in demo_script_config (scriptsConfig), not the static
+    // scriptsList registry which has no enabled field.
+    const cfg = await callerOf().scriptsConfig();
+    expect(cfg.find(s => s.id === 'facility')?.enabled).toBe(0);
   });
 
   it('usersList filters by role', async () => {
@@ -103,7 +105,7 @@ describe('lineAdminRouter', () => {
     db.prepare(`INSERT INTO line_user (channel_id, line_user_id, is_demo) VALUES ('C', ?, 1)`).run('U' + 'a'.repeat(32));
     db.prepare(`INSERT INTO line_user (channel_id, line_user_id, is_demo) VALUES ('C', ?, 0)`).run('U' + 'b'.repeat(32));
     const r = await callerOf().usersPurgeDemo();
-    expect(r.deleted).toBe(1);
+    expect(r.deletedCount).toBe(1);
     const remaining = await callerOf().usersList({});
     expect(remaining.length).toBe(1);
   });

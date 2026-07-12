@@ -215,7 +215,8 @@ adminRouter.get("/", async (_req, res) => {
       </body>
       </html>
     `);
-  } catch {
+  } catch (error) {
+    console.error("[Admin] dashboard render failed", error);
     res.status(500).send("Error loading dashboard");
   }
 });
@@ -341,7 +342,8 @@ adminRouter.get("/users", async (_req, res) => {
       </body>
       </html>
     `);
-  } catch {
+  } catch (error) {
+    console.error("[Admin] users render failed", error);
     res.status(500).send("Error loading users");
   }
 });

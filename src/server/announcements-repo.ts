@@ -37,15 +37,34 @@ function rowToAnnouncement(row: Row): Announcement {
   };
 }
 
+function ensureAnnouncementsTable(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS announcements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      audience TEXT NOT NULL DEFAULT 'all',
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      posted_by INTEGER,
+      posted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT
+    );
+  `);
+}
+
 export function makeAnnouncementsRepo(db: Database.Database) {
-  // Pinned first (DESC), then by posted_at DESC. Expired rows excluded by
-  // `expires_at IS NULL OR expires_at > now`. The posted_at filter normalises
-  // SQLite's CURRENT_TIMESTAMP (UTC) — we compare using the same SQL function.
+  ensureAnnouncementsTable(db);
+
+  // Pinned first (DESC), then by posted_at DESC. Expired rows excluded via
+  // datetime() on BOTH sides: expires_at is stored as ISO ("...T09:00:00.000Z")
+  // but CURRENT_TIMESTAMP is "...  09:00:00" (space, no T/Z), so a raw string
+  // compare mis-ordered them and a same-day expiry never took effect (audit
+  // finding). datetime() normalises both ISO and space forms before comparing.
   const listForAudience = db.prepare(`
     SELECT id, title, body, audience, is_pinned, posted_by, posted_at, expires_at
     FROM announcements
     WHERE (audience = 'all' OR audience = ?)
-      AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+      AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
     ORDER BY is_pinned DESC, posted_at DESC
     LIMIT 200
   `);

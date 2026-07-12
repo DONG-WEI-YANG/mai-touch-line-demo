@@ -122,17 +122,20 @@ export function formatDateDisplay(dateStr: string): string {
 }
 
 export function getDayLabel(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  
-  if (date.getTime() === today.getTime()) return "Today";
-  if (date.getTime() === tomorrow.getTime()) return "Tomorrow";
-  
-  return date.toLocaleDateString("en-US", { weekday: "long" });
+  // Compare on the SAME basis getNext7Days produces its date strings
+  // (toISOString → UTC calendar date). The previous version parsed the input as
+  // a LOCAL date and compared to a LOCAL "today", so in any non-UTC timezone the
+  // UTC date strings from getNext7Days never matched "today"/"tomorrow" (audit
+  // timezone finding — the getDayLabel tests failed for exactly this reason).
+  const todayStr = new Date().toISOString().split("T")[0];
+  const tomorrow = new Date();
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+  if (dateStr === todayStr) return "Today";
+  if (dateStr === tomorrowStr) return "Tomorrow";
+
+  return new Date(dateStr + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
 }
 
 export function getNext7Days(): string[] {

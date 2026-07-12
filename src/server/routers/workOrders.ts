@@ -32,7 +32,13 @@ export const workOrdersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
       const before = await db.getWorkOrderById(id);
-      await db.updateWorkOrder(id, data);
+      // Stamp resolvedAt when the order reaches a terminal state (audit finding:
+      // resolvedAt was never populated → SLA/resolution reporting always null).
+      const patch: typeof data & { resolvedAt?: Date } = { ...data };
+      if ((input.status === "resolved" || input.status === "closed") && !before?.resolvedAt) {
+        patch.resolvedAt = new Date();
+      }
+      await db.updateWorkOrder(id, patch);
       // Push status change back to the original LINE requester (if bound).
       // Best-effort: log + swallow errors so the mutation always succeeds for
       // logistics even when the LINE webhook is degraded.
@@ -53,5 +59,12 @@ export const workOrdersRouter = router({
           console.error('[workOrders.update] LINE push-back failed', { id, err });
         }
       }
+    }),
+
+  delete: staffProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await db.deleteWorkOrder(input.id);
+      return { success: true };
     }),
 });

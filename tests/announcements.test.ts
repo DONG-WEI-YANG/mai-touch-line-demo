@@ -67,6 +67,18 @@ describe('AnnouncementsRepo', () => {
     expect(repo.listAll()).toHaveLength(1);
   });
 
+  it('excludes an item expired with a raw ISO timestamp (T/Z form the router stores) — audit finding', () => {
+    // The router persists expiresAt via z.string().datetime() → "…T…Z" ISO.
+    // A raw string compare against CURRENT_TIMESTAMP ("… …") never expired these.
+    const pastIso = new Date(Date.now() - 60_000).toISOString(); // e.g. 2026-07-13T09:00:00.000Z
+    repo.create({ title: 'ISO expired', body: 'gone', audience: 'all', postedBy: null, expiresAt: pastIso });
+    expect(repo.list('resident')).toHaveLength(0);
+
+    const futureIso = new Date(Date.now() + 3_600_000).toISOString();
+    repo.create({ title: 'ISO future', body: 'here', audience: 'all', postedBy: null, expiresAt: futureIso });
+    expect(repo.list('resident').some((a: any) => a.title === 'ISO future')).toBe(true);
+  });
+
   it('update changes only specified fields', () => {
     const id = repo.create({ title: 'Old', body: 'orig', audience: 'all', postedBy: null });
     expect(repo.update({ id, title: 'New' })).toBe(true);

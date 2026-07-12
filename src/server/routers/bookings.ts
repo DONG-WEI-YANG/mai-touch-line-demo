@@ -13,7 +13,7 @@ export const bookingsRouter = router({
       date: z.string(),
       startTime: z.string(),
       endTime: z.string(),
-      guestCount: z.number().min(1).default(1),
+      guestCount: z.number().int().min(1).default(1),
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {

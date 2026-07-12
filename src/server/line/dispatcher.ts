@@ -203,6 +203,13 @@ export function getDispatchDeps(): DispatchDeps {
   return configuredDeps;
 }
 
+/** True once setDispatchDeps() has run — i.e. LINE boot wiring succeeded.
+ *  /health uses this so a dispatcher boot failure is visible instead of the bot
+ *  being silently dead while status stays green (audit finding H5). */
+export function isDispatcherConfigured(): boolean {
+  return configuredDeps !== null;
+}
+
 export function resetDispatchDeps(): void {
   configuredDeps = null;
 }
