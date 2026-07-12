@@ -66,6 +66,21 @@ describe("QUERY", () => {
     );
     expect(res.payload.devices["999"]).toMatchObject({ online: false, status: "ERROR" });
   });
+
+  it("does not leak the state of a device the user doesn't own (IDOR)", async () => {
+    // getDevice can resolve a foreign device, but it's NOT in the user's own list.
+    const foreign = { id: 3, name: "別戶冷氣", type: "climate", status: "on", unitId: 99, amenityId: null };
+    const deps = mkDeps({
+      getDevice: vi.fn((id: number) => Promise.resolve([...DEVICES, foreign].find((d) => d.id === id))),
+    });
+    const res = await handleSmartHomeRequest(
+      req("action.devices.QUERY", { devices: [{ id: "3" }] }),
+      42,
+      deps,
+    );
+    expect(res.payload.devices["3"]).toMatchObject({ online: false, status: "ERROR" });
+    expect(res.payload.devices["3"].on).toBeUndefined();
+  });
 });
 
 describe("EXECUTE", () => {

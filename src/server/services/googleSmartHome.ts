@@ -71,7 +71,7 @@ export async function handleSmartHomeRequest(
     case "action.devices.SYNC":
       return { requestId, payload: await handleSync(userId, deps) };
     case "action.devices.QUERY":
-      return { requestId, payload: await handleQuery(input.payload, deps) };
+      return { requestId, payload: await handleQuery(input.payload, userId, deps) };
     case "action.devices.EXECUTE":
       return { requestId, payload: await handleExecute(input.payload, userId, deps) };
     default:
@@ -95,10 +95,17 @@ async function handleSync(userId: number, deps: SmartHomeDeps) {
   };
 }
 
-async function handleQuery(payload: any, deps: SmartHomeDeps) {
+async function handleQuery(payload: any, userId: number, deps: SmartHomeDeps) {
+  // Only report on devices this user actually owns — a linked account must not be
+  // able to read another resident's device state by guessing ids (IDOR).
+  const owned = new Set((await deps.listDevices(userId)).map((d) => String(d.id)));
   const ids: string[] = (payload?.devices ?? []).map((d: any) => d.id);
   const states: Record<string, any> = {};
   for (const id of ids) {
+    if (!owned.has(id)) {
+      states[id] = { online: false, status: "ERROR", errorCode: "deviceNotFound" };
+      continue;
+    }
     const device = await deps.getDevice(Number(id));
     if (!device) {
       states[id] = { online: false, status: "ERROR", errorCode: "deviceNotFound" };
