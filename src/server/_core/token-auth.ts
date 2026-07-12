@@ -79,7 +79,11 @@ export function userFromPersonalToken(
       unitId: row.unitId,
       tier: row.tier,
     };
-  } catch {
+  } catch (err) {
+    // Audit finding: a swallowed DB error here silently turns a VALID token into
+    // "unauthenticated" (and hides a broken web_tokens query, e.g. missing table).
+    // Still return null so auth fails closed, but never do it invisibly.
+    console.error('[auth] userFromPersonalToken lookup failed', err);
     return null;
   }
 }

@@ -176,9 +176,17 @@ async function startServer() {
       // shared SEED_USER_ID when the LINE user hasn't been bound yet (e.g. a
       // legacy session before this feature shipped).
       const resolveAppUserId = (lineUserId: string | undefined): number => {
-        if (!lineUserId) return SEED_USER_ID;
+        if (!lineUserId) return SEED_USER_ID; // system/demo caller
         const row = lineUserRepo.byLineId(channelId, lineUserId);
-        return row?.appUserId ?? SEED_USER_ID;
+        // Audit finding: falling back to SEED_USER_ID for a REAL but unbound LINE
+        // user comingled everyone's bookings/work-orders on user 1 AND leaked
+        // user 1's orders back to any unbound caller. Fail instead — the resident
+        // handler catches this and shows a "try again / re-link" reply, so nothing
+        // is written to or read from the wrong account.
+        if (!row?.appUserId) {
+          throw new Error(`LINE user ${lineUserId} is not bound to an app account (re-link required)`);
+        }
+        return row.appUserId;
       };
 
       // Push a text message to a specific LINE user via lineUserId. Used by the
@@ -264,6 +272,11 @@ async function startServer() {
         if (orderId.startsWith('BK-')) {
           const numId = Number(orderId.slice(3));
           if (!Number.isFinite(numId)) return;
+          const beforeBk = await db.getBookingById(numId);
+          if (!beforeBk) {
+            console.warn('[LINE] updateOrder: booking not found — ignoring stale card', { orderId });
+            return;
+          }
           // DbBookingStatus mirrors updateBookingStatus()'s inline parameter type in db.ts.
           type DbBookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed';
           const dbStatusMap: Record<LineStatus, DbBookingStatus> = {
@@ -283,6 +296,17 @@ async function startServer() {
         if (woMatch) {
           const numId = Number(woMatch[1]);
           const before = await db.getWorkOrderById(numId);
+          // Audit finding: a stale LINE Flex card (from a previous instance, whose
+          // id was reused after a DB wipe) must not mutate a different/finished
+          // order. Refuse when the order is gone or already terminal.
+          if (!before) {
+            console.warn('[LINE] updateOrder: work order not found — ignoring stale card', { orderId });
+            return;
+          }
+          if (before.status === 'resolved' || before.status === 'closed') {
+            console.warn('[LINE] updateOrder: work order already terminal — ignoring stale card', { orderId, status: before.status });
+            return;
+          }
           // When a housekeeper accepts, stamp `assignedTo` with their friendly name
           // so logistics/admin dashboards (and `WO_STATUS_LABEL` consumers) can show
           // "誰在處理"; on reject we leave assignedTo alone (it's a cancellation).
