@@ -12,7 +12,7 @@ import {
 import { smartCacheMiddleware } from './middleware/cache';
 import { getProfile } from './_core/profile';
 import { mountWebhook } from './line/webhook';
-import { dispatch, getDispatchDeps } from './line/dispatcher';
+import { dispatch, getDispatchDeps, isDispatcherConfigured } from './line/dispatcher';
 import { mountAdminDashboard } from './line/admin-dashboard';
 import * as db from './db';
 import { hardwareGatewayService } from './services/hardwareGatewayService';
@@ -80,10 +80,16 @@ export function createApp(): express.Express {
 
   // NEW health for Render + cron-job.org
   app.get('/health', (_req, res) => {
+    // Report LINE readiness honestly (audit finding H5): if the LINE env is
+    // configured but the dispatcher boot wiring failed, the bot is dead — surface
+    // it as "degraded" instead of a green light. "disabled" = LINE intentionally off.
+    const lineConfigured = !!(process.env.LINE_CHANNEL_SECRET && process.env.LINE_CHANNEL_ACCESS_TOKEN);
+    const line = !lineConfigured ? 'disabled' : isDispatcherConfigured() ? 'ready' : 'degraded';
     res.json({
       ok: true,
       profile: getProfile(),
       db: 'ok',
+      line,
       ai_provider: getProfile() === 'demo' ? 'openai' : 'nlp-service',
       uptime_s: Math.floor(process.uptime()),
     });
