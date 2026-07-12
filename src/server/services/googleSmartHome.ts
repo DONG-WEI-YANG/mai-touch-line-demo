@@ -106,12 +106,19 @@ async function handleQuery(payload: any, userId: number, deps: SmartHomeDeps) {
       states[id] = { online: false, status: "ERROR", errorCode: "deviceNotFound" };
       continue;
     }
-    const device = await deps.getDevice(Number(id));
-    if (!device) {
-      states[id] = { online: false, status: "ERROR", errorCode: "deviceNotFound" };
-      continue;
+    // Isolate a single device's lookup failure so it doesn't 500 the whole batch
+    // and doesn't get mislabelled as deviceNotFound (audit findings M + H2).
+    try {
+      const device = await deps.getDevice(Number(id));
+      if (!device) {
+        states[id] = { online: false, status: "ERROR", errorCode: "deviceNotFound" };
+        continue;
+      }
+      states[id] = { online: true, status: "SUCCESS", on: isOn(device.status) };
+    } catch (err) {
+      console.error("[google/smarthome] QUERY device lookup failed", { id, err });
+      states[id] = { online: false, status: "ERROR", errorCode: "transientError" };
     }
-    states[id] = { online: true, status: "SUCCESS", on: isOn(device.status) };
   }
   return { devices: states };
 }
@@ -129,23 +136,31 @@ async function handleExecute(payload: any, userId: number, deps: SmartHomeDeps) 
       }
       const on = Boolean(exec.params?.on);
       const okIds: string[] = [];
-      const errIds: string[] = [];
+      const notOwnedIds: string[] = [];
+      const failedIds: string[] = [];
       for (const id of targetIds) {
         // Only act on devices this user actually owns — never let one linked
         // account drive another resident's hardware.
-        if (!owned.has(id)) { errIds.push(id); continue; }
+        if (!owned.has(id)) { notOwnedIds.push(id); continue; }
         try {
           await deps.setDeviceStatus(Number(id), on ? "on" : "off");
           okIds.push(id);
-        } catch {
-          errIds.push(id);
+        } catch (err) {
+          // Owned device but the command failed (hardware unreachable, DB error,
+          // strict-mode rejection). Report a truthful transientError — NOT
+          // deviceNotFound — and log it (audit findings H2 + C3).
+          console.error("[google/smarthome] EXECUTE failed for device", { id, on, err });
+          failedIds.push(id);
         }
       }
       if (okIds.length) {
         results.push({ ids: okIds, status: "SUCCESS", states: { on, online: true } });
       }
-      if (errIds.length) {
-        results.push({ ids: errIds, status: "ERROR", errorCode: "deviceNotFound" });
+      if (failedIds.length) {
+        results.push({ ids: failedIds, status: "ERROR", errorCode: "transientError" });
+      }
+      if (notOwnedIds.length) {
+        results.push({ ids: notOwnedIds, status: "ERROR", errorCode: "deviceNotFound" });
       }
     }
   }

@@ -57,6 +57,20 @@ describe("QUERY", () => {
     expect(res.payload.devices["2"]).toMatchObject({ online: true, status: "SUCCESS", on: false });
   });
 
+  it("isolates a single device lookup failure instead of failing the whole batch (M)", async () => {
+    const deps = mkDeps({
+      getDevice: vi.fn((id: number) => (id === 2 ? Promise.reject(new Error("db blip")) : Promise.resolve(DEVICES.find((d) => d.id === id)))),
+    });
+    const res = await handleSmartHomeRequest(
+      req("action.devices.QUERY", { devices: [{ id: "1" }, { id: "2" }] }),
+      42,
+      deps,
+    );
+    // device 1 still reports normally; device 2's error is isolated to itself
+    expect(res.payload.devices["1"]).toMatchObject({ online: true, status: "SUCCESS" });
+    expect(res.payload.devices["2"]).toMatchObject({ online: false, status: "ERROR" });
+  });
+
   it("marks an unknown device offline", async () => {
     const deps = mkDeps();
     const res = await handleSmartHomeRequest(
@@ -116,6 +130,25 @@ describe("EXECUTE", () => {
       deps,
     );
     expect(deps.setDeviceStatus).toHaveBeenCalledWith(1, "off");
+  });
+
+  it("reports a truthful ERROR (not deviceNotFound) when the owned device's dispatch throws (H2)", async () => {
+    const deps = mkDeps({ setDeviceStatus: vi.fn().mockRejectedValue(new Error("hardware unreachable")) });
+    const res = await handleSmartHomeRequest(
+      req("action.devices.EXECUTE", {
+        commands: [{
+          devices: [{ id: "2" }],
+          execution: [{ command: "action.devices.commands.OnOff", params: { on: true } }],
+        }],
+      }),
+      42,
+      deps,
+    );
+    const cmd = res.payload.commands[0];
+    expect(cmd.status).toBe("ERROR");
+    expect(cmd.ids).toEqual(["2"]);
+    // The device IS owned — a hardware failure must NOT be reported as deviceNotFound.
+    expect(cmd.errorCode).not.toBe("deviceNotFound");
   });
 
   it("reports ERROR for a device the user doesn't have", async () => {

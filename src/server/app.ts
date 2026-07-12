@@ -191,9 +191,14 @@ export function createApp(): express.Express {
         listDevices: async () => (user.unitId ? (await db.getDevicesByUnit(user.unitId)) as any : []),
         getDevice: (id) => db.getDeviceById(id) as any,
         setDeviceStatus: async (id, status) => {
-          await db.updateDeviceStatus(id, status);
+          // Dispatch to hardware FIRST; only persist after it succeeds (audit
+          // findings C3 + H1). A genuine gateway failure returns success:false
+          // (strict mode / hard error) — throw so handleExecute reports a
+          // truthful ERROR to Google instead of a false SUCCESS. A safe fallback
+          // (no gateway configured / demo) returns success:true and still
+          // persists, so the demo reflects intent.
           const dev: any = await db.getDeviceById(id);
-          await hardwareGatewayService.dispatchDeviceCommand({
+          const result = await hardwareGatewayService.dispatchDeviceCommand({
             deviceId: id,
             status,
             requestedBy: `google:${user.id}`,
@@ -202,6 +207,10 @@ export function createApp(): express.Express {
             unitId: dev?.unitId ?? null,
             amenityId: dev?.amenityId ?? null,
           });
+          if (!result.success) {
+            throw new Error(`Hardware command rejected: ${result.reason ?? "unknown"}`);
+          }
+          await db.updateDeviceStatus(id, status);
         },
       });
       res.json(result);

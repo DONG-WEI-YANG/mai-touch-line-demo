@@ -132,11 +132,7 @@ export const voiceRouter = router({
         intent: input.intent as IntentName,
         slots: input.slots as Slot,
         userId: ctx.user.id,
-        deps: {
-          resolveAmenityId: (f) => facilityMap.get(f),
-          createBooking: async (i) => Number(await db.createBooking(i as any)),
-          createWorkOrder: async (i) => Number(await db.createWorkOrder(i as any)),
-        },
+        deps: { resolveAmenityId: (f) => facilityMap.get(f), ...commitDeps },
       });
     }),
 
@@ -191,11 +187,7 @@ export const voiceRouter = router({
         intent: input.intent as IntentName,
         slots: input.slots as Slot,
         userId: input.targetUserId,
-        deps: {
-          resolveAmenityId: (f) => facilityMap.get(f),
-          createBooking: async (i) => Number(await db.createBooking(i as any)),
-          createWorkOrder: async (i) => Number(await db.createWorkOrder(i as any)),
-        },
+        deps: { resolveAmenityId: (f) => facilityMap.get(f), ...commitDeps },
       });
     }),
 });
@@ -208,3 +200,28 @@ async function assertResident(userId: number): Promise<void> {
     throw new TRPCError({ code: "BAD_REQUEST", message: `Target user ${userId} is not a resident.` });
   }
 }
+
+// Capacity guard for the voice booking path — mirrors bookingsRouter.create so a
+// voice-confirmed booking can't overbook a full slot (audit finding C1).
+async function assertBookingCapacity(input: {
+  amenityId: number; date: string; startTime: string; guestCount: number;
+}): Promise<void> {
+  const amenity = await db.getAmenityById(input.amenityId);
+  if (!amenity) throw new TRPCError({ code: "NOT_FOUND", message: "Amenity not found" });
+  const existing = await db.getBookingsByAmenityAndDate(input.amenityId, input.date);
+  const occupancy = existing
+    .filter((b: any) => b.startTime === input.startTime)
+    .reduce((sum: number, b: any) => sum + b.guestCount, 0);
+  if (occupancy + input.guestCount > amenity.capacity) {
+    const left = amenity.capacity - occupancy;
+    throw new TRPCError({ code: "CONFLICT", message: `Capacity exceeded. Only ${left} spots left for this slot.` });
+  }
+}
+
+// Shared commit deps (booking capacity guard + writers), reused by resident and
+// property-desk commit procedures.
+const commitDeps = {
+  createBooking: async (i: any) => Number(await db.createBooking(i)),
+  createWorkOrder: async (i: any) => Number(await db.createWorkOrder(i)),
+  assertBookingAllowed: assertBookingCapacity,
+};

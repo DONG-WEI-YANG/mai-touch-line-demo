@@ -83,6 +83,7 @@ describe("commitVoiceProposal — facility.book", () => {
     resolveAmenityId: vi.fn((f: string) => (f === "gym" ? 3 : undefined)),
     createBooking: vi.fn().mockResolvedValue(77),
     createWorkOrder: vi.fn(),
+    assertBookingAllowed: vi.fn().mockResolvedValue(undefined),
   });
 
   it("creates a booking with resolved amenityId + derived endTime, returns BK-ref", async () => {
@@ -100,10 +101,54 @@ describe("commitVoiceProposal — facility.book", () => {
     expect(d.createWorkOrder).not.toHaveBeenCalled();
   });
 
+  it("checks capacity before writing, and does not write when the slot is full (C1)", async () => {
+    const d = deps();
+    // Simulate an over-capacity slot: the capacity guard rejects.
+    d.assertBookingAllowed = vi.fn().mockRejectedValue(new Error("Capacity exceeded"));
+    await expect(
+      commitVoiceProposal({
+        intent: "facility.book",
+        slots: { facility: "gym", date: "2026-07-20", time: "19:00" },
+        userId: 42,
+        deps: d,
+      }),
+    ).rejects.toThrow(/capacity/i);
+    expect(d.assertBookingAllowed).toHaveBeenCalledWith(
+      expect.objectContaining({ amenityId: 3, date: "2026-07-20", startTime: "19:00", guestCount: 1 }),
+    );
+    expect(d.createBooking).not.toHaveBeenCalled();
+  });
+
   it("rejects a booking whose required slots are incomplete", async () => {
     const d = deps();
     await expect(
       commitVoiceProposal({ intent: "facility.book", slots: { facility: "gym" }, userId: 42, deps: d }),
+    ).rejects.toThrow();
+    expect(d.createBooking).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid date string without writing (C2)", async () => {
+    const d = deps();
+    await expect(
+      commitVoiceProposal({
+        intent: "facility.book",
+        slots: { facility: "gym", date: "下週一", time: "19:00" },
+        userId: 42,
+        deps: d,
+      }),
+    ).rejects.toThrow();
+    expect(d.createBooking).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid time string without writing (C2)", async () => {
+    const d = deps();
+    await expect(
+      commitVoiceProposal({
+        intent: "facility.book",
+        slots: { facility: "gym", date: "2026-07-20", time: "下午三點" },
+        userId: 42,
+        deps: d,
+      }),
     ).rejects.toThrow();
     expect(d.createBooking).not.toHaveBeenCalled();
   });
@@ -114,6 +159,7 @@ describe("commitVoiceProposal — work order", () => {
     resolveAmenityId: vi.fn(),
     createBooking: vi.fn(),
     createWorkOrder: vi.fn().mockResolvedValue(88),
+    assertBookingAllowed: vi.fn().mockResolvedValue(undefined),
   });
 
   it("repair.report → createWorkOrder maintenance/high, returns WO-ref", async () => {
@@ -132,7 +178,7 @@ describe("commitVoiceProposal — work order", () => {
 });
 
 describe("commitVoiceProposal — guards", () => {
-  const deps = () => ({ resolveAmenityId: vi.fn(), createBooking: vi.fn(), createWorkOrder: vi.fn() });
+  const deps = () => ({ resolveAmenityId: vi.fn(), createBooking: vi.fn(), createWorkOrder: vi.fn(), assertBookingAllowed: vi.fn().mockResolvedValue(undefined) });
 
   it("refuses to commit a query intent", async () => {
     const d = deps();
@@ -169,6 +215,11 @@ describe("helpers", () => {
 
   it("deriveEndTime honours an explicit duration in minutes", () => {
     expect(deriveEndTime("19:00", 90)).toBe("20:30");
+  });
+
+  it("deriveEndTime throws on an unparseable time instead of returning NaN:NaN (C2)", () => {
+    expect(() => deriveEndTime("下午三點")).toThrow();
+    expect(() => deriveEndTime("19:00", -30)).toThrow();
   });
 
   it("urgencyToPriority maps NLP urgency to work-order priority", () => {
