@@ -1,6 +1,18 @@
 /**
  * Environment variables configuration
  */
+import crypto from "crypto";
+
+function resolveSessionSecret(): string {
+  const s = process.env.SESSION_SECRET;
+  if (s) return s;
+  // Audit finding: never fall back to a KNOWN public string ("change-this-...") —
+  // that lets anyone forge session cookies. Use a random per-boot secret instead:
+  // fail-safe (sessions simply don't survive a restart) and warn so ops set a real
+  // one for stable sessions.
+  console.warn("[env] SESSION_SECRET not set — using a random per-boot secret. Set SESSION_SECRET in production for stable, non-forgeable sessions.");
+  return crypto.randomBytes(32).toString("hex");
+}
 
 export const ENV = {
   // General
@@ -19,7 +31,7 @@ export const ENV = {
   // OAuth
   ownerOpenId: process.env.OWNER_OPEN_ID || "",
   oauthEnabled: process.env.OAUTH_ENABLED === "true",
-  sessionSecret: process.env.SESSION_SECRET || "change-this-secret-in-production",
+  sessionSecret: resolveSessionSecret(),
   sessionMaxAge: parseInt(process.env.SESSION_MAX_AGE || "86400000"),
   cookieDomain: process.env.COOKIE_DOMAIN,
   baseUrl: process.env.BASE_URL || "http://localhost:3000",
