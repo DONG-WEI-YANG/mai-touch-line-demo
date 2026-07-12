@@ -54,8 +54,19 @@ export type NLPResponse = {
 /**
  * Analyze text using NLP service
  */
+let warnedMock = false;
+
 export async function analyzeText(request: NLPRequest): Promise<NLPResponse> {
   if (!ENV.nlpServiceEnabled) {
+    // Audit finding: returning a fabricated success when NLP is disabled is fine
+    // for tests, but if the flag is ever false in a real environment callers get a
+    // plausible-but-fake classification silently. The result is already tagged
+    // model_id:"mock" (callers can branch on it); additionally warn ONCE so an
+    // operator notices NLP is off rather than trusting the mock intents.
+    if (!warnedMock && process.env.NODE_ENV !== "test") {
+      warnedMock = true;
+      console.warn("[nlp] NLP service is DISABLED — analyzeText is returning mock (model_id:'mock') classifications. Do not trust these intents in production.");
+    }
     // Return mock response when NLP service is disabled
     return {
       success: true,
