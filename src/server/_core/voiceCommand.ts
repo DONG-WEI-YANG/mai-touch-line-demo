@@ -112,6 +112,15 @@ export type CommitDeps = {
     category: WoCategory;
     priority: WoPriority;
   }) => Promise<number>;
+  /** Capacity/slot guard — must throw if the booking would exceed the amenity's
+   *  capacity for that slot. Mirrors the check in bookingsRouter.create so the
+   *  voice path can't silently overbook (audit finding C1). */
+  assertBookingAllowed: (input: {
+    amenityId: number;
+    date: string;
+    startTime: string;
+    guestCount: number;
+  }) => Promise<void>;
 };
 
 export type CommitVoiceProposalInput = {
@@ -140,17 +149,44 @@ async function commitBooking(slots: Slot, userId: number, deps: CommitDeps): Pro
   if (amenityId == null) {
     throw new Error(`Unknown facility "${facility}" — no matching amenity.`);
   }
+  // Validate the free-form NLP date/time BEFORE anything hits the DB (audit
+  // finding C2). NLP can return "下週一" / "下午三點"; writing those produces
+  // garbage rows and NaN time math.
+  const date = String(slots.date);
   const startTime = String(slots.time);
+  if (!isValidDate(date)) {
+    throw new Error(`Invalid booking date "${date}" — expected YYYY-MM-DD.`);
+  }
+  if (!isValidTime(startTime)) {
+    throw new Error(`Invalid booking time "${startTime}" — expected HH:MM.`);
+  }
+  const endTime = deriveEndTime(startTime, slots.duration_min);
+
+  // Capacity guard — reject an overbooked slot before writing (audit finding C1).
+  await deps.assertBookingAllowed({ amenityId, date, startTime, guestCount: 1 });
+
   const id = await deps.createBooking({
     userId,
     amenityId,
-    date: String(slots.date),
+    date,
     startTime,
-    endTime: deriveEndTime(startTime, slots.duration_min),
+    endTime,
     guestCount: 1,
     notes: `[voice] facility=${facility}`,
   });
   return { ref: `BK-${id}` };
+}
+
+/** YYYY-MM-DD and a real calendar date. */
+export function isValidDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && s === d.toISOString().slice(0, 10);
+}
+
+/** 24-hour HH:MM. */
+export function isValidTime(s: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 }
 
 async function commitWorkOrder(intent: IntentName, slots: Slot, userId: number, deps: CommitDeps): Promise<{ ref: string }> {
@@ -180,9 +216,17 @@ async function commitWorkOrder(intent: IntentName, slots: Slot, userId: number, 
 export type WoCategory = "maintenance" | "security" | "concierge" | "housekeeping" | "laundry" | "vehicle" | "other";
 export type WoPriority = "low" | "medium" | "high" | "urgent";
 
-/** end = start + durationMin (default 60), wrapping past midnight. */
+/** end = start + durationMin (default 60), wrapping past midnight. Throws on an
+ *  unparseable time or a non-positive duration rather than emitting "NaN:NaN"
+ *  (audit finding C2). */
 export function deriveEndTime(startTime: string, durationMin = 60): string {
   const [h, m] = startTime.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) {
+    throw new Error(`Cannot derive end time from "${startTime}" — expected HH:MM.`);
+  }
+  if (!Number.isFinite(durationMin) || durationMin <= 0) {
+    throw new Error(`Invalid duration ${durationMin} — must be a positive number of minutes.`);
+  }
   const total = (h * 60 + (m || 0) + durationMin) % (24 * 60);
   const endH = Math.floor(total / 60);
   const endM = total % 60;
