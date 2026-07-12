@@ -6,7 +6,7 @@ describe("voice router", () => {
     expect(mod.voiceRouter).toBeDefined();
     const procedures = Object.keys((mod.voiceRouter as any)._def.procedures);
     expect(procedures).toEqual(
-      expect.arrayContaining(["transcribe", "command", "commit", "residents", "staffCommand", "staffCommit"]),
+      expect.arrayContaining(["transcribe", "command", "commit", "residents", "staffCommand", "staffCommit", "auditLogs"]),
     );
   });
 });

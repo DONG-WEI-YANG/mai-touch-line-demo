@@ -5,7 +5,27 @@ import { transcribeAudio } from "../_core/voiceTranscription";
 import { getAi } from "../_core/profile";
 import * as db from "../db";
 import { buildVoiceProposal, commitVoiceProposal, buildFacilityMap } from "../_core/voiceCommand";
+import { voiceAuditService, type VoiceAuditSource } from "../services/voiceAuditService";
 import type { IntentName, Slot } from "../line/ai/types";
+
+// Record a commit attempt in the audit trail, whether it lands or is rejected.
+// Wraps commitVoiceProposal so both outcomes are captured and the error still
+// propagates to the client unchanged.
+async function auditedCommit(args: {
+  intent: IntentName; slots: Slot; userId: number;
+  deps: Parameters<typeof commitVoiceProposal>[0]["deps"];
+  actorUserId: number; targetUserId?: number; source: VoiceAuditSource;
+}): Promise<{ ref: string }> {
+  const { intent, slots, userId, deps, actorUserId, targetUserId, source } = args;
+  try {
+    const result = await commitVoiceProposal({ intent, slots, userId, deps });
+    voiceAuditService.record({ actorUserId, targetUserId, source, phase: "commit", intent, kind: "commit", outcome: "committed", slots, ref: result.ref });
+    return result;
+  } catch (err) {
+    voiceAuditService.record({ actorUserId, targetUserId, source, phase: "commit", intent, kind: "commit", outcome: "rejected", slots, error: err instanceof Error ? err.message : String(err) });
+    throw err;
+  }
+}
 
 // Actionable + query intents the NLP classifier can emit. Kept in sync with
 // IntentName in src/server/line/ai/types.ts.
@@ -114,11 +134,18 @@ export const voiceRouter = router({
       if ("error" in result) {
         throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
       }
-      return buildVoiceProposal({
+      const proposal = await buildVoiceProposal({
         transcript: result.text || "",
         classifier: getAi(),
         userId: String(ctx.user.id),
       });
+      voiceAuditService.record({
+        actorUserId: ctx.user.id, source: "resident", phase: "command",
+        intent: proposal.intent, kind: proposal.kind,
+        outcome: proposal.kind === "unclear" ? "unclear" : "proposed",
+        transcript: proposal.transcript, slots: proposal.slots,
+      });
+      return proposal;
     }),
 
   // Confirmed proposal → book / dispatch, as the logged-in resident. Re-derives
@@ -128,11 +155,12 @@ export const voiceRouter = router({
     .input(z.object({ intent: intentSchema, slots: slotSchema }))
     .mutation(async ({ ctx, input }) => {
       const facilityMap = buildFacilityMap(await db.getAllAmenities());
-      return commitVoiceProposal({
+      return auditedCommit({
         intent: input.intent as IntentName,
         slots: input.slots as Slot,
         userId: ctx.user.id,
         deps: { resolveAmenityId: (f) => facilityMap.get(f), ...commitDeps },
+        actorUserId: ctx.user.id, source: "resident",
       });
     }),
 
@@ -159,7 +187,7 @@ export const voiceRouter = router({
       language: z.string().optional(),
       targetUserId: z.number(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       await assertResident(input.targetUserId);
       const buffer = Buffer.from(input.audioBase64, "base64");
       const result = await transcribeAudio({
@@ -171,25 +199,41 @@ export const voiceRouter = router({
       if ("error" in result) {
         throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
       }
-      return buildVoiceProposal({
+      const proposal = await buildVoiceProposal({
         transcript: result.text || "",
         classifier: getAi(),
         userId: String(input.targetUserId),
       });
+      voiceAuditService.record({
+        actorUserId: ctx.user.id, targetUserId: input.targetUserId, source: "staff", phase: "command",
+        intent: proposal.intent, kind: proposal.kind,
+        outcome: proposal.kind === "unclear" ? "unclear" : "proposed",
+        transcript: proposal.transcript, slots: proposal.slots,
+      });
+      return proposal;
     }),
 
   staffCommit: staffProcedure
     .input(z.object({ intent: intentSchema, slots: slotSchema, targetUserId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       await assertResident(input.targetUserId);
       const facilityMap = buildFacilityMap(await db.getAllAmenities());
-      return commitVoiceProposal({
+      return auditedCommit({
         intent: input.intent as IntentName,
         slots: input.slots as Slot,
         userId: input.targetUserId,
         deps: { resolveAmenityId: (f) => facilityMap.get(f), ...commitDeps },
+        actorUserId: ctx.user.id, targetUserId: input.targetUserId, source: "staff",
       });
     }),
+
+  // Voice audit trail — who/when/what for every voice command + commit outcome.
+  auditLogs: staffProcedure
+    .input(z.object({ limit: z.number().min(1).max(200).default(50) }).optional())
+    .query(({ input }) => ({
+      items: voiceAuditService.getHistory(input?.limit ?? 50),
+      stats: voiceAuditService.getStats(),
+    })),
 });
 
 // Property-desk commits write as a resident — refuse any target that isn't one,

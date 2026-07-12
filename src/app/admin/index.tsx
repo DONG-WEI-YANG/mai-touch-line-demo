@@ -35,6 +35,13 @@ const MENU_ITEMS = [
     color: '#c084fc'
   },
   {
+    title: '語音稽核軌跡',
+    subtitle: '檢視語音指令紀錄:誰、何時、送出或駁回',
+    icon: 'doc.text.fill',
+    route: '/admin/voice-audit',
+    color: '#38bdf8'
+  },
+  {
     title: '包裹管理',
     subtitle: '登記到府包裹與追蹤領取狀態',
     icon: 'shippingbox.fill',
