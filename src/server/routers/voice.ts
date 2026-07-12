@@ -1,6 +1,33 @@
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, residentProcedure, staffProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { transcribeAudio } from "../_core/voiceTranscription";
+import { getAi } from "../_core/profile";
+import * as db from "../db";
+import { buildVoiceProposal, commitVoiceProposal, buildFacilityMap } from "../_core/voiceCommand";
+import type { IntentName, Slot } from "../line/ai/types";
+
+// Actionable + query intents the NLP classifier can emit. Kept in sync with
+// IntentName in src/server/line/ai/types.ts.
+const intentSchema = z.enum([
+  "facility.book", "facility.cancel", "facility.list",
+  "repair.report", "visitor.notify", "complaint.file",
+  "workorder.status", "small_talk", "unknown",
+]);
+
+// Permissive slot schema — every field optional (the user may confirm/correct a
+// partial proposal before commit). `.passthrough()` keeps any extra NLP entities.
+const slotSchema = z.object({
+  date: z.string().optional(),
+  time: z.string().optional(),
+  facility: z.enum(["gym", "pool", "meeting_room", "lounge", "bbq", "sauna"]).optional(),
+  duration_min: z.number().optional(),
+  location: z.string().optional(),
+  issue: z.string().optional(),
+  visitor_name: z.string().optional(),
+  visitor_count: z.number().optional(),
+  urgency: z.enum(["low", "med", "high"]).optional(),
+}).passthrough();
 
 const LANGUAGE_LABELS: Record<string, string> = {
   en: "English", zh: "中文", ja: "日本語", ko: "한국어",
@@ -66,4 +93,118 @@ export const voiceRouter = router({
         confidence: estimateConfidence(result),
       };
     }),
+
+  // Voice → proposal. Transcribes, classifies, and returns a proposed booking /
+  // work order. NEVER writes — the client shows a confirmation card, then calls
+  // `commit`. See docs/superpowers/specs/2026-07-12-voice-booking-design.md.
+  command: residentProcedure
+    .input(z.object({
+      audioBase64: z.string(),
+      mimeType: z.string().default("audio/webm"),
+      language: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const buffer = Buffer.from(input.audioBase64, "base64");
+      const result = await transcribeAudio({
+        audioBuffer: buffer,
+        audioMime: input.mimeType,
+        language: input.language,
+        prompt: "Transcribe the user's voice command for a luxury property management app. 請準確辨識,可能是中文或英文。",
+      });
+      if ("error" in result) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
+      }
+      return buildVoiceProposal({
+        transcript: result.text || "",
+        classifier: getAi(),
+        userId: String(ctx.user.id),
+      });
+    }),
+
+  // Confirmed proposal → book / dispatch, as the logged-in resident. Re-derives
+  // the facility map from the live amenities table so voice bookings target the
+  // same amenities as the LINE flow.
+  commit: residentProcedure
+    .input(z.object({ intent: intentSchema, slots: slotSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const facilityMap = buildFacilityMap(await db.getAllAmenities());
+      return commitVoiceProposal({
+        intent: input.intent as IntentName,
+        slots: input.slots as Slot,
+        userId: ctx.user.id,
+        deps: {
+          resolveAmenityId: (f) => facilityMap.get(f),
+          createBooking: async (i) => Number(await db.createBooking(i as any)),
+          createWorkOrder: async (i) => Number(await db.createWorkOrder(i as any)),
+        },
+      });
+    }),
+
+  // ── Property-desk (staff-on-behalf) variants ────────────────────────────────
+  // The tablet at the front desk lets 物業 file a booking / work order FOR a
+  // resident. Same core, but the acting identity is the chosen `targetUserId`.
+
+  // Resident directory for the desk's "代哪一戶" picker.
+  residents: staffProcedure.query(async () => {
+    const users = await db.getAllUsers();
+    return users
+      .filter((u: any) => u.role === "resident")
+      .map((u: any) => ({
+        id: u.id as number,
+        name: (u.name ?? u.displayName ?? `住戶 #${u.id}`) as string,
+        unitNumber: (u.unitNumber ?? null) as string | null,
+      }));
+  }),
+
+  staffCommand: staffProcedure
+    .input(z.object({
+      audioBase64: z.string(),
+      mimeType: z.string().default("audio/webm"),
+      language: z.string().optional(),
+      targetUserId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      await assertResident(input.targetUserId);
+      const buffer = Buffer.from(input.audioBase64, "base64");
+      const result = await transcribeAudio({
+        audioBuffer: buffer,
+        audioMime: input.mimeType,
+        language: input.language,
+        prompt: "Transcribe the user's voice command for a luxury property management app. 請準確辨識,可能是中文或英文。",
+      });
+      if ("error" in result) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: result.error });
+      }
+      return buildVoiceProposal({
+        transcript: result.text || "",
+        classifier: getAi(),
+        userId: String(input.targetUserId),
+      });
+    }),
+
+  staffCommit: staffProcedure
+    .input(z.object({ intent: intentSchema, slots: slotSchema, targetUserId: z.number() }))
+    .mutation(async ({ input }) => {
+      await assertResident(input.targetUserId);
+      const facilityMap = buildFacilityMap(await db.getAllAmenities());
+      return commitVoiceProposal({
+        intent: input.intent as IntentName,
+        slots: input.slots as Slot,
+        userId: input.targetUserId,
+        deps: {
+          resolveAmenityId: (f) => facilityMap.get(f),
+          createBooking: async (i) => Number(await db.createBooking(i as any)),
+          createWorkOrder: async (i) => Number(await db.createWorkOrder(i as any)),
+        },
+      });
+    }),
 });
+
+// Property-desk commits write as a resident — refuse any target that isn't one,
+// so staff can't accidentally file bookings against an admin/logistics account.
+async function assertResident(userId: number): Promise<void> {
+  const target = await db.getUserById(userId);
+  if (!target || target.role !== "resident") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `Target user ${userId} is not a resident.` });
+  }
+}

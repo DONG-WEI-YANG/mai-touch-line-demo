@@ -14,6 +14,9 @@ import { getProfile } from './_core/profile';
 import { mountWebhook } from './line/webhook';
 import { dispatch, getDispatchDeps } from './line/dispatcher';
 import { mountAdminDashboard } from './line/admin-dashboard';
+import * as db from './db';
+import { hardwareGatewayService } from './services/hardwareGatewayService';
+import { handleSmartHomeRequest } from './services/googleSmartHome';
 
 export function createApp(): express.Express {
   const app = express();
@@ -21,7 +24,18 @@ export function createApp(): express.Express {
   // CORS — same logic as before
   const allowedOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
-    : ['http://localhost:8081', 'http://localhost:19006', 'http://localhost:3000'];
+    : [
+        'http://localhost:8081',
+        'http://127.0.0.1:8081',
+        'http://localhost:8082',
+        'http://127.0.0.1:8082',
+        'http://localhost:8083',
+        'http://127.0.0.1:8083',
+        'http://localhost:19006',
+        'http://127.0.0.1:19006',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+      ];
 
   app.use(cors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
@@ -155,6 +169,41 @@ export function createApp(): express.Express {
   </div>
 </body>
 </html>`);
+  });
+
+  // Google Smart Home (Cloud-to-Cloud) fulfillment webhook. This is the ONLY
+  // supported Google-speaker → backend path, and it is DEVICE CONTROL only
+  // (開燈/開冷氣) — not voice booking. Google POSTs SYNC/QUERY/EXECUTE here with
+  // the account-linked user in the Bearer token; createContext resolves it the
+  // same way tRPC does. External setup (Actions Console + OAuth linking) is the
+  // operator's — see docs/security/google-smart-home.md.
+  app.post('/google/smarthome', async (req, res) => {
+    try {
+      const ctx = await createContext({ req, res });
+      const user = ctx.user as any;
+      if (!user) return res.status(401).json({ error: 'unauthorized' });
+      const result = await handleSmartHomeRequest(req.body, user.id, {
+        listDevices: async () => (user.unitId ? (await db.getDevicesByUnit(user.unitId)) as any : []),
+        getDevice: (id) => db.getDeviceById(id) as any,
+        setDeviceStatus: async (id, status) => {
+          await db.updateDeviceStatus(id, status);
+          const dev: any = await db.getDeviceById(id);
+          await hardwareGatewayService.dispatchDeviceCommand({
+            deviceId: id,
+            status,
+            requestedBy: `google:${user.id}`,
+            deviceName: dev?.name,
+            deviceType: dev?.type,
+            unitId: dev?.unitId ?? null,
+            amenityId: dev?.amenityId ?? null,
+          });
+        },
+      });
+      res.json(result);
+    } catch (err) {
+      console.error('[google/smarthome] fulfillment error', err);
+      res.status(500).json({ error: 'fulfillment_error' });
+    }
   });
 
   registerOAuthRoutes(app);

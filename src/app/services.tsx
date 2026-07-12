@@ -31,6 +31,14 @@ const SERVICES: Service[] = [
   },
   // Property Operations
   {
+    id: "voice-booking",
+    titleKey: "services.voice.title",
+    descKey: "services.voice.desc",
+    icon: "mic.fill",
+    category: "operations",
+    route: "/voice-booking",
+  },
+  {
     id: "digital-wallet",
     titleKey: "wallet.title",
     descKey: "wallet.balance",
