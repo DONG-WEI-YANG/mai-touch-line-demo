@@ -1,3 +1,6 @@
+import { logError } from './logError';
+import { ErrorIds } from '../constants/errorIds';
+
 export type SyntheticUser = {
   id: number;
   openId: string;
@@ -83,7 +86,7 @@ export function userFromPersonalToken(
     // Audit finding: a swallowed DB error here silently turns a VALID token into
     // "unauthenticated" (and hides a broken web_tokens query, e.g. missing table).
     // Still return null so auth fails closed, but never do it invisibly.
-    console.error('[auth] userFromPersonalToken lookup failed', err);
+    logError(ErrorIds.AUTH_TOKEN_LOOKUP_FAILED, 'userFromPersonalToken lookup failed', { cause: err });
     return null;
   }
 }

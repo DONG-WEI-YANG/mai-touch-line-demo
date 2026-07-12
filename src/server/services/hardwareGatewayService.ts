@@ -1,3 +1,6 @@
+import { logError } from "../_core/logError";
+import { ErrorIds } from "../constants/errorIds";
+
 type DispatchDeviceCommandInput = {
   deviceId: number;
   status: string;
@@ -331,6 +334,10 @@ class HardwareGatewayService {
     } else {
       this.failedDispatches += 1;
       this.lastFailureReason = result.reason ?? "Unknown failure";
+      logError(ErrorIds.HARDWARE_DISPATCH_FAILED, "Hardware device command failed", {
+        context: { deviceId: input.deviceId, status: input.status, adapter: this.protocolAdapter },
+        cause: result.reason,
+      });
     }
 
     if (result.commandDispatched) {

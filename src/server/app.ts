@@ -17,6 +17,8 @@ import { mountAdminDashboard } from './line/admin-dashboard';
 import * as db from './db';
 import { hardwareGatewayService } from './services/hardwareGatewayService';
 import { handleSmartHomeRequest } from './services/googleSmartHome';
+import { logError } from './_core/logError';
+import { ErrorIds } from './constants/errorIds';
 
 export function createApp(): express.Express {
   const app = express();
@@ -221,7 +223,7 @@ export function createApp(): express.Express {
       });
       res.json(result);
     } catch (err) {
-      console.error('[google/smarthome] fulfillment error', err);
+      logError(ErrorIds.GOOGLE_FULFILLMENT_ERROR, 'Google Smart Home fulfillment failed', { cause: err });
       res.status(500).json({ error: 'fulfillment_error' });
     }
   });
