@@ -117,16 +117,17 @@ class HttpHardwareProtocolAdapter implements HardwareProtocolAdapter {
 
       if (!response.ok) {
         const reason = `Hardware gateway rejected command (${response.status})`;
-        if (context.strictMode) {
-          return {
-            success: false,
-            commandDispatched: false,
-            fallbackUsed: false,
-            reason,
-            statusCode: response.status,
-          };
-        }
-        return context.safeFallback(reason, response.status);
+        // Audit finding E: a configured gateway that rejects the command is a
+        // genuine FAILURE — do not report success:true just because strict mode
+        // is off. (safeFallback stays for the not-attempted cases: no URL, dry-
+        // run, stub adapters.) fallbackUsed flags that we degraded gracefully.
+        return {
+          success: false,
+          commandDispatched: false,
+          fallbackUsed: !context.strictMode,
+          reason,
+          statusCode: response.status,
+        };
       }
 
       return {
@@ -140,15 +141,15 @@ class HttpHardwareProtocolAdapter implements HardwareProtocolAdapter {
         error instanceof Error
           ? `Hardware gateway request failed: ${error.message}`
           : "Hardware gateway request failed";
-      if (context.strictMode) {
-        return {
-          success: false,
-          commandDispatched: false,
-          fallbackUsed: false,
-          reason,
-        };
-      }
-      return context.safeFallback(reason);
+      // Audit finding E: an attempted-but-failed dispatch (timeout / connection
+      // error) is a real failure, not a safe fallback — report success:false so
+      // callers (and the health counters) see it.
+      return {
+        success: false,
+        commandDispatched: false,
+        fallbackUsed: !context.strictMode,
+        reason,
+      };
     } finally {
       clearTimeout(timeoutId);
     }

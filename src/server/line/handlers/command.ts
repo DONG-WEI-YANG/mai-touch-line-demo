@@ -51,8 +51,12 @@ export async function handleCommand(rawText: string, ev: any, d: CommandDeps): P
   const roleMatch = text.match(/^\/role\s+(resident|housekeeper|admin)$/);
   if (roleMatch) {
     const newRole = roleMatch[1] as 'resident' | 'housekeeper' | 'admin';
-    if (newRole === 'admin' && !d.adminWhitelist.includes(userId)) {
-      await reply({ type: 'text', text: 'forbidden: admin role requires whitelist' });
+    // Audit finding D: housekeeper is a privileged role (receives all residents'
+    // work-order PII + can accept/close any order), so it must NOT be self-
+    // selectable. Gate both admin AND housekeeper behind the operator whitelist;
+    // only self-demotion to resident is unrestricted.
+    if ((newRole === 'admin' || newRole === 'housekeeper') && !d.adminWhitelist.includes(userId)) {
+      await reply({ type: 'text', text: `forbidden: ${newRole} role requires whitelist` });
       return true;
     }
     d.lineUserRepo.setRole(d.channelId, userId, newRole);
