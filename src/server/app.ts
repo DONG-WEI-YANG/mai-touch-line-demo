@@ -37,10 +37,15 @@ export function createApp(): express.Express {
         'http://127.0.0.1:3000',
       ];
 
+  // GitHub Pages frontend origin — always allowed regardless of CORS_ORIGINS env
+  // so the Pages build (dong-wei-yang.github.io/mai-touch-line-demo/) can call the
+  // API without also having to touch the Render env. See the deploy-pages workflow.
+  const alwaysAllowedOrigins = ['https://dong-wei-yang.github.io'];
+
   app.use(cors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (allowedOrigins.includes(origin) || alwaysAllowedOrigins.includes(origin)) return callback(null, true);
       callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
