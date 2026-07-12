@@ -1,0 +1,71 @@
+name: Deploy web to GitHub Pages
+
+# Builds the Expo web app to static files and publishes to GitHub Pages at
+# https://dong-wei-yang.github.io/mai-touch-line-demo/. The API stays on Render
+# (mai-touch-line-us) — the frontend calls it cross-origin (allowed in app.ts).
+#
+# One-time setup by the repo owner:
+#   1. Settings → Pages → Source: "GitHub Actions".
+#   2. Settings → Secrets and variables → Actions → add the demo login tokens
+#      (copy the values from the Vercel project env):
+#        EXPO_PUBLIC_DEMO_ADMIN_TOKEN, EXPO_PUBLIC_DEMO_LOGISTICS_TOKEN,
+#        EXPO_PUBLIC_DEMO_RESIDENT_TOKEN, and (optional) EXPO_PUBLIC_API_KEY.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Export Expo web (static)
+        env:
+          EXPO_PUBLIC_API_URL: https://mai-touch-line-us.onrender.com
+          EXPO_BASE_URL: /mai-touch-line-demo
+          EXPO_PUBLIC_API_KEY: ${{ secrets.EXPO_PUBLIC_API_KEY }}
+          EXPO_PUBLIC_DEMO_ADMIN_TOKEN: ${{ secrets.EXPO_PUBLIC_DEMO_ADMIN_TOKEN }}
+          EXPO_PUBLIC_DEMO_LOGISTICS_TOKEN: ${{ secrets.EXPO_PUBLIC_DEMO_LOGISTICS_TOKEN }}
+          EXPO_PUBLIC_DEMO_RESIDENT_TOKEN: ${{ secrets.EXPO_PUBLIC_DEMO_RESIDENT_TOKEN }}
+        run: npx expo export -p web --output-dir dist
+
+      - name: Add .nojekyll and SPA fallback
+        # .nojekyll stops GitHub Pages' Jekyll from dropping the _expo/ folder.
+        # 404.html = index.html so client-side deep links (e.g. /voice-booking) resolve.
+        run: |
+          touch dist/.nojekyll
+          cp dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
