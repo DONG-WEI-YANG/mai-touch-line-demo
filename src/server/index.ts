@@ -195,8 +195,13 @@ async function startServer() {
       // Real bookFn — calls db.createBooking directly (skip tRPC ctx auth for demo)
       const bookFn = async (input: { facility: string; date: string; time: string }, lineUserId?: string): Promise<{ id: string }> => {
         const amenityId = facilityToAmenityId.get(input.facility);
+        // Audit finding: don't silently book amenity #1 when the facility isn't
+        // mapped — that told the user their sauna/pool booking succeeded while a
+        // booking against a different room was created. Fail loudly instead; the
+        // caller (resident handler) shows a "busy, try again" reply on throw.
         if (!amenityId) {
-          console.warn('[LINE] no amenity mapped for facility', input.facility, '— using fallback id=1');
+          console.error('[LINE] no amenity mapped for facility', input.facility);
+          throw new Error(`Unknown facility "${input.facility}" — no matching amenity`);
         }
         // Derive endTime = startTime + 1 hour
         const [h, m] = input.time.split(':').map(Number);
@@ -204,7 +209,7 @@ async function startServer() {
         const endTime = `${String(endH).padStart(2, '0')}:${String(m ?? 0).padStart(2, '0')}`;
         const bookingId = await db.createBooking({
           userId: resolveAppUserId(lineUserId),
-          amenityId: amenityId ?? 1,
+          amenityId,
           date: input.date,
           startTime: input.time,
           endTime,
