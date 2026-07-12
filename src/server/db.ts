@@ -25,6 +25,14 @@ import type {
 
 let cachedDb: Awaited<ReturnType<typeof dbManager.connect>>["db"] | null = null;
 
+/** Thrown when the database is genuinely unreachable — distinct from "empty". */
+export class DatabaseUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super(`Database unavailable: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = "DatabaseUnavailableError";
+  }
+}
+
 export async function getDb() {
   if (cachedDb) return cachedDb;
   try {
@@ -32,8 +40,12 @@ export async function getDb() {
     cachedDb = adapter.db;
     return cachedDb;
   } catch (error) {
-    console.warn("[Database] Failed to connect:", error);
-    return null;
+    // Audit finding F: do NOT return null on connection failure — that made every
+    // read helper degrade to "empty data", so a DB outage looked identical to a
+    // legitimately empty system (admin saw "0 users"). Throw so the outage
+    // surfaces to the caller (tRPC → 5xx) instead of silently showing nothing.
+    console.error("[Database] Failed to connect:", error);
+    throw new DatabaseUnavailableError(error);
   }
 }
 

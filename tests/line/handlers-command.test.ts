@@ -44,8 +44,16 @@ describe('handleCommand', () => {
     expect(msg.text).toMatch(/help|role|lang|demo/i);
   });
 
-  it('/role housekeeper updates role', async () => {
-    const deps = mkDeps();
+  it('/role housekeeper denied for non-whitelisted user (audit finding D)', async () => {
+    const deps = mkDeps(); // adminWhitelist: []
+    await handleCommand('/role housekeeper', mkEv('/role housekeeper') as any, deps);
+    expect(deps.lineUserRepo.setRole).not.toHaveBeenCalled();
+    expect(deps.client.replyOrPush).toHaveBeenCalledWith(expect.anything(), 'U1',
+      expect.objectContaining({ text: expect.stringMatching(/forbidden|housekeeper/i) }));
+  });
+
+  it('/role housekeeper allowed for whitelisted user', async () => {
+    const deps = mkDeps({ adminWhitelist: ['U1'] });
     await handleCommand('/role housekeeper', mkEv('/role housekeeper') as any, deps);
     expect(deps.lineUserRepo.setRole).toHaveBeenCalledWith('C', 'U1', 'housekeeper');
   });

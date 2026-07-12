@@ -3,11 +3,36 @@
  * 預留給未來真實主機的管理後台 UI
  */
 import { Router } from "express";
+import crypto from "crypto";
 import * as db from "./db";
 import { getAuditLog } from "./audit-log";
 import type { User } from "./schema";
 
 export const adminRouter = Router();
+
+// Audit finding A (CRITICAL): these legacy /admin/* routes (user list, audit CSV
+// with PII, stats) were mounted with NO authentication — publicly readable on the
+// backend URL. Gate the whole router behind ADMIN_DASHBOARD_TOKEN, same as the
+// LINE ops dashboard. Fail-closed: 503 if the token isn't configured.
+function safeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+adminRouter.use((req, res, next) => {
+  const expected = process.env.ADMIN_DASHBOARD_TOKEN;
+  if (!expected) {
+    return res.status(503).send("Admin dashboard disabled: ADMIN_DASHBOARD_TOKEN is not set.");
+  }
+  const authHeader = String(req.headers["authorization"] ?? "");
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
+  const got = bearer || String((req.query.token as string) ?? (req.body?.token as string) ?? "");
+  if (!got || !safeEqual(got, expected)) {
+    return res.status(401).send("Unauthorized");
+  }
+  next();
+});
 
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const displayDateFormatter = new Intl.DateTimeFormat("zh-TW", {

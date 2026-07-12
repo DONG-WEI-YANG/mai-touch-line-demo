@@ -5,6 +5,7 @@ import { transcribeAudio } from "../_core/voiceTranscription";
 import { getAi } from "../_core/profile";
 import * as db from "../db";
 import { buildVoiceProposal, commitVoiceProposal, buildFacilityMap, VoiceValidationError } from "../_core/voiceCommand";
+import { assertWithinCapacity } from "../_core/bookingCapacity";
 import { voiceAuditService, type VoiceAuditSource } from "../services/voiceAuditService";
 import type { IntentName, Slot } from "../line/ai/types";
 
@@ -250,20 +251,25 @@ async function assertResident(userId: number): Promise<void> {
   }
 }
 
-// Capacity guard for the voice booking path — mirrors bookingsRouter.create so a
-// voice-confirmed booking can't overbook a full slot (audit finding C1).
+// Capacity guard for the voice booking path — shares assertWithinCapacity with
+// bookingsRouter.create so a voice-confirmed booking can't overbook a full slot
+// (audit findings C1 + C: range-overlap occupancy, not exact-startTime match).
 async function assertBookingCapacity(input: {
-  amenityId: number; date: string; startTime: string; guestCount: number;
+  amenityId: number; date: string; startTime: string; endTime: string; guestCount: number;
 }): Promise<void> {
   const amenity = await db.getAmenityById(input.amenityId);
   if (!amenity) throw new TRPCError({ code: "NOT_FOUND", message: "Amenity not found" });
   const existing = await db.getBookingsByAmenityAndDate(input.amenityId, input.date);
-  const occupancy = existing
-    .filter((b: any) => b.startTime === input.startTime)
-    .reduce((sum: number, b: any) => sum + b.guestCount, 0);
-  if (occupancy + input.guestCount > amenity.capacity) {
-    const left = amenity.capacity - occupancy;
-    throw new TRPCError({ code: "CONFLICT", message: `Capacity exceeded. Only ${left} spots left for this slot.` });
+  try {
+    assertWithinCapacity({
+      existing: existing as any,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      guestCount: input.guestCount,
+      capacity: amenity.capacity,
+    });
+  } catch (err) {
+    throw new TRPCError({ code: "CONFLICT", message: err instanceof Error ? err.message : "Capacity exceeded" });
   }
 }
 

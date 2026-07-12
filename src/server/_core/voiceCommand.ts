@@ -130,6 +130,7 @@ export type CommitDeps = {
     amenityId: number;
     date: string;
     startTime: string;
+    endTime: string;
     guestCount: number;
   }) => Promise<void>;
 };
@@ -174,7 +175,7 @@ async function commitBooking(slots: Slot, userId: number, deps: CommitDeps): Pro
   const endTime = deriveEndTime(startTime, slots.duration_min);
 
   // Capacity guard — reject an overbooked slot before writing (audit finding C1).
-  await deps.assertBookingAllowed({ amenityId, date, startTime, guestCount: 1 });
+  await deps.assertBookingAllowed({ amenityId, date, startTime, endTime, guestCount: 1 });
 
   const id = await deps.createBooking({
     userId,
