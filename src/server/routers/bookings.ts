@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 import { assertWithinCapacity } from "../_core/bookingCapacity";
+import { runExclusive } from "../_core/keyedLock";
 
 export const bookingsRouter = router({
   myBookings: residentProcedure.query(async ({ ctx }) => db.getUserBookings(ctx.user.id)),
@@ -20,28 +21,31 @@ export const bookingsRouter = router({
       const amenity = await db.getAmenityById(input.amenityId);
       if (!amenity) throw new TRPCError({ code: "NOT_FOUND", message: "Amenity not found" });
 
-      // Range-overlap capacity check (audit finding C) — shared with the voice path.
-      const existingBookings = await db.getBookingsByAmenityAndDate(input.amenityId, input.date);
-      try {
-        assertWithinCapacity({
-          existing: existingBookings,
+      // Serialize the read→check→write for this exact slot so two concurrent
+      // requests can't both pass the capacity check and overbook (audit race).
+      return runExclusive(`booking:${input.amenityId}:${input.date}:${input.startTime}`, async () => {
+        const existingBookings = await db.getBookingsByAmenityAndDate(input.amenityId, input.date);
+        try {
+          assertWithinCapacity({
+            existing: existingBookings,
+            startTime: input.startTime,
+            endTime: input.endTime,
+            guestCount: input.guestCount,
+            capacity: amenity.capacity,
+          });
+        } catch (err) {
+          throw new TRPCError({ code: "CONFLICT", message: err instanceof Error ? err.message : "Capacity exceeded" });
+        }
+
+        return db.createBooking({
+          userId: ctx.user.id,
+          amenityId: input.amenityId,
+          date: input.date,
           startTime: input.startTime,
           endTime: input.endTime,
           guestCount: input.guestCount,
-          capacity: amenity.capacity,
+          notes: input.notes,
         });
-      } catch (err) {
-        throw new TRPCError({ code: "CONFLICT", message: err instanceof Error ? err.message : "Capacity exceeded" });
-      }
-
-      return db.createBooking({
-        userId: ctx.user.id,
-        amenityId: input.amenityId,
-        date: input.date,
-        startTime: input.startTime,
-        endTime: input.endTime,
-        guestCount: input.guestCount,
-        notes: input.notes,
       });
     }),
 
