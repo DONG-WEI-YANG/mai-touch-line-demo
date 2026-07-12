@@ -4,7 +4,7 @@ import { z } from "zod";
 import { transcribeAudio } from "../_core/voiceTranscription";
 import { getAi } from "../_core/profile";
 import * as db from "../db";
-import { buildVoiceProposal, commitVoiceProposal, buildFacilityMap } from "../_core/voiceCommand";
+import { buildVoiceProposal, commitVoiceProposal, buildFacilityMap, VoiceValidationError } from "../_core/voiceCommand";
 import { voiceAuditService, type VoiceAuditSource } from "../services/voiceAuditService";
 import type { IntentName, Slot } from "../line/ai/types";
 
@@ -23,6 +23,11 @@ async function auditedCommit(args: {
     return result;
   } catch (err) {
     voiceAuditService.record({ actorUserId, targetUserId, source, phase: "commit", intent, kind: "commit", outcome: "rejected", slots, error: err instanceof Error ? err.message : String(err) });
+    // Bad client input → 400 (not a 500). Capacity conflicts already arrive as
+    // their own TRPCError (409) from assertBookingAllowed and pass through.
+    if (err instanceof VoiceValidationError) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+    }
     throw err;
   }
 }

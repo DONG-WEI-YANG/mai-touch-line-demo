@@ -33,6 +33,17 @@ const QUERY_INTENTS = new Set<IntentName>(["facility.list", "facility.cancel", "
 /** Intents that produce a work order (everything actionable that isn't a booking). */
 const WORK_ORDER_INTENTS = new Set<IntentName>(["repair.report", "visitor.notify", "complaint.file"]);
 
+/** Thrown when a commit fails due to bad client input (missing/invalid slots,
+ *  unknown facility, non-committable intent). The router maps this to a 400
+ *  BAD_REQUEST; unmapped errors would surface as a 500. Capacity conflicts are
+ *  raised by the injected assertBookingAllowed as its own (409) error. */
+export class VoiceValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VoiceValidationError";
+  }
+}
+
 export type VoiceProposalKind = "booking" | "work_order" | "query" | "unclear";
 
 export type VoiceProposal = {
@@ -136,18 +147,18 @@ export async function commitVoiceProposal(input: CommitVoiceProposalInput): Prom
   if (intent === "facility.book") return commitBooking(slots, userId, deps);
   if (WORK_ORDER_INTENTS.has(intent)) return commitWorkOrder(intent, slots, userId, deps);
 
-  throw new Error(`Intent "${intent}" is not committable (query or unclear intents never write).`);
+  throw new VoiceValidationError(`Intent "${intent}" is not committable (query or unclear intents never write).`);
 }
 
 async function commitBooking(slots: Slot, userId: number, deps: CommitDeps): Promise<{ ref: string }> {
   const missing = missingSlots("facility.book", slots);
   if (missing.length > 0) {
-    throw new Error(`Cannot book: missing required slot(s) ${missing.join(", ")}.`);
+    throw new VoiceValidationError(`Cannot book: missing required slot(s) ${missing.join(", ")}.`);
   }
   const facility = String(slots.facility);
   const amenityId = deps.resolveAmenityId(facility);
   if (amenityId == null) {
-    throw new Error(`Unknown facility "${facility}" — no matching amenity.`);
+    throw new VoiceValidationError(`Unknown facility "${facility}" — no matching amenity.`);
   }
   // Validate the free-form NLP date/time BEFORE anything hits the DB (audit
   // finding C2). NLP can return "下週一" / "下午三點"; writing those produces
@@ -155,10 +166,10 @@ async function commitBooking(slots: Slot, userId: number, deps: CommitDeps): Pro
   const date = String(slots.date);
   const startTime = String(slots.time);
   if (!isValidDate(date)) {
-    throw new Error(`Invalid booking date "${date}" — expected YYYY-MM-DD.`);
+    throw new VoiceValidationError(`Invalid booking date "${date}" — expected YYYY-MM-DD.`);
   }
   if (!isValidTime(startTime)) {
-    throw new Error(`Invalid booking time "${startTime}" — expected HH:MM.`);
+    throw new VoiceValidationError(`Invalid booking time "${startTime}" — expected HH:MM.`);
   }
   const endTime = deriveEndTime(startTime, slots.duration_min);
 

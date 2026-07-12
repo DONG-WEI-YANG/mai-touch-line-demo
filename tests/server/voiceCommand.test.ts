@@ -5,6 +5,7 @@ import {
   deriveEndTime,
   urgencyToPriority,
   buildFacilityMap,
+  VoiceValidationError,
 } from "../../src/server/_core/voiceCommand";
 
 // Mirrors the `mkAi` mock in tests/line/handlers-resident.test.ts — a classifier
@@ -136,7 +137,7 @@ describe("commitVoiceProposal — facility.book", () => {
         userId: 42,
         deps: d,
       }),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(VoiceValidationError); // → mapped to 400 by the router, not 500
     expect(d.createBooking).not.toHaveBeenCalled();
   });
 
