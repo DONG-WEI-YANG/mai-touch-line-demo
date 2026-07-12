@@ -81,13 +81,17 @@ export function makeAnnouncementsRepo(db: Database.Database) {
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 
+  // expires_at: a clear flag (1) sets NULL (remove expiry); otherwise COALESCE so
+  // undefined keeps the current value. Audit finding: COALESCE alone could set/
+  // extend an expiry but never REMOVE one (passing null was indistinguishable
+  // from "don't change").
   const update = db.prepare(`
     UPDATE announcements
     SET title      = COALESCE(?, title),
         body       = COALESCE(?, body),
         audience   = COALESCE(?, audience),
         is_pinned  = COALESCE(?, is_pinned),
-        expires_at = COALESCE(?, expires_at)
+        expires_at = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, expires_at) END
     WHERE id = ?
   `);
 
@@ -132,12 +136,16 @@ export function makeAnnouncementsRepo(db: Database.Database) {
       isPinned?: boolean;
       expiresAt?: string | null;
     }): boolean {
+      // null → clear expiry; undefined → keep; a string → set.
+      const clearExpiry = input.expiresAt === null ? 1 : 0;
+      const expiresValue = input.expiresAt == null ? null : input.expiresAt;
       const result = update.run(
         input.title ?? null,
         input.body ?? null,
         input.audience ?? null,
         input.isPinned === undefined ? null : (input.isPinned ? 1 : 0),
-        input.expiresAt === undefined ? null : input.expiresAt,
+        clearExpiry,
+        expiresValue,
         input.id,
       ) as { changes?: number };
       return (result.changes ?? 0) > 0;

@@ -79,6 +79,18 @@ describe('AnnouncementsRepo', () => {
     expect(repo.list('resident').some((a: any) => a.title === 'ISO future')).toBe(true);
   });
 
+  it('update can CLEAR an expiry with null (undefined keeps it) — audit finding', () => {
+    const id = repo.create({ title: 'Clearable', body: 'b', audience: 'all', postedBy: null,
+      expiresAt: new Date(Date.now() - 60_000).toISOString() }); // already expired → hidden
+    expect(repo.list('resident').some((a: any) => a.id === id)).toBe(false);
+
+    repo.update({ id, body: 'edited' });        // undefined expiresAt → expiry unchanged, still hidden
+    expect(repo.list('resident').some((a: any) => a.id === id)).toBe(false);
+
+    repo.update({ id, expiresAt: null });        // explicit null → clear expiry → visible again
+    expect(repo.list('resident').some((a: any) => a.id === id)).toBe(true);
+  });
+
   it('update changes only specified fields', () => {
     const id = repo.create({ title: 'Old', body: 'orig', audience: 'all', postedBy: null });
     expect(repo.update({ id, title: 'New' })).toBe(true);
