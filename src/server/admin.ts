@@ -6,6 +6,8 @@ import { Router } from "express";
 import crypto from "crypto";
 import * as db from "./db";
 import { getAuditLog } from "./audit-log";
+import { logError } from "./_core/logError";
+import { ErrorIds } from "./constants/errorIds";
 import type { User } from "./schema";
 
 export const adminRouter = Router();
@@ -216,7 +218,7 @@ adminRouter.get("/", async (_req, res) => {
       </html>
     `);
   } catch (error) {
-    console.error("[Admin] dashboard render failed", error);
+    logError(ErrorIds.ADMIN_RENDER_FAILED, "dashboard render failed", { cause: error });
     res.status(500).send("Error loading dashboard");
   }
 });
@@ -343,7 +345,7 @@ adminRouter.get("/users", async (_req, res) => {
       </html>
     `);
   } catch (error) {
-    console.error("[Admin] users render failed", error);
+    logError(ErrorIds.ADMIN_RENDER_FAILED, "users render failed", { cause: error });
     res.status(500).send("Error loading users");
   }
 });

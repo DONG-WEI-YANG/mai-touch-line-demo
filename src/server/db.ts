@@ -16,6 +16,8 @@ import {
 } from "./schema";
 import { ENV } from "./_core/env";
 import { dbManager } from "./database/adapter";
+import { logError } from "./_core/logError";
+import { ErrorIds } from "./constants/errorIds";
 import type {
   BatchControlAuditEntry,
   BatchControlAuditRecordInput,
@@ -44,7 +46,7 @@ export async function getDb() {
     // read helper degrade to "empty data", so a DB outage looked identical to a
     // legitimately empty system (admin saw "0 users"). Throw so the outage
     // surfaces to the caller (tRPC → 5xx) instead of silently showing nothing.
-    console.error("[Database] Failed to connect:", error);
+    logError(ErrorIds.DB_UNAVAILABLE, "Database connection failed", { cause: error });
     throw new DatabaseUnavailableError(error);
   }
 }

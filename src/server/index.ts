@@ -13,6 +13,8 @@ import { makeMessageLog } from './line/message-log';
 import { setLineAdminContext } from './_core/context';
 import { makePushHousekeepers } from './line/push-housekeepers';
 import { getAi } from './_core/profile';
+import { logError } from './_core/logError';
+import { ErrorIds } from './constants/errorIds';
 import { dbManager } from './database/adapter';
 import { runMigrations } from './database/migrate';
 import { makeRateLimiter } from './line/rate-limit';
@@ -47,7 +49,7 @@ async function startServer() {
   try {
     await runMigrations();
   } catch (err) {
-    console.warn('[Server] runMigrations failed (continuing on existing schema):', (err as Error).message);
+    logError(ErrorIds.BOOT_MIGRATION_FAILED, 'runMigrations failed — continuing on existing (possibly drifted) schema', { cause: err });
   }
 
   // seedSystemIfEmpty uses now() SQL function which is MySQL-specific and crashes on
@@ -56,7 +58,7 @@ async function startServer() {
   try {
     await db.seedSystemIfEmpty();
   } catch (err) {
-    console.warn('[Server] seedSystemIfEmpty failed (continuing — may be SQLite vs MySQL syntax):', (err as Error).message);
+    logError(ErrorIds.BOOT_SEED_FAILED, 'seedSystemIfEmpty failed (continuing — may be SQLite vs MySQL syntax)', { cause: err });
   }
   startAuditCleanupScheduler();
 
@@ -514,7 +516,7 @@ async function startServer() {
 
       console.log('[LINE] dispatcher configured');
     } catch (err) {
-      console.error('[LINE] dispatcher setup failed (non-fatal, webhook will throw on first request):', err);
+      logError(ErrorIds.LINE_DISPATCHER_SETUP_FAILED, 'LINE dispatcher setup failed — bot is DOWN until restart (/health reports line:degraded)', { cause: err });
     }
   }
 
