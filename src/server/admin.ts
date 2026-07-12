@@ -25,9 +25,13 @@ adminRouter.use((req, res, next) => {
   if (!expected) {
     return res.status(503).send("Admin dashboard disabled: ADMIN_DASHBOARD_TOKEN is not set.");
   }
+  // Require the token via the Authorization: Bearer header only — NOT a
+  // ?token= query param (which leaks into access logs / history / Referer;
+  // audit finding M2). These routes had no auth before, so there's no existing
+  // query-string workflow to preserve. For browser access, add an HttpOnly
+  // cookie login later.
   const authHeader = String(req.headers["authorization"] ?? "");
-  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
-  const got = bearer || String((req.query.token as string) ?? (req.body?.token as string) ?? "");
+  const got = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
   if (!got || !safeEqual(got, expected)) {
     return res.status(401).send("Unauthorized");
   }
