@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1333 750" width="1333" height="750" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif">
+<defs><radialGradient id="g1" cx="50%" cy="-8%" r="85%">
+    <stop offset="0" stop-color="#1a2c4d"/><stop offset="0.55" stop-color="#0c1322"/><stop offset="1" stop-color="#070d18"/>
+  </radialGradient></defs>
+  <rect width="1333" height="750" fill="#070b14"/>
+  <rect width="1333" height="750" fill="url(#g1)"/>
+  <rect x="20" y="20" width="1293" height="710" rx="10" fill="none" stroke="#c9a35a" stroke-width="1" stroke-opacity="0.28"/>
+<g transform="translate(606.00,142.00) scale(5.0000)" fill="none" stroke="#c9a35a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="12" height="9.5" rx="2"/><circle cx="12" cy="14.7" r="1.3"/><path d="M9 8a5 5 0 0 1 6 0M7 6a8 8 0 0 1 10 0"/></g>
+<text x="666.6" y="314.254" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" letter-spacing="4" xml:space="preserve"><tspan fill="#c9a35a" font-weight="700" font-size="18.06">RECOMMENDED HARDWARE CONFIGURATION</tspan></text>
+<text x="666.6" y="392.1184" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#f6f3ec" font-weight="700" font-size="61.12">推薦硬體配置清單</tspan></text>
+<line x1="616" y1="452" x2="716" y2="452" stroke="#c9a35a" stroke-width="1.67"/>
+<text x="666.6" y="488.756" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#cdd8ec" font-size="20.84">高級住宅・智慧管理平台　｜　從雲端到終端，一次配齊</tspan></text>
+<text x="666.6" y="581.624" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#e6cf9a" font-weight="700" font-size="17.36">邊緣閘道 × 網路基礎 × 公設門禁 × 住戶智慧 × 管理終端 × 雲端服務</tspan></text>
+<text x="666.6" y="683.122" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#5e74a0" font-size="14.58">※ 配置分級對應實際程式整合現況：已整合上線 · 建議必備 · 選配待接</tspan></text>
+</svg>

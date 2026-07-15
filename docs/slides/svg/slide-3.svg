@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1333 750" width="1333" height="750" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif">
+<defs><radialGradient id="g3" cx="50%" cy="-8%" r="85%">
+    <stop offset="0" stop-color="#1a2c4d"/><stop offset="0.55" stop-color="#0c1322"/><stop offset="1" stop-color="#070d18"/>
+  </radialGradient></defs>
+  <rect width="1333" height="750" fill="#070b14"/>
+  <rect width="1333" height="750" fill="url(#g3)"/>
+  <rect x="20" y="20" width="1293" height="710" rx="10" fill="none" stroke="#c9a35a" stroke-width="1" stroke-opacity="0.28"/>
+<text x="60" y="47.751999999999995" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" letter-spacing="3" xml:space="preserve"><tspan fill="#c9a35a" font-weight="700" font-size="15.28">GOOGLE NEST ECOSYSTEM</tspan></text>
+<text x="58" y="90.499" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#f6f3ec" font-weight="700" font-size="36.11">採用 Google Nest 智慧生態系</tspan></text>
+<text x="60" y="138.24" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="17.36" fill="#9fb0cc">國際級硬體品質，以 Google 官方 Cloud-to-Cloud 標準串接，語音裝置控制已完成整合</text>
+<text x="1273" y="64.373" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#9fb0cc" font-size="15.97">國際品牌背書</tspan></text>
+<text x="1273" y="85.21050000000001" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#e6cf9a" font-weight="700" font-size="16.67">Google Nest 全系列</tspan></text>
+<text x="1273" y="141.122" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#69d6a8" font-size="14.58">● </tspan><tspan fill="#cdd8ec" font-size="14.58">已整合上線　</tspan><tspan fill="#c9a35a" font-size="14.58">● </tspan><tspan fill="#cdd8ec" font-size="14.58">建議必備　</tspan><tspan fill="#6fb1ff" font-size="14.58">○ </tspan><tspan fill="#cdd8ec" font-size="14.58">選配・待接</tspan></text>
+<rect x="50" y="168" width="1233" height="86" rx="10" ry="10" fill="#10241d" fill-opacity="0.92" stroke="#69d6a8" stroke-width="1" stroke-opacity="0.7"/>
+<rect x="50" y="168" width="9" height="86" rx="4" ry="4" fill="#69d6a8"/>
+<ellipse cx="107" cy="211" rx="29" ry="29" fill="#0f1c33" stroke="#69d6a8" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(92.00,196.00) scale(1.2500)" fill="none" stroke="#69d6a8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12.2c0-.7-.06-1.2-.2-1.8H12v3.4h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.6-3.9 2.6-6.5z"/><path d="M12 21c2.4 0 4.4-.8 5.9-2.2l-2.9-2.2c-.8.5-1.8.9-3 .9-2.3 0-4.3-1.6-5-3.7H4v2.3A9 9 0 0 0 12 21z"/><path d="M7 11.8a5.4 5.4 0 0 1 0-3.5V6H4a9 9 0 0 0 0 8.1z"/><path d="M12 6.6c1.3 0 2.5.45 3.4 1.3l2.5-2.5A9 9 0 0 0 4 6l3 2.3c.7-2.1 2.7-3.7 5-3.7z"/></g>
+<text x="155" y="195.624" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#69d6a8" font-weight="700" font-size="17.36">● 已整合上線　</tspan><tspan fill="#f6f3ec" font-weight="700" font-size="17.36">Google 官方 Cloud-to-Cloud 標準</tspan></text>
+<text x="155" y="227.122" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#cdd8ec" font-size="14.58">SYNC · QUERY · EXECUTE 語音裝置控制 —— 對 Nest 音箱／顯示器說一句話即可開關燈光・空調・窗簾</tspan></text>
+<text x="1275" y="194.501" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#e6cf9a" font-weight="700" font-size="13.89">※ 僅『裝置控制』</tspan></text>
+<text x="1275" y="221.88" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#5e74a0" font-size="13.2">語音預約由平台自建麥克風管道</tspan></text>
+<rect x="50" y="278" width="405" height="192" rx="11" ry="11" fill="#13241d" fill-opacity="0.9" stroke="#69d6a8" stroke-width="1" stroke-opacity="0.6"/>
+<ellipse cx="110" cy="338" rx="36" ry="36" fill="#0f1c33" stroke="#69d6a8" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(92.00,320.00) scale(1.5000)" fill="none" stroke="#69d6a8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="8.6" ry="5.2"/><ellipse cx="12" cy="12" rx="4" ry="2.3"/><circle cx="12" cy="12" r="0.9" fill="#69d6a8" stroke="none"/></g>
+<text x="162" y="319.1685" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#69d6a8" font-size="14.58">● </tspan><tspan fill="#f6f3ec" font-weight="700" font-size="16.67">Google Nest Mini / Audio</tspan></text>
+<text x="162" y="348.501" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#69d6a8" font-weight="700" font-size="13.89">智能音箱</tspan></text>
+<line x1="76" y1="390" x2="429" y2="390" stroke="#c9a35a" stroke-width="0.69" stroke-dasharray="3 3" stroke-opacity="0.44999999999999996"/>
+<text x="78" y="408.82" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="13.2" fill="#cdd8ec">語音開關燈光・空調・窗簾(Cloud-to-Cloud)</text>
+<rect x="474" y="278" width="405" height="192" rx="11" ry="11" fill="#13241d" fill-opacity="0.9" stroke="#69d6a8" stroke-width="1" stroke-opacity="0.6"/>
+<ellipse cx="534" cy="338" rx="36" ry="36" fill="#0f1c33" stroke="#69d6a8" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(516.00,320.00) scale(1.5000)" fill="none" stroke="#69d6a8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.6" width="16" height="11" rx="1.6"/><path d="M9 14.6v3.4h6v-3.4M6.5 21h11"/></g>
+<text x="586" y="319.1685" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#69d6a8" font-size="14.58">● </tspan><tspan fill="#f6f3ec" font-weight="700" font-size="16.67">Google Nest Hub</tspan></text>
+<text x="586" y="348.501" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#69d6a8" font-weight="700" font-size="13.89">智能顯示器</tspan></text>
+<line x1="500" y1="390" x2="853" y2="390" stroke="#c9a35a" stroke-width="0.69" stroke-dasharray="3 3" stroke-opacity="0.44999999999999996"/>
+<text x="502" y="408.82" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="13.2" fill="#cdd8ec">7 吋觸控 + 語音,可視化住戶控制面板</text>
+<rect x="898" y="278" width="405" height="192" rx="11" ry="11" fill="#12203a" fill-opacity="0.8" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.42000000000000004"/>
+<ellipse cx="958" cy="338" rx="36" ry="36" fill="#0f1c33" stroke="#6fb1ff" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(940.00,320.00) scale(1.5000)" fill="none" stroke="#6fb1ff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.6" width="16" height="11" rx="1.6"/><path d="M9 14.6v3.4h6v-3.4M6.5 21h11"/></g>
+<text x="1010" y="319.1685" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#6fb1ff" font-size="14.58">○ </tspan><tspan fill="#f6f3ec" font-weight="700" font-size="16.67">Google Nest Hub Max</tspan></text>
+<text x="1010" y="348.501" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#6fb1ff" font-weight="700" font-size="13.89">大屏 + 視訊</tspan></text>
+<line x1="924" y1="390" x2="1277" y2="390" stroke="#c9a35a" stroke-width="0.69" stroke-dasharray="3 3" stroke-opacity="0.44999999999999996"/>
+<text x="926" y="408.82" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="13.2" fill="#cdd8ec">10 吋,公設迎賓 / 管理端資訊看板</text>
+<rect x="50" y="486" width="405" height="192" rx="11" ry="11" fill="#12203a" fill-opacity="0.8" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.42000000000000004"/>
+<ellipse cx="110" cy="546" rx="36" ry="36" fill="#0f1c33" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(92.00,528.00) scale(1.5000)" fill="none" stroke="#c9a35a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9.5a10 10 0 0 1 14 0M7.6 12.4a6 6 0 0 1 8.8 0M10 15.2a2.4 2.4 0 0 1 4 0"/><circle cx="12" cy="18.4" r="0.9" fill="#c9a35a" stroke="none"/></g>
+<text x="162" y="527.1685" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#c9a35a" font-size="14.58">● </tspan><tspan fill="#f6f3ec" font-weight="700" font-size="16.67">Google Nest Wifi Pro</tspan></text>
+<text x="162" y="556.501" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#c9a35a" font-weight="700" font-size="13.89">Wi-Fi 6E Mesh</tspan></text>
+<line x1="76" y1="598" x2="429" y2="598" stroke="#c9a35a" stroke-width="0.69" stroke-dasharray="3 3" stroke-opacity="0.44999999999999996"/>
+<text x="78" y="616.82" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="13.2" fill="#cdd8ec">對應網路層,社區全區無線覆蓋</text>
+<rect x="474" y="486" width="405" height="192" rx="11" ry="11" fill="#12203a" fill-opacity="0.8" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.42000000000000004"/>
+<ellipse cx="534" cy="546" rx="36" ry="36" fill="#0f1c33" stroke="#6fb1ff" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(516.00,528.00) scale(1.5000)" fill="none" stroke="#6fb1ff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7.5" width="13" height="10" rx="2"/><path d="M16 11l5-2.4v7.8L16 14z"/><circle cx="9" cy="12.5" r="2.2"/></g>
+<text x="586" y="527.1685" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#6fb1ff" font-size="14.58">○ </tspan><tspan fill="#f6f3ec" font-weight="700" font-size="16.67">Nest Cam / Doorbell</tspan></text>
+<text x="586" y="556.501" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#6fb1ff" font-weight="700" font-size="13.89">影像門禁</tspan></text>
+<line x1="500" y1="598" x2="853" y2="598" stroke="#c9a35a" stroke-width="0.69" stroke-dasharray="3 3" stroke-opacity="0.44999999999999996"/>
+<text x="502" y="616.82" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="13.2" fill="#cdd8ec">門口 / 公區影像,對接門禁層</text>
+<rect x="898" y="486" width="405" height="192" rx="11" ry="11" fill="#12203a" fill-opacity="0.8" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.42000000000000004"/>
+<ellipse cx="958" cy="546" rx="36" ry="36" fill="#0f1c33" stroke="#6fb1ff" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(940.00,528.00) scale(1.5000)" fill="none" stroke="#6fb1ff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3.2v2.1M20.8 12h-2.1M12 20.8v-2.1M3.2 12h2.1"/></g>
+<text x="1010" y="527.1685" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#6fb1ff" font-size="14.58">○ </tspan><tspan fill="#f6f3ec" font-weight="700" font-size="16.67">Google Nest Thermostat</tspan></text>
+<text x="1010" y="556.501" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#6fb1ff" font-weight="700" font-size="13.89">智能溫控</tspan></text>
+<line x1="924" y1="598" x2="1277" y2="598" stroke="#c9a35a" stroke-width="0.69" stroke-dasharray="3 3" stroke-opacity="0.44999999999999996"/>
+<text x="926" y="616.82" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="13.2" fill="#cdd8ec">空調節能控制,連動 IoT 排程</text>
+<text x="50" y="685.39" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="13.89" fill="#5e74a0" font-style="italic">※ Nest 音箱／顯示器的語音裝置控制經 Google 官方 Cloud-to-Cloud 標準整合；其餘 Nest 硬體為建議選配的同生態系設備，非既有程式整合。</text>
+<text x="60" y="725.122" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#5e74a0" font-size="14.58">推薦硬體配置清單 ── Google Nest 生態系</tspan></text>
+<text x="1273" y="725.122" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#5e74a0" font-size="14.58">官方標準整合 · 國際級硬體品質</tspan></text>
+</svg>

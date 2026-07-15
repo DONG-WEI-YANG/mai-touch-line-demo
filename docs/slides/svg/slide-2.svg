@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1333 750" width="1333" height="750" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif">
+<defs><radialGradient id="g2" cx="50%" cy="-8%" r="85%">
+    <stop offset="0" stop-color="#1a2c4d"/><stop offset="0.55" stop-color="#0c1322"/><stop offset="1" stop-color="#070d18"/>
+  </radialGradient></defs>
+  <rect width="1333" height="750" fill="#070b14"/>
+  <rect width="1333" height="750" fill="url(#g2)"/>
+  <rect x="20" y="20" width="1293" height="710" rx="10" fill="none" stroke="#c9a35a" stroke-width="1" stroke-opacity="0.28"/>
+<text x="60" y="47.751999999999995" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" letter-spacing="3" xml:space="preserve"><tspan fill="#c9a35a" font-weight="700" font-size="15.28">SYSTEM HARDWARE ARCHITECTURE</tspan></text>
+<text x="58" y="90.499" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#f6f3ec" font-weight="700" font-size="36.11">五層硬體架構：從雲端指令到終端執行</tspan></text>
+<text x="60" y="138.24" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="17.36" fill="#9fb0cc">App 不直接對接設備 —— 指令經『邊緣閘道』下發，設備狀態逐層回報</text>
+<text x="1273" y="64.373" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#9fb0cc" font-size="15.97">建商級住宅管理平台</tspan></text>
+<text x="1273" y="85.21050000000001" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#e6cf9a" font-weight="700" font-size="16.67">雲 → 端 · 分層解耦</tspan></text>
+<text x="1273" y="141.122" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#69d6a8" font-size="14.58">● </tspan><tspan fill="#cdd8ec" font-size="14.58">已整合上線　</tspan><tspan fill="#c9a35a" font-size="14.58">● </tspan><tspan fill="#cdd8ec" font-size="14.58">建議必備　</tspan><tspan fill="#6fb1ff" font-size="14.58">○ </tspan><tspan fill="#cdd8ec" font-size="14.58">選配・待接</tspan></text>
+<rect x="62" y="178" width="1105" height="90" rx="10" ry="10" fill="#14253f" fill-opacity="0.88" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.44999999999999996"/>
+<rect x="62" y="178" width="9" height="90" rx="4" ry="4" fill="#69d6a8"/>
+<ellipse cx="121" cy="223" rx="31" ry="31" fill="#0f1c33" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(104.00,206.00) scale(1.4167)" fill="none" stroke="#c9a35a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.7 1.4A3.4 3.4 0 0 1 17.5 18z"/></g>
+<text x="172" y="230.5024" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#f6f3ec" font-weight="700" font-size="20.84">雲端與服務層  </tspan><tspan fill="#5e74a0" font-size="13.89">Cloud &amp; Services</tspan></text>
+<text x="467" y="227.89" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="15.28" fill="#cdd8ec">Render 後端 · Vercel Web · LINE OA · Twilio SMS · Gemini · FastAPI NLP</text>
+<text x="121" y="283.003" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#c9a35a" font-size="16.67">↓</tspan></text>
+<rect x="62" y="282" width="1105" height="90" rx="10" ry="10" fill="#14253f" fill-opacity="0.88" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.44999999999999996"/>
+<rect x="62" y="282" width="9" height="90" rx="4" ry="4" fill="#69d6a8"/>
+<ellipse cx="121" cy="327" rx="31" ry="31" fill="#0f1c33" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(104.00,310.00) scale(1.4167)" fill="none" stroke="#c9a35a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="11.5" rx="2"/><path d="M8.5 20.5h7M12 16v4.5"/></g>
+<text x="172" y="334.5024" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#f6f3ec" font-weight="700" font-size="20.84">管理終端層  </tspan><tspan fill="#5e74a0" font-size="13.89">Terminals</tspan></text>
+<text x="467" y="331.89" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="15.28" fill="#cdd8ec">物業櫃檯平板 · 管理中心 Web Kiosk · 住戶手機 App</text>
+<text x="121" y="387.003" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#c9a35a" font-size="16.67">↓</tspan></text>
+<rect x="62" y="386" width="1105" height="90" rx="10" ry="10" fill="#14253f" fill-opacity="0.88" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.44999999999999996"/>
+<rect x="62" y="386" width="9" height="90" rx="4" ry="4" fill="#c9a35a"/>
+<ellipse cx="121" cy="431" rx="31" ry="31" fill="#0f1c33" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(104.00,414.00) scale(1.4167)" fill="none" stroke="#c9a35a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="6.5" rx="1.4"/><path d="M7 15.5v2.3M12 15.5v2.3M17 15.5v2.3M7 9V6.8M12 9V6.8M17 9V6.8"/></g>
+<text x="172" y="438.5024" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#f6f3ec" font-weight="700" font-size="20.84">社區網路層  </tspan><tspan fill="#5e74a0" font-size="13.89">Network</tspan></text>
+<text x="467" y="435.89" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="15.28" fill="#cdd8ec">路由 / 防火牆(VLAN) · PoE 交換器 · Wi-Fi 6E(Nest Wifi Pro)</text>
+<text x="121" y="491.003" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#c9a35a" font-size="16.67">↓</tspan></text>
+<rect x="62" y="490" width="1105" height="90" rx="10" ry="10" fill="#14253f" fill-opacity="0.88" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.44999999999999996"/>
+<rect x="62" y="490" width="9" height="90" rx="4" ry="4" fill="#c9a35a"/>
+<ellipse cx="121" cy="535" rx="31" ry="31" fill="#0f1c33" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(104.00,518.00) scale(1.4167)" fill="none" stroke="#c9a35a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="12" height="9.5" rx="2"/><circle cx="12" cy="14.7" r="1.3"/><path d="M9 8a5 5 0 0 1 6 0M7 6a8 8 0 0 1 10 0"/></g>
+<text x="172" y="542.5024" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#f6f3ec" font-weight="700" font-size="20.84">邊緣閘道層  </tspan><tspan fill="#5e74a0" font-size="13.89">Edge Gateway</tspan></text>
+<text x="467" y="539.89" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="15.28" fill="#cdd8ec">工控閘道主機 · HTTP(已通) / MQTT · Modbus 橋接 · UPS</text>
+<text x="121" y="595.003" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#c9a35a" font-size="16.67">↓</tspan></text>
+<rect x="62" y="594" width="1105" height="90" rx="10" ry="10" fill="#14253f" fill-opacity="0.88" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.44999999999999996"/>
+<rect x="62" y="594" width="9" height="90" rx="4" ry="4" fill="#6fb1ff"/>
+<ellipse cx="121" cy="639" rx="31" ry="31" fill="#0f1c33" stroke="#c9a35a" stroke-width="0.75" stroke-opacity="0.65"/>
+<g transform="translate(104.00,622.00) scale(1.4167)" fill="none" stroke="#c9a35a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 18.5h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.8 10.6c.6.6 1 1.3 1 2.4h5.6c0-1.1.4-1.8 1-2.4A6 6 0 0 0 12 3z"/></g>
+<text x="172" y="646.5024" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#f6f3ec" font-weight="700" font-size="20.84">設備層  </tspan><tspan fill="#5e74a0" font-size="13.89">Devices</tspan></text>
+<text x="467" y="643.89" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="15.28" fill="#cdd8ec">光/空調/窗簾/安防 · Nest 音箱/顯示器 · 門禁/電梯/柵欄/包裹櫃</text>
+<line x1="1205" y1="198" x2="1205" y2="664" stroke="#3a4f73" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="1253.5" y="214.96" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="14.58" fill="#e6cf9a">指令下行</text>
+<text x="1253.5" y="620.96" text-anchor="middle" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" font-size="14.58" fill="#6fb1ff">狀態回報</text>
+<text x="60" y="725.122" text-anchor="start" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#5e74a0" font-size="14.58">推薦硬體配置清單 ── 五層硬體架構</tspan></text>
+<text x="1273" y="725.122" text-anchor="end" font-family="'Microsoft JhengHei','PingFang TC','Noto Sans TC','Segoe UI',sans-serif" xml:space="preserve"><tspan fill="#5e74a0" font-size="14.58">分層解耦：任一層可獨立擴充或替換</tspan></text>
+</svg>
