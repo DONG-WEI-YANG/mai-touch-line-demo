@@ -1,27 +1,40 @@
 import { router, adminProcedure } from '../_core/trpc';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
+import { listScripts } from '../line/demo-scripts';
+import { startDemo } from '../line/handlers/demo';
+
+function createLineNotConfiguredError(): TRPCError {
+  return new TRPCError({
+    code: 'PRECONDITION_FAILED',
+    message: 'LINE not configured (LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN not set)',
+  });
+}
+
+function requireLineAdmin(ctx: { lineAdmin?: unknown }): asserts ctx is { lineAdmin: Exclude<typeof ctx.lineAdmin, undefined | null> } {
+  if (!ctx.lineAdmin) {
+    throw createLineNotConfiguredError();
+  }
+}
 
 // Helper: admin + ctx.lineAdmin must be present (LINE configured at boot)
 const adminLineProcedure = adminProcedure.use(({ ctx, next }) => {
-  if (!ctx.lineAdmin) {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: 'LINE not configured (LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN not set)',
-    });
-  }
+  requireLineAdmin(ctx);
   return next({ ctx: { ...ctx, lineAdmin: ctx.lineAdmin } });
 });
 
 export const lineAdminRouter = router({
   // ─────── A1. Logs ───────
-  logsList: adminLineProcedure.input(z.object({
+  logsList: adminProcedure.input(z.object({
     limit:      z.number().min(1).max(500).default(100),
     cursor:     z.number().optional(),                    // line_message_log.id
     intent:     z.string().optional(),
     direction:  z.enum(['inbound', 'outbound', 'outbound:debug']).optional(),
     lineUserId: z.string().optional(),
   })).query(({ ctx, input }) => {
+    if (!ctx.lineAdmin) {
+      return { items: [], nextCursor: undefined };
+    }
     const where: string[] = [];
     const params: unknown[] = [];
     if (input.cursor !== undefined) { where.push('id < ?'); params.push(input.cursor); }
@@ -45,7 +58,8 @@ export const lineAdminRouter = router({
   }),
 
   // ─────── A2. Config ───────
-  configList: adminLineProcedure.query(({ ctx }) => {
+  configList: adminProcedure.query(({ ctx }) => {
+    if (!ctx.lineAdmin) return [];
     return ctx.lineAdmin.db.prepare(
       `SELECT key, value, type, description, updated_at as updatedAt, updated_by as updatedBy
        FROM runtime_config ORDER BY key`
@@ -64,7 +78,50 @@ export const lineAdminRouter = router({
   }),
 
   // ─────── A3. Scripts ───────
-  scriptsList: adminLineProcedure.query(({ ctx }) => {
+  scriptsList: adminProcedure.query(() => {
+    return listScripts().map(s => ({
+      id: s.id,
+      name: s.title['zh-TW'] || s.id,
+      description: `Automated flow for ${s.id}`,
+      category: s.id === 'repair' ? 'maintenance' : s.id === 'facility' ? 'amenity' : 'concierge',
+      steps: s.steps.map(step => {
+          if (step.kind === 'bot_say') return `Bot: ${typeof step.message === 'string' ? step.message : 'Flex Message'}`;
+          if (step.kind === 'wait_user') return `Wait: ${step.expect}`;
+          if (step.kind === 'simulate_housekeeper') return `Staff: ${step.message}`;
+          if (step.kind === 'side_effect') return `System: ${step.trpcCall.procedure}`;
+          return (step as { kind: string }).kind;
+        })
+    }));
+  }),
+
+  scriptRun: adminLineProcedure.input(z.object({
+    id: z.string(),
+  })).mutation(async ({ ctx, input }) => {
+    // Find the LINE user bound to this admin account
+    const row = ctx.lineAdmin.db.prepare(
+      `SELECT line_user_id FROM line_user WHERE app_user_id = ? AND channel_id = ? LIMIT 1`
+    ).get(ctx.user.id, ctx.lineAdmin.channelId) as { line_user_id: string } | undefined;
+
+    if (!row) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Your admin account is not bound to a LINE user. Please bind your account first.',
+      });
+    }
+
+    const deps = {
+      store: ctx.lineAdmin.sessionStore,
+      client: ctx.lineAdmin.lineClient,
+      lineUser: { lineUserId: row.line_user_id, language: 'zh-TW' as const },
+      runSideEffect: ctx.lineAdmin.runSideEffect,
+    };
+
+    await startDemo(input.id, deps);
+    return { ok: true, message: `Script ${input.id} started on your LINE device.` };
+  }),
+
+  scriptsConfig: adminProcedure.query(({ ctx }) => {
+    if (!ctx.lineAdmin) return [];
     return ctx.lineAdmin.db.prepare(
       `SELECT id, enabled, steps_json as stepsJson, updated_at as updatedAt FROM demo_script_config`
     ).all() as Array<{ id: string; enabled: number; stepsJson: string | null; updatedAt: string }>;
@@ -91,20 +148,24 @@ export const lineAdminRouter = router({
   }),
 
   // ─────── A4. Users ───────
-  usersList: adminLineProcedure.input(z.object({
+  usersList: adminProcedure.input(z.object({
     role:   z.enum(['resident', 'housekeeper', 'admin']).optional(),
     isDemo: z.boolean().optional(),
   })).query(({ ctx, input }) => {
+    if (!ctx.lineAdmin) return [];
     const where: string[] = [];
     const params: unknown[] = [];
-    if (input.role !== undefined)   { where.push('role = ?'); params.push(input.role); }
-    if (input.isDemo !== undefined) { where.push('is_demo = ?'); params.push(input.isDemo ? 1 : 0); }
+    if (input.role !== undefined)   { where.push('lu.role = ?'); params.push(input.role); }
+    if (input.isDemo !== undefined) { where.push('lu.is_demo = ?'); params.push(input.isDemo ? 1 : 0); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
     return ctx.lineAdmin.db.prepare(
-      `SELECT id, channel_id as channelId, line_user_id as lineUserId, app_user_id as appUserId,
-              role, display_name as displayName, picture_url as pictureUrl, language, is_demo as isDemo,
-              created_at as createdAt, updated_at as updatedAt
-       FROM line_user ${whereSql} ORDER BY id DESC LIMIT 200`
+      `SELECT lu.id, lu.channel_id as channelId, lu.line_user_id as lineUserId, lu.app_user_id as appUserId,
+              lu.role, lu.display_name as displayName, lu.picture_url as pictureUrl, lu.language, lu.is_demo as isDemo,
+              lu.created_at as createdAt, lu.updated_at as updatedAt,
+              u.name as realUserName, u.id as realUserId, u.role as realUserRole
+       FROM line_user lu
+       LEFT JOIN users u ON u.id = lu.app_user_id
+       ${whereSql} ORDER BY lu.id DESC LIMIT 200`
     ).all(...params);
   }),
 
@@ -118,11 +179,21 @@ export const lineAdminRouter = router({
 
   usersPurgeDemo: adminLineProcedure.mutation(({ ctx }) => {
     const result = ctx.lineAdmin.db.prepare(`DELETE FROM line_user WHERE is_demo = 1`).run();
-    return { deleted: result.changes };
+    return { deletedCount: result.changes };
   }),
 
   // ─────── A5. Health ───────
-  health: adminLineProcedure.query(({ ctx }) => {
+  health: adminProcedure.query(({ ctx }) => {
+    if (!ctx.lineAdmin) {
+      return {
+        todayCount: 0,
+        errorCount: 0,
+        errorRate: 0,
+        uptimeS: Math.floor(process.uptime()),
+        openaiTokensToday: 0,
+        avgLatencyMs: 0,
+      };
+    }
     const today = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD
     const todayCount = (ctx.lineAdmin.db.prepare(
       `SELECT COUNT(*) AS n FROM line_message_log WHERE created_at >= ?`

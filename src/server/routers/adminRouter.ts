@@ -203,6 +203,30 @@ function ensureCleanupPolicyWriteAccess(openId: string | null | undefined) {
 export const adminDashboardRouter = router({
   stats: adminProcedure.query(async () => db.getDashboardStats()),
   users: adminProcedure.query(async () => db.getAllUsers()),
+  createUser: adminProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        email: z.string().email().optional(),
+        role: z.enum(["resident", "admin", "logistics"]).default("resident"),
+        unitId: z.number().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      return db.createUser({
+        email: input.email ?? "",
+        name: input.name,
+        loginMethod: "manual",
+        openId: `manual-${Date.now()}`,
+        picture: undefined,
+      });
+    }),
+  deleteUser: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await db.deleteUser(input.id);
+      return { success: true };
+    }),
   hardwareGatewayHealth: adminProcedure.query(() =>
     hardwareGatewayService.getHealthInfo(),
   ),

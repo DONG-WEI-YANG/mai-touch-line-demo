@@ -49,7 +49,27 @@ function toInvoice(row: Row): Invoice {
   };
 }
 
+function ensureInvoicesTable(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      description TEXT NOT NULL,
+      amount_cents INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'TWD',
+      due_date TEXT,
+      issued_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      paid_at TEXT,
+      paid_method TEXT,
+      notes TEXT,
+      issued_by INTEGER
+    );
+  `);
+}
+
 export function makeInvoicesRepo(db: Database.Database) {
+  ensureInvoicesTable(db);
+
   const SELECT_BASE = `
     SELECT i.id, i.user_id, u.name AS user_name, i.description, i.amount_cents,
            i.currency, i.due_date, i.issued_at, i.paid_at, i.paid_method,
