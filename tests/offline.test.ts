@@ -45,6 +45,7 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
 
 vi.mock("@react-native-community/netinfo", () => ({
   default: {
+    configure: vi.fn(),
     fetch: vi.fn(() => Promise.resolve(netHarness.fetchState())),
     addEventListener: vi.fn((cb: (s: { isConnected: boolean }) => void) => {
       netHarness.listeners.push(cb);
