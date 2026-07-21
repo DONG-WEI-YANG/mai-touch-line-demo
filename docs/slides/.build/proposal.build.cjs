@@ -279,7 +279,7 @@ const PH = [
     rd.addText([{ text: "亮點　", options: { color: C.cardMute, fontSize: 9.5 } }, { text: r.hi, options: { color: p.col, fontSize: 11, bold: true } }],
       { x: cx + 0.24, y: cy + ch - 0.7, w: rW - 0.48, h: 0.56, valign: "middle", margin: 0, fontFace: JH, lineSpacingMultiple: 1.05 });
   });
-  rd.addText("※ Phase 0 以軟體開發為優先、幾乎零硬體投入；Phase 1 起硬體隨建案工程分批進場 —— 避免一次性重投資。",
+  rd.addText("※ Phase 0 以軟體開發為優先，硬體僅需樣品屋最小組（櫃檯平板＋智慧音箱）；Phase 1 起隨建案工程分批進場 —— 避免一次性重投資。",
     { x: 0.62, y: 6.74, w: 12.1, h: 0.3, fontSize: 10, italic: true, color: C.cardMute, margin: 0, fontFace: JH });
   footer(rd, "系統方案規劃書 ── 分階段導入路線圖", "開發優先 · 每階段獨立驗收");
 
