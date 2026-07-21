@@ -314,7 +314,7 @@ const stColor = { LIVE: C.live, CORE: C.core, OPT: C.opt };
     { id: "P3", name: "旗艦完善",       tag: "營運成熟期",       col: C.goldSoft },
   ];
   const buys = [
-    { note: "幾乎零硬體投入", items: [
+    { note: "最小配置:平板 ×1 + 音箱 ×1", items: [
       { st: "CORE", n: "櫃檯平板 ×1", s: "樣品屋語音預約→派單實演" },
       { st: "CORE", n: "Nest 音箱 ×1", s: "語音裝置控制展示" },
       { st: "OPT",  n: "示範閘道＋情境設備", s: "少量燈光/空調(或乾跑展示)" },
