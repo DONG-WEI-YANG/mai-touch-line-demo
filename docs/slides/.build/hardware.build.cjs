@@ -223,79 +223,70 @@ const stColor = { LIVE: C.live, CORE: C.core, OPT: C.opt };
   legend(ng, 1.28);
   footer(ng, "推薦硬體配置清單 ── Google Nest 生態系", "官方標準整合 · 國際級硬體品質");
 
-  // ============ Slide 4 · 分區推薦硬體清單（6 卡）============
+  // ============ Slide 4 · 硬體明細總表 ============
   const g = pres.addSlide();
   g.background = { data: bgPlain };
-  header(g, "HARDWARE CHECKLIST BY ZONE", "分區推薦硬體清單",
-    "六大區塊逐項列出建議設備、規格與整合狀態",
-    [{ text: "涵蓋六大區塊\n", options: { color: C.muted, fontSize: 11.5 } },
-     { text: "中樞 · 網路 · 公設 · 住戶 · 管理 · 雲端", options: { color: C.goldSoft, fontSize: 11, bold: true } }]);
+  header(g, "HARDWARE BILL OF MATERIALS", "硬體明細總表：品項 × 規格 × 數量 × 階段",
+    "一行一項,可直接作為詢價依據;參考數量以單棟社區為基準,實際依建案規模於報價階段確認",
+    [{ text: "完整品項明列\n", options: { color: C.muted, fontSize: 11.5 } },
+     { text: "P0–P3 · 19 項", options: { color: C.goldSoft, fontSize: 12, bold: true } }]);
   legend(g, 1.28);
 
-  const zones = [
-    { ic: gold.hub, t: "社區中樞・邊緣閘道", en: "Edge Gateway", items: [
-      { st: "CORE", n: "邊緣閘道主機", s: "無風扇工控機(N100/8GB/128GB),常駐 Gateway 服務" },
-      { st: "LIVE", n: "HTTP 硬體閘道", s: "App 經 x-api-key 下發:光/空調/窗簾/安防/影音/電源" },
-      { st: "OPT",  n: "協定橋接模組", s: "MQTT Broker + Modbus 閘道(現為 stub,待接實體設備)" },
-      { st: "CORE", n: "不斷電系統 UPS", s: "≥600VA,保障中樞與網路斷電續航" },
-    ]},
-    { ic: gold.network, t: "網路基礎建設", en: "Network", items: [
-      { st: "CORE", n: "路由 / 防火牆", s: "具 VLAN 分流:IoT / 管理 / 訪客網段隔離" },
-      { st: "CORE", n: "PoE 網路交換器", s: "8–24 埠,供電掃碼機 / 攝影機 / AP" },
-      { st: "OPT",  n: "Wi-Fi 6E 無線 AP", s: "公區覆蓋(建議 Google Nest Wifi Pro)" },
-    ]},
-    { ic: gold.scan, t: "公共設備・門禁", en: "Amenity & Access", items: [
-      { st: "OPT", n: "大廳掃碼門禁", s: "QR 掃描器 + 電子鎖控制器(通行證 QR 已實作,現模擬掃描)" },
-      { st: "OPT", n: "車道柵欄 + 車牌辨識", s: "停車現為人工輸入車牌,LPR 可自動放行" },
-      { st: "OPT", n: "智能包裹櫃", s: "包裹位置現為文字欄位,智能櫃可自動通知取件" },
-      { st: "OPT", n: "電梯介接控制器", s: "乾接點 / BACnet,支援『電梯禮賓』呼梯" },
-    ]},
-    { ic: gold.bulb, t: "住戶端智慧設備", en: "In-home", items: [
-      { st: "LIVE", n: "Google Nest 音箱 / 顯示器", s: "Cloud-to-Cloud 語音『開關』控制(僅裝置控制,非語音預約)" },
-      { st: "LIVE", n: "住戶智慧設備", s: "光/空調/窗簾/安防,經閘道由住戶 App 控制" },
-      { st: "LIVE", n: "住戶智慧型手機", s: "主要用戶端(iOS/Android),語音預約麥克風;自備" },
-    ]},
-    { ic: gold.monitor, t: "管理與終端", en: "Terminals", items: [
-      { st: "CORE", n: "物業櫃檯平板", s: "10 吋以上,語音代訂 + 管理後台" },
-      { st: "LIVE", n: "管理中心 Web Kiosk", s: "react-native-web 儀表板,櫃檯大螢幕一體機" },
-      { st: "LIVE", n: "派工人員行動裝置", s: "物業 / 維修手機,接收 LINE・推播派工單" },
-    ]},
-    { ic: gold.cloud, t: "雲端與服務", en: "Cloud & Services", items: [
-      { st: "LIVE", n: "後端主機(Render)", s: "Node/tRPC;建議 Starter+ 含持久磁碟(SQLite/PG)" },
-      { st: "LIVE", n: "Web 前端(Vercel)", s: "Expo Router web build" },
-      { st: "LIVE", n: "訊息通道", s: "LINE OA · Twilio SMS · SMTP · Expo 推播" },
-      { st: "OPT",  n: "NLP 服務(FastAPI)", s: "100+ 模型自架(選配),現以 Gemini 代理" },
-    ]},
+  const PHC2 = { P0: C.live, P1: C.core, P2: C.opt, P3: C.goldSoft };
+  const stName = { LIVE: "● 已上線", CORE: "● 建議必備", OPT: "○ 選配・待接" };
+  const bom = [
+    ["P0", "櫃檯平板",             "管理終端", "10 吋以上 Android / iPad",                    "1",        "CORE"],
+    ["P0", "Google Nest 音箱",     "住戶智慧", "Nest Mini / Audio(語音裝置控制)",            "1",        "CORE"],
+    ["P0", "示範閘道＋情境設備",   "社區中樞", "迷你主機＋少量燈光/空調示範(或乾跑)",        "1 式",     "OPT"],
+    ["P0", "雲端服務",             "雲端",     "Render + Vercel + LINE OA(免費層起步)",      "—",        "LIVE"],
+    ["P1", "路由 / 防火牆",        "網路",     "Gigabit・支援 VLAN 網段隔離",                 "1",        "CORE"],
+    ["P1", "PoE 網路交換器",       "網路",     "8–24 埠 802.3af/at",                          "1–2",      "CORE"],
+    ["P1", "邊緣閘道主機",         "社區中樞", "無風扇工控機(N100 / 8GB / 128GB)",           "1",        "CORE"],
+    ["P1", "不斷電系統 UPS",       "社區中樞", "≥600VA 在線互動式",                           "1",        "CORE"],
+    ["P1", "管理中心 Kiosk 螢幕",  "管理終端", "大螢幕一體機或電視＋瀏覽器",                  "1",        "CORE"],
+    ["P1", "雲端方案升級",         "雲端",     "Render Starter(持久磁碟)",                   "—",        "LIVE"],
+    ["P2", "大廳 QR 掃碼門禁",     "公設門禁", "QR 掃描器＋電子鎖控制器",                     "出入口 ×2", "OPT"],
+    ["P2", "住戶 IoT 設備組",      "住戶智慧", "燈光/空調/窗簾控制模組",                      "每戶 1 式", "LIVE"],
+    ["P2", "Nest 音箱/顯示器(住戶)","住戶智慧","Nest Hub 7 吋(語音＋觸控面板)",              "每戶 1",   "LIVE"],
+    ["P2", "Google Nest Wifi Pro", "網路",     "Wi-Fi 6E Mesh(3-pack)",                      "1 組",     "CORE"],
+    ["P2", "協定橋接模組",         "社區中樞", "MQTT Broker＋Modbus 閘道",                    "1 式",     "OPT"],
+    ["P3", "車牌辨識柵欄(LPR)",    "公設門禁", "LPR 攝影機＋柵欄機連動",                      "車道 ×1",  "OPT"],
+    ["P3", "智能包裹櫃",           "公設門禁", "格口式 20–40 格,掃碼取件",                   "1 組",     "OPT"],
+    ["P3", "電梯介接控制器",       "公設門禁", "乾接點 / BACnet",                             "每梯 ×1",  "OPT"],
+    ["P3", "自架 NLP＋PostgreSQL・備援", "雲端/中樞", "語意服務自架＋資料庫升級;雙 UPS/雙上聯", "1 式",  "OPT"],
   ];
-
-  const gx0 = 0.5, gy0 = 1.72, gw = 4.05, gh = 2.52, ggx = 0.19, ggy = 0.16;
-  zones.forEach((z, i) => {
-    const cx = gx0 + (i % 3) * (gw + ggx);
-    const cy = gy0 + Math.floor(i / 3) * (gh + ggy);
-    g.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: cx, y: cy, w: gw, h: gh, rectRadius: 0.11,
-      fill: { color: C.cardFill, transparency: 20 }, line: { color: C.gold, width: 0.75, transparency: 58 },
-      shadow: { type: "outer", color: "000000", blur: 8, offset: 3, angle: 90, opacity: 0.3 } });
-    // 卡頭
-    g.addShape(pres.shapes.OVAL, { x: cx + 0.2, y: cy + 0.18, w: 0.5, h: 0.5, fill: { color: "0f1c33" }, line: { color: C.gold, width: 0.75, transparency: 35 } });
-    g.addImage({ data: z.ic, x: cx + 0.31, y: cy + 0.29, w: 0.28, h: 0.28 });
-    g.addText([
-      { text: z.t + "\n", options: { fontSize: 13, bold: true, color: C.paper } },
-      { text: z.en, options: { fontSize: 9, color: C.cardMute } },
-    ], { x: cx + 0.82, y: cy + 0.16, w: gw - 0.95, h: 0.54, valign: "middle", margin: 0, fontFace: JH, lineSpacingMultiple: 0.95 });
-    g.addShape(pres.shapes.LINE, { x: cx + 0.22, y: cy + 0.78, w: gw - 0.44, h: 0, line: { color: C.gold, width: 0.5, dashType: "dash", transparency: 55 } });
-    // 設備列
-    const n = z.items.length;
-    const rowH = (gh - 0.92) / n;
-    z.items.forEach((it, k) => {
-      const ry = cy + 0.86 + k * rowH;
-      g.addText([
-        dot(it.st),
-        { text: it.n, options: { color: C.paper, bold: true, fontSize: 10.5 } },
-      ], { x: cx + 0.22, y: ry, w: gw - 0.42, h: 0.24, margin: 0, fontFace: JH });
-      g.addText(it.s, { x: cx + 0.44, y: ry + 0.24, w: gw - 0.62, h: rowH - 0.26, fontSize: 8.3, color: C.capt, margin: 0, fontFace: JH, lineSpacingMultiple: 0.98, valign: "top" });
-    });
+  const thOpt = { bold: true, color: C.gold, fontSize: 9.5, fill: { color: "0e1a30" }, valign: "middle", fontFace: JH, border: { type: "solid", color: "2a3c5c", pt: 0.5 } };
+  const rows = [[
+    { text: "階段", options: { ...thOpt, align: "center" } },
+    { text: "品項", options: thOpt },
+    { text: "分區", options: thOpt },
+    { text: "建議規格", options: thOpt },
+    { text: "參考數量", options: thOpt },
+    { text: "整合狀態", options: thOpt },
+  ]];
+  bom.forEach((r, i) => {
+    const [ph, item, zone, spec, qty, st] = r;
+    const zebra = i % 2 === 0 ? "12203a" : "0f1b31";
+    const td = (text, extra = {}) => ({ text, options: { color: C.capt, fontSize: 9.3, fill: { color: zebra }, valign: "middle", fontFace: JH, border: { type: "solid", color: "22334f", pt: 0.5 }, ...extra } });
+    rows.push([
+      td(ph, { color: PHC2[ph], bold: true, align: "center", fontSize: 10 }),
+      td(item, { color: C.paper, bold: true }),
+      td(zone, { color: C.cardMute, fontSize: 8.8 }),
+      td(spec),
+      td(qty, { align: "center" }),
+      td(stName[st], { color: stColor[st], fontSize: 8.8 }),
+    ]);
   });
-  footer(g, "推薦硬體配置清單 ── 分區明細", "狀態依實際程式整合現況標註");
+  g.addTable(rows, {
+    x: 0.5, y: 1.66, w: 12.33,
+    colW: [0.72, 2.55, 1.05, 4.36, 1.35, 2.3],
+    rowH: 0.252,
+    margin: [0.02, 0.06, 0.02, 0.06],
+  });
+  g.addText("※ 本表不含報價;品牌型號為規格參考,可依建商既有供應鏈替換 —— 分層解耦架構下,設備經標準協定接入、單項可獨立更換。",
+    { x: 0.5, y: 6.86, w: 12.33, h: 0.28, fontSize: 9.5, italic: true, color: C.cardMute, margin: 0, fontFace: JH });
+  footer(g, "推薦硬體配置清單 ── 硬體明細總表", "P0 綠 · P1 金 · P2 藍 · P3 淺金");
+
 
   // ============ Slide 5 · 分階段採購建議（對齊系統方案規劃書 P0–P3）============
   const t = pres.addSlide();
