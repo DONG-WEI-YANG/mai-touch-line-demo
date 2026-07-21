@@ -1,17 +1,9 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { View, Text, ScrollView, Alert, ActivityIndicator, RefreshControl, Pressable, StyleSheet } from 'react-native';
 import { trpc } from '@/lib/trpc';
-
-const COLORS = {
-  bg: '#1a1a1a',
-  card: '#252525',
-  cardLight: '#2f2f2f',
-  accent: '#C9A96E',
-  text: '#fff',
-  muted: '#888',
-  error: '#ff6b6b',
-  success: '#4ade80',
-};
+import { ScreenContainer } from '@/components/screen-container';
+import { useColors } from '@/hooks/use-colors';
+import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
 
 type CreateInput = {
   name: string;
@@ -36,14 +28,13 @@ const EMPTY_DRAFT: CreateInput = {
   slotDurationMinutes: 60,
 };
 
-// Tiny helper for the inline numeric input — avoids leaking NaN into the form
-// state when the user clears the field mid-typing.
 function parseIntSafe(s: string, fallback: number): number {
   const n = parseInt(s, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 export default function AdminAmenitiesPage() {
+  const colors = useColors();
   const utils = trpc.useUtils();
   const q = trpc.amenities.list.useQuery();
   const [showCreate, setShowCreate] = useState(false);
@@ -108,196 +99,199 @@ export default function AdminAmenitiesPage() {
   };
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: COLORS.bg }}
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={COLORS.accent} />}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: 'bold' }}>
-            設施管理 (Amenities)
-          </Text>
-          <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 2 }}>
-            {q.data?.length ?? 0} amenities
-          </Text>
-        </View>
-        <Pressable
-          onPress={() => setShowCreate((v) => !v)}
-          style={{
-            paddingHorizontal: 14, paddingVertical: 8, borderRadius: 4,
-            backgroundColor: showCreate ? COLORS.muted : COLORS.accent,
-          }}
-        >
-          <Text style={{ color: showCreate ? '#fff' : '#1a1a1a', fontWeight: 'bold' }}>
-            {showCreate ? 'Cancel' : '+ Add'}
-          </Text>
-        </Pressable>
-      </View>
-
-      {showCreate && (
-        <View style={{ padding: 12, marginBottom: 16, backgroundColor: COLORS.cardLight, borderRadius: 6 }}>
-          <Text style={{ color: COLORS.accent, fontWeight: 'bold', marginBottom: 8 }}>New Amenity</Text>
-          <Field label="Name *" value={draft.name} onChangeText={(t) => setDraft({ ...draft, name: t })} />
-          <Field label="Description" value={draft.description ?? ''} onChangeText={(t) => setDraft({ ...draft, description: t })} multiline />
-          <Field label="Location" value={draft.location ?? ''} onChangeText={(t) => setDraft({ ...draft, location: t })} />
-          <Field label="Rules" value={draft.rules ?? ''} onChangeText={(t) => setDraft({ ...draft, rules: t })} multiline />
-          <Field label="Capacity" value={String(draft.capacity)} onChangeText={(t) => setDraft({ ...draft, capacity: parseIntSafe(t, 1) })} keyboardType="number-pad" />
-
-          <Text style={{ color: COLORS.muted, fontSize: 11, marginBottom: 4 }}>Category</Text>
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-            {CATEGORIES.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => setDraft({ ...draft, category: c })}
-                style={{
-                  paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4,
-                  backgroundColor: draft.category === c ? COLORS.accent : COLORS.card,
-                }}
-              >
-                <Text style={{ color: draft.category === c ? '#1a1a1a' : '#fff', fontSize: 11 }}>{c}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Field label="Open" value={draft.openTime} onChangeText={(t) => setDraft({ ...draft, openTime: t })} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field label="Close" value={draft.closeTime} onChangeText={(t) => setDraft({ ...draft, closeTime: t })} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field label="Slot (min)" value={String(draft.slotDurationMinutes)} onChangeText={(t) => setDraft({ ...draft, slotDurationMinutes: parseIntSafe(t, 60) })} keyboardType="number-pad" />
-            </View>
-          </View>
-
-          <Pressable
-            disabled={createMut.isPending}
-            onPress={submitCreate}
-            style={{
-              marginTop: 8, paddingVertical: 10, borderRadius: 4,
-              backgroundColor: COLORS.accent, alignItems: 'center',
-              opacity: createMut.isPending ? 0.5 : 1,
-            }}
-          >
-            <Text style={{ color: '#1a1a1a', fontWeight: 'bold' }}>
-              {createMut.isPending ? 'Creating…' : 'Create'}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
-      {q.isLoading && <ActivityIndicator color={COLORS.accent} />}
-      {q.error && <Text style={{ color: COLORS.error }}>Error: {q.error.message}</Text>}
-
-      {(q.data ?? []).map((a: any) => {
-        const isEditing = editingId === a.id;
-        return (
-          <View key={a.id} style={{ padding: 12, marginBottom: 8, backgroundColor: COLORS.card, borderRadius: 6 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: COLORS.text, fontWeight: 'bold' }}>{a.name}</Text>
-                <Text style={{ color: COLORS.muted, fontSize: 11, marginTop: 2 }}>
-                  #{a.id} · {a.category} · capacity {a.capacity} · {a.openTime}-{a.closeTime}
-                  {a.isActive === false ? ' · INACTIVE' : ''}
-                </Text>
-                {a.description && (
-                  <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 4 }} numberOfLines={2}>
-                    {a.description}
-                  </Text>
-                )}
-              </View>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                <Pressable
-                  onPress={() => (isEditing ? (setEditingId(null), setEditDraft(null)) : beginEdit(a))}
-                  style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 4, backgroundColor: isEditing ? COLORS.muted : COLORS.cardLight }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 11 }}>{isEditing ? 'Close' : 'Edit'}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => confirmDelete(a.id, a.name)}
-                  style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 4, backgroundColor: '#5d0a0a' }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 11 }}>Del</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {isEditing && editDraft && (
-              <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.muted + '40' }}>
-                <Field label="Name" value={editDraft.name} onChangeText={(t) => setEditDraft({ ...editDraft, name: t })} />
-                <Field label="Description" value={editDraft.description} onChangeText={(t) => setEditDraft({ ...editDraft, description: t })} multiline />
-                <Field label="Capacity" value={String(editDraft.capacity)} onChangeText={(t) => setEditDraft({ ...editDraft, capacity: parseIntSafe(t, 1) })} keyboardType="number-pad" />
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field label="Open" value={editDraft.openTime} onChangeText={(t) => setEditDraft({ ...editDraft, openTime: t })} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field label="Close" value={editDraft.closeTime} onChangeText={(t) => setEditDraft({ ...editDraft, closeTime: t })} />
-                  </View>
-                </View>
-                <Pressable
-                  onPress={() => setEditDraft({ ...editDraft, isActive: !editDraft.isActive })}
-                  style={{
-                    paddingVertical: 6, marginBottom: 8, borderRadius: 4,
-                    backgroundColor: editDraft.isActive ? COLORS.success + '40' : COLORS.muted,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 12 }}>
-                    isActive: {editDraft.isActive ? 'true ✓' : 'false (tap to enable)'}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  disabled={updateMut.isPending}
-                  onPress={submitEdit}
-                  style={{
-                    paddingVertical: 8, borderRadius: 4,
-                    backgroundColor: COLORS.accent, alignItems: 'center',
-                    opacity: updateMut.isPending ? 0.5 : 1,
-                  }}
-                >
-                  <Text style={{ color: '#1a1a1a', fontWeight: 'bold' }}>
-                    {updateMut.isPending ? 'Saving…' : 'Save changes'}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        );
-      })}
-    </ScrollView>
-  );
-}
-
-function Field({ label, value, onChangeText, multiline, keyboardType }: {
-  label: string;
-  value: string;
-  onChangeText: (t: string) => void;
-  multiline?: boolean;
-  keyboardType?: 'default' | 'number-pad';
-}) {
-  return (
-    <View style={{ marginBottom: 8 }}>
-      <Text style={{ color: COLORS.muted, fontSize: 11, marginBottom: 4 }}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        multiline={multiline}
-        keyboardType={keyboardType}
-        placeholderTextColor={COLORS.muted}
-        style={{
-          paddingHorizontal: 8,
-          paddingVertical: 6,
-          fontSize: 13,
-          color: COLORS.text,
-          backgroundColor: COLORS.bg,
-          borderRadius: 4,
-          minHeight: multiline ? 56 : undefined,
-          textAlignVertical: multiline ? 'top' : 'auto',
-        }}
+    <ScreenContainer edges={['top']}>
+      <AdminHeader 
+        title="設施管理" 
+        subtitle={`${q.data?.length ?? 0} amenities configured`}
+        rightElement={
+          <AdminButton 
+            title={showCreate ? 'Cancel' : '+ Add'} 
+            type={showCreate ? 'secondary' : 'primary'}
+            onPress={() => setShowCreate(!showCreate)}
+            style={{ paddingVertical: 8 }}
+          />
+        }
       />
-    </View>
+      
+      <ScrollView
+        contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
+      >
+        {showCreate && (
+          <AdminCard title="New Amenity" style={{ marginBottom: 24 }}>
+            <AdminField label="Name *" value={draft.name} onChangeText={(t) => setDraft({ ...draft, name: t })} />
+            <AdminField label="Description" value={draft.description ?? ''} onChangeText={(t) => setDraft({ ...draft, description: t })} multiline />
+            <AdminField label="Location" value={draft.location ?? ''} onChangeText={(t) => setDraft({ ...draft, location: t })} />
+            <AdminField label="Rules" value={draft.rules ?? ''} onChangeText={(t) => setDraft({ ...draft, rules: t })} multiline />
+            <AdminField label="Capacity" value={String(draft.capacity)} onChangeText={(t) => setDraft({ ...draft, capacity: parseIntSafe(t, 1) })} keyboardType="number-pad" />
+
+            <Text style={[styles.label, { color: colors.muted }]}>Category</Text>
+            <View style={styles.categoryRow}>
+              {CATEGORIES.map((c) => (
+                <Pressable
+                  key={c}
+                  onPress={() => setDraft({ ...draft, category: c })}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: draft.category === c ? colors.primary : colors.surface,
+                      borderColor: draft.category === c ? colors.primary : colors.border,
+                    }
+                  ]}
+                >
+                  <Text style={[styles.chipText, { color: draft.category === c ? '#000' : colors.foreground }]}>{c}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <AdminField label="Open" value={draft.openTime} onChangeText={(t) => setDraft({ ...draft, openTime: t })} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AdminField label="Close" value={draft.closeTime} onChangeText={(t) => setDraft({ ...draft, closeTime: t })} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AdminField label="Slot (min)" value={String(draft.slotDurationMinutes)} onChangeText={(t) => setDraft({ ...draft, slotDurationMinutes: parseIntSafe(t, 60) })} keyboardType="number-pad" />
+              </View>
+            </View>
+
+            <AdminButton
+              title={createMut.isPending ? 'Creating…' : 'Create'}
+              onPress={submitCreate}
+              disabled={createMut.isPending}
+              style={{ marginTop: 8 }}
+            />
+          </AdminCard>
+        )}
+
+        {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+        {q.error && <Text style={{ color: colors.error, textAlign: 'center' }}>Error: {q.error.message}</Text>}
+
+        {(q.data ?? []).map((a: any) => {
+          const isEditing = editingId === a.id;
+          return (
+            <AdminCard key={a.id} style={{ marginBottom: 12 }}>
+              <View style={styles.cardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.amenityName, { color: colors.foreground }]}>{a.name}</Text>
+                  <Text style={[styles.amenityMeta, { color: colors.muted }]}>
+                    #{a.id} · {a.category} · capacity {a.capacity} · {a.openTime}-{a.closeTime}
+                    {a.isActive === false ? ' · INACTIVE' : ''}
+                  </Text>
+                </View>
+                <View style={styles.actionButtons}>
+                  <AdminButton 
+                    title={isEditing ? 'Close' : 'Edit'} 
+                    type="secondary" 
+                    onPress={() => (isEditing ? (setEditingId(null), setEditDraft(null)) : beginEdit(a))}
+                    style={styles.smallButton}
+                  />
+                  <AdminButton 
+                    title="Del" 
+                    type="danger" 
+                    onPress={() => confirmDelete(a.id, a.name)}
+                    style={styles.smallButton}
+                  />
+                </View>
+              </View>
+
+              {a.description && !isEditing && (
+                <Text style={[styles.description, { color: colors.muted }]} numberOfLines={2}>
+                  {a.description}
+                </Text>
+              )}
+
+              {isEditing && editDraft && (
+                <View style={[styles.editForm, { borderTopColor: colors.border }]}>
+                  <AdminField label="Name" value={editDraft.name} onChangeText={(t) => setEditDraft({ ...editDraft, name: t })} />
+                  <AdminField label="Description" value={editDraft.description} onChangeText={(t) => setEditDraft({ ...editDraft, description: t })} multiline />
+                  <AdminField label="Capacity" value={String(editDraft.capacity)} onChangeText={(t) => setEditDraft({ ...editDraft, capacity: parseIntSafe(t, 1) })} keyboardType="number-pad" />
+                  
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <AdminField label="Open" value={editDraft.openTime} onChangeText={(t) => setEditDraft({ ...editDraft, openTime: t })} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <AdminField label="Close" value={editDraft.closeTime} onChangeText={(t) => setEditDraft({ ...editDraft, closeTime: t })} />
+                    </View>
+                  </View>
+                  
+                  <AdminButton
+                    title={`isActive: ${editDraft.isActive ? 'True ✓' : 'False (tap to enable)'}`}
+                    type={editDraft.isActive ? 'success' : 'secondary'}
+                    onPress={() => setEditDraft({ ...editDraft, isActive: !editDraft.isActive })}
+                    style={{ marginBottom: 12 }}
+                  />
+                  
+                  <AdminButton
+                    title={updateMut.isPending ? 'Saving…' : 'Save changes'}
+                    onPress={submitEdit}
+                    disabled={updateMut.isPending}
+                  />
+                </View>
+              )}
+            </AdminCard>
+          );
+        })}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  amenityName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  amenityMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  smallButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  description: {
+    fontSize: 13,
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  editForm: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
+});

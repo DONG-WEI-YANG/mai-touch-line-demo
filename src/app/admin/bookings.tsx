@@ -1,40 +1,26 @@
 import { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { trpc } from '@/lib/trpc';
-
-const COLORS = {
-  bg: '#1a1a1a',
-  card: '#252525',
-  accent: '#C9A96E',
-  text: '#fff',
-  muted: '#888',
-  error: '#ff6b6b',
-  success: '#4ade80',
-  warning: '#fbbf24',
-};
+import { useColors } from '@/hooks/use-colors';
+import { ScreenContainer } from '@/components/screen-container';
+import { AdminHeader, AdminCard } from '@/components/admin/admin-ui';
+import { parseError } from '@/lib/error-utils';
 
 type BookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed';
 const STATUS_OPTIONS: BookingStatus[] = ['confirmed', 'pending', 'cancelled', 'completed'];
-
-const STATUS_COLOR: Record<BookingStatus, string> = {
-  confirmed: COLORS.success,
-  pending: COLORS.warning,
-  cancelled: COLORS.muted,
-  completed: COLORS.accent,
-};
 
 type StatusFilter = BookingStatus | 'all';
 const FILTERS: StatusFilter[] = ['all', 'confirmed', 'pending', 'cancelled', 'completed'];
 
 export default function AdminBookingsPage() {
+  const colors = useColors();
   const [filter, setFilter] = useState<StatusFilter>('all');
   const utils = trpc.useUtils();
   const q = trpc.bookings.listAll.useQuery();
 
-  // Optimistic invalidate so the badge flips immediately after a status change.
   const updateStatus = trpc.bookings.updateStatus.useMutation({
     onSuccess: () => utils.bookings.listAll.invalidate(),
-    onError: (err) => Alert.alert('Update failed', err.message),
+    onError: (err) => Alert.alert('Update failed', parseError(err)),
   });
 
   const rows = useMemo(() => {
@@ -47,95 +33,250 @@ export default function AdminBookingsPage() {
     const c: Record<StatusFilter, number> = { all: 0, confirmed: 0, pending: 0, cancelled: 0, completed: 0 };
     if (!q.data) return c;
     c.all = q.data.length;
-    for (const r of q.data as any[]) c[r.booking.status as BookingStatus]++;
+    for (const r of q.data as any[]) {
+      const status = r.booking.status as StatusFilter;
+      if (status in c) c[status]++;
+    }
     return c;
   }, [q.data]);
 
-  return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: COLORS.bg }}
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={COLORS.accent} />}
-    >
-      <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: 'bold', marginBottom: 4 }}>
-        預約管理 (Bookings)
-      </Text>
-      <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 16 }}>
-        全社區預約一覽 — 點下方狀態切換以變更。
-      </Text>
+  const getStatusColor = (status: BookingStatus) => {
+    switch (status) {
+      case 'confirmed': return colors.success;
+      case 'pending': return colors.warning;
+      case 'cancelled': return colors.muted;
+      case 'completed': return colors.primary;
+      default: return colors.foreground;
+    }
+  };
 
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {FILTERS.map((f) => (
-          <Pressable
-            key={f}
-            onPress={() => setFilter(f)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 4,
-              backgroundColor: filter === f ? COLORS.accent : COLORS.card,
-            }}
-          >
-            <Text style={{ color: filter === f ? '#1a1a1a' : '#fff', fontSize: 12 }}>
-              {f} ({counts[f]})
-            </Text>
-          </Pressable>
-        ))}
+  return (
+    <ScreenContainer edges={['top']}>
+      <AdminHeader 
+        title="預約管理" 
+        subtitle="Manage facility bookings building-wide"
+      />
+
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          {FILTERS.map((f) => (
+            <Pressable
+              key={f}
+              onPress={() => setFilter(f)}
+              style={[
+                styles.filterChip,
+                { backgroundColor: filter === f ? colors.primary : colors.surface, borderColor: colors.border }
+              ]}
+            >
+              <Text style={[styles.filterChipText, { color: filter === f ? '#000' : colors.foreground }]}>
+                {f.toUpperCase()} ({counts[f]})
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
 
-      {q.isLoading && <ActivityIndicator color={COLORS.accent} />}
-      {q.error && <Text style={{ color: COLORS.error }}>Error: {q.error.message}</Text>}
-      {!q.isLoading && rows.length === 0 && (
-        <Text style={{ color: COLORS.muted, textAlign: 'center', marginTop: 32 }}>No bookings.</Text>
-      )}
-
-      {rows.map((row: any) => {
-        const b = row.booking;
-        const status = b.status as BookingStatus;
-        return (
-          <View key={b.id} style={{ padding: 12, marginBottom: 8, backgroundColor: COLORS.card, borderRadius: 6 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Text style={{ color: COLORS.text, fontWeight: 'bold', flex: 1 }} numberOfLines={1}>
-                {row.amenityName ?? `Amenity #${b.amenityId}`}
-              </Text>
-              <Text style={{ color: STATUS_COLOR[status], fontSize: 11, fontWeight: 'bold' }}>
-                {status.toUpperCase()}
-              </Text>
-            </View>
-            <Text style={{ color: COLORS.muted, fontSize: 11, marginTop: 4 }}>
-              #BK-{b.id} · {b.date} {b.startTime}-{b.endTime} · {b.guestCount} 人
-            </Text>
-            <Text style={{ color: COLORS.muted, fontSize: 11 }}>
-              From: {row.userName ?? 'N/A'}
-            </Text>
-            {b.notes && (
-              <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 4, fontStyle: 'italic' }} numberOfLines={2}>
-                "{b.notes}"
-              </Text>
-            )}
-            <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-              {STATUS_OPTIONS.filter((s) => s !== status).map((s) => (
-                <Pressable
-                  key={s}
-                  disabled={updateStatus.isPending}
-                  onPress={() => updateStatus.mutate({ id: b.id, status: s })}
-                  style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 4,
-                    backgroundColor: STATUS_COLOR[s] + '20',
-                    borderWidth: 1,
-                    borderColor: STATUS_COLOR[s] + '60',
-                    opacity: updateStatus.isPending ? 0.5 : 1,
-                  }}
-                >
-                  <Text style={{ color: STATUS_COLOR[s], fontSize: 11, fontWeight: '600' }}>→ {s}</Text>
-                </Pressable>
-              ))}
-            </View>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
+      >
+        {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+        {q.error && <Text style={[styles.errorText, { color: colors.error }]}>Error: {q.error.message}</Text>}
+        
+        {!q.isLoading && rows.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyText, { color: colors.muted }]}>No bookings found.</Text>
           </View>
-        );
-      })}
-    </ScrollView>
+        )}
+
+        {rows.map((row: any) => {
+          const b = row.booking;
+          const status = b.status as BookingStatus;
+          const statusColor = getStatusColor(status);
+          
+          return (
+            <AdminCard key={b.id} style={styles.bookingCard}>
+              <View style={styles.cardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.amenityName, { color: colors.foreground }]} numberOfLines={1}>
+                    {row.amenityName ?? `Amenity #${b.amenityId}`}
+                  </Text>
+                  <Text style={[styles.bookingMeta, { color: colors.muted }]}>
+                    #BK-{b.id} · {b.date}
+                  </Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+                  <Text style={[styles.statusBadgeText, { color: statusColor }]}>
+                    {status.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.timeInfo}>
+                <Text style={[styles.timeText, { color: colors.foreground }]}>
+                  {b.startTime} - {b.endTime}
+                </Text>
+                <Text style={[styles.guestCount, { color: colors.muted }]}>
+                  {b.guestCount} People
+                </Text>
+              </View>
+
+              <Text style={[styles.userName, { color: colors.muted }]}>
+                Resident: <Text style={{ color: colors.foreground, fontWeight: '600' }}>{row.userName ?? 'N/A'}</Text>
+              </Text>
+
+              {b.notes && (
+                <View style={[styles.notesBox, { backgroundColor: colors.background }]}>
+                  <Text style={[styles.notesText, { color: colors.muted }]}>
+                    "{b.notes}"
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.actionRow}>
+                <Text style={[styles.actionLabel, { color: colors.muted }]}>UPDATE STATUS:</Text>
+                <View style={styles.actionButtons}>
+                  {STATUS_OPTIONS.filter((s) => s !== status).map((s) => (
+                    <Pressable
+                      key={s}
+                      disabled={updateStatus.isPending}
+                      onPress={() => updateStatus.mutate({ id: b.id, status: s })}
+                      style={[
+                        styles.statusBtn, 
+                        { borderColor: getStatusColor(s) + '40', backgroundColor: getStatusColor(s) + '10' }
+                      ]}
+                    >
+                      <Text style={[styles.statusBtnText, { color: getStatusColor(s) }]}>
+                        {s.substring(0, 4)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </AdminCard>
+          );
+        })}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  filterContainer: {
+    marginBottom: 4,
+  },
+  filterRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  errorText: {
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  emptyState: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  bookingCard: {
+    marginBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  amenityName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  bookingMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  timeInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  timeText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  guestCount: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  userName: {
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  notesBox: {
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  notesText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  actionRow: {
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  actionLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  statusBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  statusBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+});

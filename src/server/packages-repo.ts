@@ -56,7 +56,27 @@ function generatePin(): string {
   return String(n);
 }
 
+function ensurePackagesTable(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS packages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recipient_id INTEGER NOT NULL,
+      sender TEXT,
+      courier TEXT,
+      storage_location TEXT,
+      pickup_pin TEXT NOT NULL,
+      arrived_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      picked_up_at TEXT,
+      picked_up_by TEXT,
+      notes TEXT,
+      registered_by INTEGER
+    );
+  `);
+}
+
 export function makePackagesRepo(db: Database.Database) {
+  ensurePackagesTable(db);
+
   const SELECT_BASE = `
     SELECT p.id, p.recipient_id, u.name AS recipient_name, p.sender, p.courier,
            p.storage_location, p.pickup_pin, p.arrived_at, p.picked_up_at,

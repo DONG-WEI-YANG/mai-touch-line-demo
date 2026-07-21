@@ -60,6 +60,29 @@ npm run dev:server
 npm start
 ```
 
+### 本機固定埠開發
+
+避免前後端埠漂移時，建議改用固定埠腳本：
+
+```bash
+# 先建立本機覆蓋設定
+cp .env.local.example .env.local
+
+# 啟動後端（固定 http://localhost:3011）
+npm run local:server
+
+# 啟動 Web（固定 http://localhost:8081，並自動指向 3011）
+npm run local:web
+
+# 檢查本機 API / Web 是否都可達
+npm run local:smoke
+```
+
+- `local:server` / `local:web` 會優先讀取 `.env.local`
+- `local:smoke` 會檢查 `/api/health` 與 Web 首頁是否可達
+- 可用 `LOCAL_API_PORT` / `LOCAL_WEB_PORT` 覆蓋預設埠
+- 若要查看設定說明，可執行 `npm run local:help`
+
 ## 📱 技術棧
 
 ### 前端

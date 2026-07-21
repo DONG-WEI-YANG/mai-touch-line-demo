@@ -8,6 +8,7 @@ import type { LineClient } from '../line/line-client';
 import type { makeRuntimeConfig } from '../line/runtime-config';
 import type { makeLineUserRepo } from '../line/line-user-repo';
 import type { makeMessageLog } from '../line/message-log';
+import type { SessionStore } from '../line/session-store';
 import type Database from 'better-sqlite3';
 import { userFromToken, userFromPersonalToken } from './token-auth';
 
@@ -18,6 +19,8 @@ export type LineAdminContext = {
   messageLog: ReturnType<typeof makeMessageLog>;
   lineClient: LineClient;
   channelId: string;
+  sessionStore: SessionStore;
+  runSideEffect: (call: { router: string; procedure: string; input: unknown }) => Promise<void>;
   /** Push a plain-text message to a specific LINE user. Optional so test/non-LINE
    *  builds can omit it. Used by mutation handlers to notify the original
    *  resident when their work order or booking status changes. */

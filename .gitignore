@@ -101,6 +101,9 @@ priority_download*.log
 .vercel
 .claude/settings.local.json
 
+# Local artifacts folder (screenshots/logs/media moved here during cleanup)
+/_local/
+
 # Local QA / demo screenshots (kept locally for reference, not committed).
 # Anchored to repo root so app icons/assets under subdirs are unaffected.
 /admin-dashboard.png

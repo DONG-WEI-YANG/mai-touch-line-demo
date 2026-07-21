@@ -37,7 +37,33 @@ export type AssignmentRow = {
   endAt: string | null;
 };
 
+function ensureParkingTables(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS parking_spots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      label TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'resident',
+      zone TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      notes TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS parking_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      spot_id INTEGER NOT NULL,
+      user_id INTEGER,
+      vehicle_plate TEXT NOT NULL,
+      driver_name TEXT,
+      purpose TEXT NOT NULL DEFAULT 'visitor',
+      start_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      end_at TEXT
+    );
+  `);
+}
+
 export function makeParkingRepo(db: Database.Database) {
+  ensureParkingTables(db);
+
   // The "active assignment" join uses a correlated subquery because SQLite
   // doesn't have DISTINCT ON. We pick the most recent open assignment per spot.
   const spotsWithActive = db.prepare(`

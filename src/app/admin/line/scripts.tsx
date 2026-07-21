@@ -1,120 +1,155 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Alert } from 'react-native';
+import { View, Text, ScrollView, Alert, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { trpc } from '@/lib/trpc';
+import { useColors } from '@/hooks/use-colors';
+import { ScreenContainer } from '@/components/screen-container';
+import { AdminHeader, AdminCard, AdminButton } from '@/components/admin/admin-ui';
+import { parseError } from '@/lib/error-utils';
 
-const COLORS = { bg: '#1a1a1a', card: '#252525', accent: '#C9A96E', text: '#fff', muted: '#888', error: '#ff6b6b' };
-
-type ScriptId = 'facility' | 'repair' | 'visitor' | 'complaint';
-
-export default function ScriptsPage() {
-  const utils = trpc.useUtils();
+export default function LineScriptsPage() {
+  const colors = useColors();
   const q = trpc.lineAdmin.scriptsList.useQuery();
-  const setEnabled = trpc.lineAdmin.scriptsSetEnabled.useMutation({
-    onSuccess: () => utils.lineAdmin.scriptsList.invalidate(),
-    onError: (err) => Alert.alert('Error', err.message),
+  const [runningId, setRunningId] = useState<string | null>(null);
+
+  const runMut = trpc.lineAdmin.scriptRun.useMutation({
+    onSuccess: (res) => {
+      setRunningId(null);
+      Alert.alert('Script Executed', res.message || 'The script completed successfully.');
+    },
+    onError: (err) => {
+      setRunningId(null);
+      Alert.alert('Execution Failed', parseError(err));
+    },
   });
-  const setSteps = trpc.lineAdmin.scriptsSetSteps.useMutation({
-    onSuccess: () => utils.lineAdmin.scriptsList.invalidate(),
-    onError: (err) => Alert.alert('Error', err.message),
-  });
+
+  const handleRun = (id: string, name: string) => {
+    Alert.alert(
+      'Run Script',
+      `Are you sure you want to execute "${name}"? This will send automated messages and update database state.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Run Now', style: 'destructive', onPress: () => {
+          setRunningId(id);
+          runMut.mutate({ id });
+        }},
+      ]
+    );
+  };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg, padding: 16 }}>
-      <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: 'bold', marginBottom: 16 }}>
-        Demo Scripts
-      </Text>
+    <ScreenContainer edges={['top']}>
+      <AdminHeader 
+        title="Demo Scripts" 
+        subtitle="Automated flows for testing and demonstration"
+      />
 
-      {q.isLoading && <Text style={{ color: COLORS.muted }}>Loading...</Text>}
-      {q.error && <Text style={{ color: COLORS.error }}>Error: {q.error.message}</Text>}
+      <ScrollView 
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
+      >
+        {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+        {q.error && <Text style={[styles.errorText, { color: colors.error }]}>Error: {q.error.message}</Text>}
 
-      {q.data?.map((s) => (
-        <ScriptRow
-          key={s.id}
-          script={s}
-          onToggle={(en) => setEnabled.mutate({ id: s.id as ScriptId, enabled: en })}
-          onSaveSteps={(steps) => setSteps.mutate({ id: s.id as ScriptId, steps })}
-        />
-      ))}
-    </ScrollView>
+        {q.data?.map((script) => (
+          <AdminCard key={script.id} style={styles.scriptCard}>
+            <View style={styles.cardHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.scriptName, { color: colors.foreground }]}>{script.name}</Text>
+                <Text style={[styles.scriptId, { color: colors.muted }]}>ID: {script.id}</Text>
+              </View>
+              <View style={[styles.categoryBadge, { backgroundColor: colors.background }]}>
+                <Text style={[styles.categoryText, { color: colors.muted }]}>
+                  {script.category.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={[styles.description, { color: colors.muted }]}>
+              {script.description}
+            </Text>
+
+            <View style={styles.stepsBox}>
+              <Text style={[styles.stepsTitle, { color: colors.foreground }]}>STEPS ({script.steps.length}):</Text>
+              {script.steps.map((step, idx) => (
+                <Text key={idx} style={[styles.stepItem, { color: colors.muted }]} numberOfLines={1}>
+                  {idx + 1}. {step}
+                </Text>
+              ))}
+            </View>
+
+            <AdminButton
+              title={runningId === script.id ? "Running..." : "Execute Script"}
+              onPress={() => handleRun(script.id, script.name)}
+              disabled={!!runningId}
+              type={runningId === script.id ? "secondary" : "primary"}
+              style={styles.runBtn}
+            />
+          </AdminCard>
+        ))}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
-function ScriptRow(props: {
-  script: { id: string; enabled: number; stepsJson: string | null; updatedAt: string };
-  onToggle: (enabled: boolean) => void;
-  onSaveSteps: (steps: unknown[]) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(props.script.stepsJson ?? '[]');
-
-  return (
-    <View style={{ padding: 12, marginBottom: 8, backgroundColor: COLORS.card, borderRadius: 4 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: COLORS.accent, fontSize: 16, fontWeight: 'bold' }}>/demo {props.script.id}</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable
-            onPress={() => props.onToggle(!props.script.enabled)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 4,
-              backgroundColor: props.script.enabled ? '#0a5d0a' : '#5d0a0a',
-            }}
-          >
-            <Text style={{ color: '#fff' }}>{props.script.enabled ? 'enabled' : 'disabled'}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setEditing((e) => !e)}
-            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4, backgroundColor: COLORS.muted }}
-          >
-            <Text style={{ color: '#fff' }}>{editing ? 'cancel' : 'edit steps'}</Text>
-          </Pressable>
-        </View>
-      </View>
-      <Text style={{ color: COLORS.muted, fontSize: 11, marginTop: 4 }}>updated {props.script.updatedAt}</Text>
-
-      {editing && (
-        <View style={{ marginTop: 8 }}>
-          <Text style={{ color: COLORS.muted, fontSize: 11 }}>steps JSON (array)</Text>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            multiline
-            style={{
-              minHeight: 120,
-              padding: 8,
-              color: COLORS.text,
-              fontFamily: 'monospace',
-              borderColor: COLORS.muted,
-              borderWidth: 1,
-              borderRadius: 4,
-              marginTop: 4,
-            }}
-          />
-          <Pressable
-            onPress={() => {
-              try {
-                const arr = JSON.parse(draft);
-                if (!Array.isArray(arr)) throw new Error('must be an array');
-                props.onSaveSteps(arr);
-                setEditing(false);
-              } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : 'parse error';
-                Alert.alert('Invalid JSON', msg);
-              }
-            }}
-            style={{
-              marginTop: 8,
-              padding: 10,
-              borderRadius: 4,
-              backgroundColor: COLORS.accent,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: '#1a1a1a', fontWeight: 'bold' }}>Save steps</Text>
-          </Pressable>
-        </View>
-      )}
-    </View>
-  );
-}
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  errorText: {
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  scriptCard: {
+    marginBottom: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  scriptName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  scriptId: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  categoryText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  description: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  stepsBox: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    marginBottom: 16,
+    gap: 4,
+  },
+  stepsTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  stepItem: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  runBtn: {
+    paddingVertical: 12,
+  },
+});

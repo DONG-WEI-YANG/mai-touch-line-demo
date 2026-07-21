@@ -1,312 +1,374 @@
-import { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { useState, useMemo, useCallback } from 'react';
+import { View, Text, ScrollView, Alert, ActivityIndicator, RefreshControl, StyleSheet, Pressable } from 'react-native';
 import { trpc } from '@/lib/trpc';
+import { useColors } from '@/hooks/use-colors';
+import { ScreenContainer } from '@/components/screen-container';
+import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
+import { parseError } from '@/lib/error-utils';
 
-const COLORS = {
-  bg: '#1a1a1a',
-  card: '#252525',
-  cardLight: '#2f2f2f',
-  accent: '#C9A96E',
-  text: '#fff',
-  muted: '#888',
-  error: '#ff6b6b',
-  success: '#4ade80',
-  warning: '#fbbf24',
-};
+interface PackageRecord {
+  id: number;
+  recipientId: number;
+  recipientName: string | null;
+  sender: string | null;
+  courier: string | null;
+  storageLocation: string | null;
+  pickupPin: string;
+  arrivedAt: string;
+  pickedUpAt: string | null;
+  pickedUpBy: string | null;
+  notes: string | null;
+  registeredBy: number | null;
+}
 
-const COURIER_OPTIONS = ['Black Cat', 'FedEx', 'DHL', 'SF Express', 'Amazon', 'Local', 'Other'];
+interface UserRecord {
+  id: number;
+  name: string | null;
+  role: string;
+  unitId: number | null;
+}
 
 export default function AdminPackagesPage() {
+  const colors = useColors();
   const utils = trpc.useUtils();
-  const list = trpc.packages.list.useQuery();
+  const q = trpc.packages.list.useQuery();
   const users = trpc.admin.users.useQuery();
-  const [showCompose, setShowCompose] = useState(false);
-  const [draft, setDraft] = useState({
-    recipientId: 0,
-    courier: '',
-    storageLocation: '',
-    sender: '',
-    notes: '',
-  });
-  const [recipientFilter, setRecipientFilter] = useState('');
-  const [pickupBy, setPickupBy] = useState<Record<number, string>>({});
+  
   const [filter, setFilter] = useState<'pending' | 'all'>('pending');
+  const [showLog, setShowLog] = useState(false);
+  const [draft, setDraft] = useState({ userId: 0, courier: '', notes: '' });
+  const [userSearch, setUserSearch] = useState('');
 
-  const recipientChoices = useMemo(() => {
-    const all = (users.data ?? []) as any[];
-    const residents = all.filter((u) => u.role === 'resident');
-    if (!recipientFilter.trim()) return residents.slice(0, 10);
-    const s = recipientFilter.trim().toLowerCase();
-    return residents.filter(
-      (u) => (u.name ?? '').toLowerCase().includes(s) || (u.email ?? '').toLowerCase().includes(s),
-    ).slice(0, 10);
-  }, [users.data, recipientFilter]);
+  const logMut = trpc.packages.register.useMutation({
+    onSuccess: () => {
+      utils.packages.list.invalidate();
+      setDraft({ userId: 0, courier: '', notes: '' });
+      setUserSearch('');
+      setShowLog(false);
+      Alert.alert('Success', 'Package logged');
+    },
+    onError: (err) => Alert.alert('Failed', parseError(err)),
+  });
 
-  const pickedRecipient = useMemo(
-    () => (users.data as any[] | undefined)?.find((u) => u.id === draft.recipientId),
-    [users.data, draft.recipientId],
+  const pickupMut = trpc.packages.markPickedUp.useMutation({
+    onSuccess: () => utils.packages.list.invalidate(),
+    onError: (err) => Alert.alert('Failed', parseError(err)),
+  });
+
+  const deleteMut = trpc.packages.delete.useMutation({
+    onSuccess: () => utils.packages.list.invalidate(),
+    onError: (err) => Alert.alert('Failed', parseError(err)),
+  });
+
+  const userChoices = useMemo(() => {
+    const all = (users.data ?? []) as UserRecord[];
+    const residents = all.filter(u => u.role === 'resident');
+    if (!userSearch.trim()) return residents.slice(0, 5);
+    const s = userSearch.toLowerCase();
+    return residents.filter(u => 
+      (u.name ?? '').toLowerCase().includes(s) || (u.unitId ?? '').toString().includes(s)
+    ).slice(0, 5);
+  }, [users.data, userSearch]);
+
+  const selectedUser = useMemo(() => 
+    (users.data as UserRecord[] | undefined)?.find(u => u.id === draft.userId),
+    [users.data, draft.userId]
   );
 
-  const filtered = useMemo(() => {
-    if (!list.data) return [];
-    if (filter === 'pending') return (list.data as any[]).filter((p) => !p.pickedUpAt);
-    return list.data as any[];
-  }, [list.data, filter]);
+  const rows = useMemo(() => {
+    if (!q.data) return [];
+    const all = q.data as PackageRecord[];
+    if (filter === 'pending') return all.filter(p => !p.pickedUpAt);
+    return all;
+  }, [q.data, filter]);
 
-  const registerMut = trpc.packages.register.useMutation({
-    onSuccess: (r) => {
-      utils.packages.list.invalidate();
-      Alert.alert('Registered', `PIN: ${r.pin}\n通知住戶來領取時告知此 PIN`);
-      setDraft({ recipientId: 0, courier: '', storageLocation: '', sender: '', notes: '' });
-      setRecipientFilter('');
-      setShowCompose(false);
-    },
-    onError: (err) => Alert.alert('Register failed', err.message),
-  });
-  const markedMut = trpc.packages.markPickedUp.useMutation({
-    onSuccess: () => utils.packages.list.invalidate(),
-    onError: (err) => Alert.alert('Failed', err.message),
-  });
-  const delMut = trpc.packages.delete.useMutation({
-    onSuccess: () => utils.packages.list.invalidate(),
-    onError: (err) => Alert.alert('Delete failed', err.message),
-  });
-
-  const submitRegister = () => {
-    if (!draft.recipientId) {
-      Alert.alert('Validation', 'Pick a recipient first');
-      return;
-    }
-    registerMut.mutate({
-      recipientId: draft.recipientId,
-      courier: draft.courier || undefined,
-      storageLocation: draft.storageLocation || undefined,
-      sender: draft.sender || undefined,
-      notes: draft.notes || undefined,
+  const submitLog = useCallback(() => {
+    if (!draft.userId) { Alert.alert('Validation', 'Pick a resident'); return; }
+    if (!draft.courier.trim()) { Alert.alert('Validation', 'Courier name required'); return; }
+    logMut.mutate({
+      recipientId: draft.userId,
+      courier: draft.courier.trim(),
+      notes: draft.notes.trim() || undefined,
     });
-  };
+  }, [draft, logMut]);
+
+  const confirmDelete = useCallback((id: number) => {
+    Alert.alert('Delete Record', `Permanently delete package PKG-${id}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate({ id }) },
+    ]);
+  }, [deleteMut]);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: COLORS.bg }}
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={<RefreshControl refreshing={list.isFetching} onRefresh={() => list.refetch()} tintColor={COLORS.accent} />}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: 'bold' }}>包裹代收 (Packages)</Text>
-          <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 2 }}>
-            {filtered.length} of {list.data?.length ?? 0}
-          </Text>
-        </View>
-        <Pressable
-          onPress={() => setShowCompose((v) => !v)}
-          style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 4,
-                   backgroundColor: showCompose ? COLORS.muted : COLORS.accent }}
-        >
-          <Text style={{ color: showCompose ? '#fff' : '#1a1a1a', fontWeight: 'bold' }}>
-            {showCompose ? 'Cancel' : '+ Register'}
-          </Text>
-        </Pressable>
-      </View>
+    <ScreenContainer edges={['top']}>
+      <AdminHeader 
+        title="包裹管理" 
+        subtitle={`${rows.length} packages listed`}
+        rightElement={
+          <AdminButton 
+            title={showLog ? 'Cancel' : '+ Log'} 
+            type={showLog ? 'secondary' : 'primary'}
+            onPress={() => setShowLog(!showLog)}
+            style={{ paddingVertical: 8 }}
+          />
+        }
+      />
 
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-        {(['pending', 'all'] as const).map((f) => (
-          <Pressable
-            key={f}
-            onPress={() => setFilter(f)}
-            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4,
-                     backgroundColor: filter === f ? COLORS.accent : COLORS.card }}
-          >
-            <Text style={{ color: filter === f ? '#1a1a1a' : '#fff', fontSize: 12 }}>
-              {f === 'pending' ? '未領取' : '全部'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {showCompose && (
-        <View style={{ padding: 12, marginBottom: 16, backgroundColor: COLORS.cardLight, borderRadius: 6 }}>
-          <Text style={{ color: COLORS.muted, fontSize: 11, marginBottom: 4 }}>Recipient *</Text>
-          {pickedRecipient ? (
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
+      >
+        <View style={styles.filterRow}>
+          {(['pending', 'all'] as const).map((f) => (
             <Pressable
-              onPress={() => setDraft({ ...draft, recipientId: 0 })}
-              style={{ padding: 10, backgroundColor: COLORS.accent + '40', borderRadius: 4, marginBottom: 8 }}
+              key={f}
+              onPress={() => setFilter(f)}
+              style={[
+                styles.filterChip,
+                { backgroundColor: filter === f ? colors.primary : colors.surface, borderColor: colors.border }
+              ]}
             >
-              <Text style={{ color: COLORS.text }}>
-                ✓ {pickedRecipient.name ?? '(no name)'} · #{pickedRecipient.id}
+              <Text style={[styles.filterChipText, { color: filter === f ? '#000' : colors.foreground }]}>
+                {f === 'pending' ? '未領取' : '全部'}
               </Text>
-              <Text style={{ color: COLORS.muted, fontSize: 11 }}>tap to change</Text>
             </Pressable>
-          ) : (
-            <>
-              <TextInput
-                value={recipientFilter}
-                onChangeText={setRecipientFilter}
-                placeholder="Search resident by name / email"
-                placeholderTextColor={COLORS.muted}
-                style={{ padding: 8, marginBottom: 6, color: COLORS.text,
-                         backgroundColor: COLORS.bg, borderRadius: 4 }}
-              />
-              {recipientChoices.map((u) => (
-                <Pressable
-                  key={u.id}
-                  onPress={() => setDraft({ ...draft, recipientId: u.id })}
-                  style={{ padding: 8, marginBottom: 4, backgroundColor: COLORS.card, borderRadius: 4 }}
-                >
-                  <Text style={{ color: COLORS.text, fontSize: 13 }}>
-                    {u.name ?? '(no name)'}
-                  </Text>
-                  <Text style={{ color: COLORS.muted, fontSize: 11 }}>
-                    #{u.id} · Unit {u.unitId ?? '-'} · {u.email}
-                  </Text>
-                </Pressable>
-              ))}
-            </>
-          )}
-
-          <Text style={{ color: COLORS.muted, fontSize: 11, marginTop: 8, marginBottom: 4 }}>Courier</Text>
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-            {COURIER_OPTIONS.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => setDraft({ ...draft, courier: c })}
-                style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4,
-                         backgroundColor: draft.courier === c ? COLORS.accent : COLORS.card }}
-              >
-                <Text style={{ color: draft.courier === c ? '#1a1a1a' : '#fff', fontSize: 11 }}>{c}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={{ color: COLORS.muted, fontSize: 11, marginBottom: 4 }}>Sender</Text>
-          <TextInput
-            value={draft.sender}
-            onChangeText={(t) => setDraft({ ...draft, sender: t })}
-            placeholder="Optional — sender name / company"
-            placeholderTextColor={COLORS.muted}
-            style={{ padding: 8, marginBottom: 8, color: COLORS.text,
-                     backgroundColor: COLORS.bg, borderRadius: 4 }}
-          />
-
-          <Text style={{ color: COLORS.muted, fontSize: 11, marginBottom: 4 }}>Storage location</Text>
-          <TextInput
-            value={draft.storageLocation}
-            onChangeText={(t) => setDraft({ ...draft, storageLocation: t })}
-            placeholder="e.g. 前台 B 架 / 冷藏櫃 #3"
-            placeholderTextColor={COLORS.muted}
-            style={{ padding: 8, marginBottom: 8, color: COLORS.text,
-                     backgroundColor: COLORS.bg, borderRadius: 4 }}
-          />
-
-          <Text style={{ color: COLORS.muted, fontSize: 11, marginBottom: 4 }}>Notes</Text>
-          <TextInput
-            value={draft.notes}
-            onChangeText={(t) => setDraft({ ...draft, notes: t })}
-            placeholder="特殊處理 / 易碎 / 冷藏..."
-            placeholderTextColor={COLORS.muted}
-            multiline
-            style={{ padding: 8, marginBottom: 8, color: COLORS.text,
-                     backgroundColor: COLORS.bg, borderRadius: 4, minHeight: 50, textAlignVertical: 'top' }}
-          />
-
-          <Pressable
-            disabled={registerMut.isPending}
-            onPress={submitRegister}
-            style={{ paddingVertical: 10, borderRadius: 4, backgroundColor: COLORS.accent,
-                     alignItems: 'center', opacity: registerMut.isPending ? 0.5 : 1 }}
-          >
-            <Text style={{ color: '#1a1a1a', fontWeight: 'bold' }}>
-              {registerMut.isPending ? 'Registering…' : 'Register & generate PIN'}
-            </Text>
-          </Pressable>
+          ))}
         </View>
-      )}
 
-      {list.isLoading && <ActivityIndicator color={COLORS.accent} />}
-      {list.error && <Text style={{ color: COLORS.error }}>{list.error.message}</Text>}
-      {!list.isLoading && filtered.length === 0 && (
-        <Text style={{ color: COLORS.muted, textAlign: 'center', marginTop: 32 }}>No packages.</Text>
-      )}
-
-      {filtered.map((p: any) => {
-        const isPending = !p.pickedUpAt;
-        return (
-          <View
-            key={p.id}
-            style={{ padding: 12, marginBottom: 8, backgroundColor: COLORS.card, borderRadius: 6,
-                     borderLeftWidth: isPending ? 3 : 0,
-                     borderLeftColor: isPending ? COLORS.warning : COLORS.muted }}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ color: COLORS.text, fontWeight: 'bold' }}>
-                {p.recipientName ?? `User #${p.recipientId}`}
-              </Text>
-              <Text style={{ color: isPending ? COLORS.warning : COLORS.muted, fontSize: 11, fontWeight: 'bold' }}>
-                {isPending ? `PIN: ${p.pickupPin}` : 'COLLECTED'}
-              </Text>
-            </View>
-            <Text style={{ color: COLORS.muted, fontSize: 11, marginTop: 4 }}>
-              #PKG-{p.id} · {p.courier ?? '?'} · {new Date(p.arrivedAt).toLocaleString()}
-            </Text>
-            {p.storageLocation && (
-              <Text style={{ color: COLORS.muted, fontSize: 11 }}>📦 {p.storageLocation}</Text>
-            )}
-            {p.sender && (
-              <Text style={{ color: COLORS.muted, fontSize: 11 }}>From: {p.sender}</Text>
-            )}
-            {p.notes && (
-              <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 4, fontStyle: 'italic' }}>
-                {p.notes}
-              </Text>
-            )}
-            {p.pickedUpAt && (
-              <Text style={{ color: COLORS.success, fontSize: 11, marginTop: 4 }}>
-                ✓ Picked up by {p.pickedUpBy} · {new Date(p.pickedUpAt).toLocaleString()}
-              </Text>
-            )}
-
-            {isPending && (
-              <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                <TextInput
-                  value={pickupBy[p.id] ?? ''}
-                  onChangeText={(t) => setPickupBy((prev) => ({ ...prev, [p.id]: t }))}
-                  placeholder="Picked up by (name)"
-                  placeholderTextColor={COLORS.muted}
-                  style={{ flex: 1, padding: 6, color: COLORS.text,
-                           backgroundColor: COLORS.bg, borderRadius: 4, fontSize: 12 }}
-                />
-                <Pressable
-                  disabled={markedMut.isPending}
-                  onPress={() => {
-                    const name = (pickupBy[p.id] ?? '').trim();
-                    if (!name) {
-                      Alert.alert('Validation', 'Enter the receiver name');
-                      return;
-                    }
-                    markedMut.mutate({ id: p.id, pickedUpBy: name });
-                  }}
-                  style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 4,
-                           backgroundColor: COLORS.success + '60' }}
-                >
-                  <Text style={{ color: COLORS.text, fontSize: 11, fontWeight: '600' }}>Mark picked up</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    Alert.alert('Delete', `Delete PKG-${p.id}?`, [
-                      { text: 'Cancel' },
-                      { text: 'Delete', style: 'destructive', onPress: () => delMut.mutate({ id: p.id }) },
-                    ]);
-                  }}
-                  style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 4, backgroundColor: '#5d0a0a' }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 11 }}>Del</Text>
-                </Pressable>
+        {showLog && (
+          <AdminCard title="Log New Package Arrival" style={styles.composeCard}>
+            <Text style={[styles.fieldLabel, { color: colors.muted }]}>RESIDENT *</Text>
+            {selectedUser ? (
+              <Pressable
+                onPress={() => setDraft({ ...draft, userId: 0 })}
+                style={[styles.pickedUser, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}
+              >
+                <Text style={[styles.pickedUserText, { color: colors.foreground }]}>
+                  ✓ {selectedUser.name ?? 'Unknown'} (Unit {selectedUser.unitId ?? '?'})
+                </Text>
+                <Text style={[styles.tapToChange, { color: colors.primary }]}>Change</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.userPicker}>
+                <AdminField label="" value={userSearch} onChangeText={setUserSearch} placeholder="Search by name or unit..." />
+                <View style={styles.choicesRow}>
+                  {userChoices.map(u => (
+                    <Pressable
+                      key={u.id}
+                      onPress={() => setDraft({ ...draft, userId: u.id })}
+                      style={[styles.choiceItem, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.choiceName, { color: colors.foreground }]}>{u.name ?? '?'}</Text>
+                      <Text style={[styles.choiceMeta, { color: colors.muted }]}>Unit {u.unitId ?? '?'}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
             )}
+
+            <AdminField label="Courier / Logistics *" value={draft.courier} onChangeText={(t) => setDraft({ ...draft, courier: t })} placeholder="e.g. SF Express, 黑貓" />
+            <AdminField label="Internal Notes" value={draft.notes} onChangeText={(t) => setDraft({ ...draft, notes: t })} multiline placeholder="e.g. 大型包裹, 需冷藏" />
+
+            <AdminButton
+              title={logMut.isPending ? 'Logging…' : 'Log Package'}
+              onPress={submitLog}
+              disabled={logMut.isPending}
+            />
+          </AdminCard>
+        )}
+
+        {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+        
+        {rows.length === 0 && !q.isLoading && (
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyText, { color: colors.muted }]}>No packages found.</Text>
           </View>
-        );
-      })}
-    </ScrollView>
+        )}
+
+        {rows.map((p) => {
+          const isPending = !p.pickedUpAt;
+          return (
+            <AdminCard key={p.id} style={[styles.packageCard, { borderLeftWidth: isPending ? 4 : 0, borderLeftColor: colors.warning }]}>
+              <View style={styles.cardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.courierName, { color: colors.foreground }]}>{p.courier}</Text>
+                  <Text style={[styles.packageMeta, { color: colors.muted }]}>
+                    #PKG-{p.id} · {p.recipientName ?? `Resident #${p.recipientId}`}
+                  </Text>
+                </View>
+                {isPending && (
+                  <View style={[styles.pendingBadge, { backgroundColor: colors.warning + '20' }]}>
+                    <Text style={[styles.pendingText, { color: colors.warning }]}>PENDING</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.timeInfo}>
+                <Text style={[styles.timeText, { color: colors.muted }]}>
+                  Arrived: {new Date(p.arrivedAt).toLocaleString()}
+                </Text>
+                {p.pickedUpAt && (
+                  <Text style={[styles.timeText, { color: colors.success }]}>
+                    ✓ Picked up: {new Date(p.pickedUpAt).toLocaleString()}
+                  </Text>
+                )}
+              </View>
+
+              {p.notes && (
+                <Text style={[styles.notesText, { color: colors.muted }]}>Note: {p.notes}</Text>
+              )}
+
+              {isPending && (
+                <View style={styles.actionRow}>
+                  <AdminButton 
+                    title={pickupMut.isPending ? "Updating..." : "Confirm Pickup"} 
+                    onPress={() => pickupMut.mutate({ id: p.id })}
+                    disabled={pickupMut.isPending}
+                    style={styles.pickupBtn}
+                  />
+                  <AdminButton 
+                    title="Del" 
+                    type="danger" 
+                    onPress={() => confirmDelete(p.id)} 
+                    style={styles.delBtn}
+                  />
+                </View>
+              )}
+            </AdminCard>
+          );
+        })}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  composeCard: {
+    marginBottom: 24,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  pickedUser: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pickedUserText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tapToChange: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  userPicker: {
+    marginBottom: 8,
+  },
+  choicesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: -8,
+    marginBottom: 16,
+  },
+  choiceItem: {
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: '30%',
+    alignItems: 'center',
+  },
+  choiceName: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  choiceMeta: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  packageCard: {
+    marginBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  courierName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  packageMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  pendingBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  pendingText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  timeInfo: {
+    marginTop: 10,
+    gap: 4,
+  },
+  timeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  notesText: {
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  actionRow: {
+    marginTop: 16,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  pickupBtn: {
+    flex: 1,
+    paddingVertical: 10,
+  },
+  delBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  emptyState: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});
