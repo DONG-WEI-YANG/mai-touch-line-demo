@@ -7,6 +7,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { EventEmitter } from 'events';
 
+// We only consume `isConnected` (OS/browser connectivity events), never
+// `isInternetReachable`, so NetInfo's active reachability probe is pure
+// overhead. On web it HEAD-polls the origin root every few seconds, which
+// 404s forever when the app is served from a subpath (GitHub Pages).
+NetInfo.configure({ reachabilityShouldRun: () => false });
+
 export type OfflineOperationType =
   | 'create_booking'
   | 'update_booking'
