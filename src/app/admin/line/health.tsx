@@ -1,46 +1,125 @@
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { trpc } from '@/lib/trpc';
+import { useColors } from '@/hooks/use-colors';
+import { ScreenContainer } from '@/components/screen-container';
+import { AdminHeader, AdminCard } from '@/components/admin/admin-ui';
 
-const COLORS = { bg: '#1a1a1a', card: '#252525', accent: '#C9A96E', text: '#fff', muted: '#888' };
-
-export default function HealthPage() {
-  const q = trpc.lineAdmin.health.useQuery(undefined, { refetchInterval: 30000 });
+export default function LineHealthPage() {
+  const colors = useColors();
+  const q = trpc.lineAdmin.health.useQuery();
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg, padding: 16 }}>
-      <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: 'bold', marginBottom: 16 }}>
-        Health Metrics (today)
-      </Text>
+    <ScreenContainer edges={['top']}>
+      <AdminHeader 
+        title="LINE 健康狀態" 
+        subtitle="Gateway 性能與流量指標"
+      />
 
-      {q.isLoading && <Text style={{ color: COLORS.muted }}>Loading...</Text>}
+      <ScrollView 
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
+      >
+        {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+        
+        {q.data && (
+          <>
+            <View style={styles.statsGrid}>
+              <AdminCard style={styles.statCard}>
+                <Text style={[styles.statLabel, { color: colors.muted }]}>今日訊息量</Text>
+                <Text style={[styles.statValue, { color: colors.foreground }]}>{q.data.todayCount}</Text>
+              </AdminCard>
+              <AdminCard style={styles.statCard}>
+                <Text style={[styles.statLabel, { color: colors.muted }]}>系統錯誤率</Text>
+                <Text style={[styles.statValue, { color: q.data.errorRate > 0.1 ? colors.error : colors.success }]}>
+                  {(q.data.errorRate * 100).toFixed(1)}%
+                </Text>
+              </AdminCard>
+            </View>
 
-      {q.data ? (
-        <View style={{ gap: 8 }}>
-          <Metric label="Messages today" value={String(q.data.todayCount)} />
-          <Metric label="Errors today" value={String(q.data.errorCount)} />
-          <Metric label="Error rate" value={(q.data.errorRate * 100).toFixed(2) + '%'} />
-          <Metric label="Server uptime" value={formatUptime(q.data.uptimeS)} />
-          {/* TODO(v2): openaiTokensToday requires additional log columns */}
-          <Metric label="OpenAI tokens (today)" value={String(q.data.openaiTokensToday) + ' (placeholder — v2)'} />
-          {/* TODO(v2): avgLatencyMs requires per-request timing columns */}
-          <Metric label="Avg latency (ms)" value={String(q.data.avgLatencyMs) + ' (placeholder — v2)'} />
-        </View>
-      ) : null}
-    </ScrollView>
+            <AdminCard title="系統指標">
+              <View style={styles.modelRow}>
+                <Text style={[styles.modelName, { color: colors.foreground }]}>運行時間</Text>
+                <Text style={[styles.modelCount, { color: colors.muted }]}>{Math.floor(q.data.uptimeS / 3600)}h {Math.floor((q.data.uptimeS % 3600) / 60)}m</Text>
+              </View>
+              <View style={styles.modelRow}>
+                <Text style={[styles.modelName, { color: colors.foreground }]}>平均延遲</Text>
+                <Text style={[styles.modelCount, { color: colors.muted }]}>{q.data.avgLatencyMs}ms</Text>
+              </View>
+              <View style={styles.modelRow}>
+                <Text style={[styles.modelName, { color: colors.foreground }]}>今日 Token 消耗</Text>
+                <Text style={[styles.modelCount, { color: colors.muted }]}>{q.data.openaiTokensToday}</Text>
+              </View>
+            </AdminCard>
+          </>
+        )}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={{ padding: 12, backgroundColor: COLORS.card, borderRadius: 4 }}>
-      <Text style={{ color: COLORS.muted, fontSize: 12 }}>{label}</Text>
-      <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: 'bold' }}>{value}</Text>
-    </View>
-  );
-}
-
-function formatUptime(s: number): string {
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-}
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  dailyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    gap: 12,
+  },
+  dateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    width: 80,
+  },
+  barWrap: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  bar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  countText: {
+    fontSize: 11,
+    fontWeight: '700',
+    width: 30,
+    textAlign: 'right',
+  },
+  modelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  modelName: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modelCount: {
+    fontSize: 12,
+  },
+});

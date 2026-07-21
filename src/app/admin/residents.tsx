@@ -1,136 +1,225 @@
-import { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { useState, useMemo, useCallback } from 'react';
+import { View, Text, ScrollView, Alert, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { trpc } from '@/lib/trpc';
+import { useColors } from '@/hooks/use-colors';
+import { ScreenContainer } from '@/components/screen-container';
+import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
+import { parseError } from '@/lib/error-utils';
 
-const COLORS = {
-  bg: '#1a1a1a',
-  card: '#252525',
-  accent: '#C9A96E',
-  text: '#fff',
-  muted: '#888',
-  error: '#ff6b6b',
-};
-
-type Role = 'resident' | 'admin' | 'logistics' | 'housekeeper';
-type RoleFilter = Role | 'all';
-const ROLE_FILTERS: RoleFilter[] = ['all', 'resident', 'admin', 'logistics', 'housekeeper'];
-
-const ROLE_COLOR: Record<Role, string> = {
-  resident: COLORS.accent,
-  admin: '#ff6b6b',
-  logistics: '#60a5fa',
-  housekeeper: '#a78bfa',
-};
+interface UserRecord {
+  id: number;
+  name: string | null;
+  email: string | null;
+  role: string;
+  unitId: number | null;
+}
 
 export default function AdminResidentsPage() {
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
-  const [search, setSearch] = useState('');
+  const colors = useColors();
+  const utils = trpc.useUtils();
   const q = trpc.admin.users.useQuery();
+  const [search, setSearch] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [draft, setDraft] = useState({ name: '', email: '', unitId: '' });
+
+  const addMut = trpc.admin.createUser.useMutation({
+    onSuccess: () => {
+      utils.admin.users.invalidate();
+      setDraft({ name: '', email: '', unitId: '' });
+      setShowAdd(false);
+      Alert.alert('Success', 'Resident added');
+    },
+    onError: (err) => Alert.alert('Failed', parseError(err)),
+  });
+
+  const deleteMut = trpc.admin.deleteUser.useMutation({
+    onSuccess: () => utils.admin.users.invalidate(),
+    onError: (err) => Alert.alert('Failed', parseError(err)),
+  });
 
   const filtered = useMemo(() => {
-    if (!q.data) return [];
-    let rows = q.data as any[];
-    if (roleFilter !== 'all') rows = rows.filter((u) => u.role === roleFilter);
-    if (search.trim()) {
-      const s = search.trim().toLowerCase();
-      rows = rows.filter(
-        (u) =>
-          (u.name ?? '').toLowerCase().includes(s) ||
-          (u.email ?? '').toLowerCase().includes(s) ||
-          String(u.id).includes(s),
-      );
-    }
-    return rows;
-  }, [q.data, roleFilter, search]);
+    const all = (q.data ?? []) as UserRecord[];
+    const residents = all.filter(u => u.role === 'resident');
+    if (!search.trim()) return residents;
+    const s = search.toLowerCase();
+    return residents.filter(u => 
+      (u.name ?? '').toLowerCase().includes(s) || 
+      (u.email ?? '').toLowerCase().includes(s) ||
+      (u.unitId ?? '').toString().includes(s)
+    );
+  }, [q.data, search]);
 
-  const counts = useMemo(() => {
-    const c: Record<RoleFilter, number> = {
-      all: 0, resident: 0, admin: 0, logistics: 0, housekeeper: 0,
-    };
-    if (!q.data) return c;
-    c.all = q.data.length;
-    for (const u of q.data as any[]) {
-      const r = u.role as Role;
-      if (r in c) c[r]++;
-    }
-    return c;
-  }, [q.data]);
+  const submitAdd = useCallback(() => {
+    if (!draft.name.trim()) { Alert.alert('Name required'); return; }
+    addMut.mutate({
+      name: draft.name.trim(),
+      email: draft.email.trim() || undefined,
+      role: 'resident',
+      unitId: draft.unitId ? parseInt(draft.unitId, 10) : undefined,
+    });
+  }, [draft, addMut]);
+
+  const confirmDelete = useCallback((id: number, name: string) => {
+    Alert.alert('Delete Resident', `Permanently remove ${name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate({ id }) },
+    ]);
+  }, [deleteMut]);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: COLORS.bg }}
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={COLORS.accent} />}
-    >
-      <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: 'bold', marginBottom: 4 }}>
-        住戶 / 用戶 (Residents)
-      </Text>
-      <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 16 }}>
-        Read-only. 角色變更目前需 SQL 直改 (production auth 後加 role mutation)。
-      </Text>
-
-      <TextInput
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Search by name / email / id"
-        placeholderTextColor={COLORS.muted}
-        style={{
-          padding: 10,
-          marginBottom: 12,
-          color: COLORS.text,
-          backgroundColor: COLORS.card,
-          borderRadius: 4,
-          fontSize: 13,
-        }}
+    <ScreenContainer edges={['top']}>
+      <AdminHeader 
+        title="住戶管理" 
+        subtitle={`${filtered.length} residents registered`}
+        rightElement={
+          <AdminButton 
+            title={showAdd ? 'Cancel' : '+ Add'} 
+            type={showAdd ? 'secondary' : 'primary'}
+            onPress={() => setShowAdd(!showAdd)}
+            style={{ paddingVertical: 8 }}
+          />
+        }
       />
 
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {ROLE_FILTERS.map((r) => (
-          <Pressable
-            key={r}
-            onPress={() => setRoleFilter(r)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 4,
-              backgroundColor: roleFilter === r ? COLORS.accent : COLORS.card,
-            }}
-          >
-            <Text style={{ color: roleFilter === r ? '#1a1a1a' : '#fff', fontSize: 12 }}>
-              {r} ({counts[r]})
-            </Text>
-          </Pressable>
-        ))}
+      <View style={styles.searchBox}>
+        <AdminField 
+          label="" 
+          value={search} 
+          onChangeText={setSearch} 
+          placeholder="Search by name, email or unit..." 
+        />
       </View>
 
-      {q.isLoading && <ActivityIndicator color={COLORS.accent} />}
-      {q.error && <Text style={{ color: COLORS.error }}>Error: {q.error.message}</Text>}
-      {!q.isLoading && filtered.length === 0 && (
-        <Text style={{ color: COLORS.muted, textAlign: 'center', marginTop: 32 }}>No matching users.</Text>
-      )}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
+      >
+        {showAdd && (
+          <AdminCard title="Add New Resident" style={styles.composeCard}>
+            <AdminField label="Full Name *" value={draft.name} onChangeText={(t) => setDraft({ ...draft, name: t })} placeholder="e.g. John Doe" />
+            <AdminField label="Email Address" value={draft.email} onChangeText={(t) => setDraft({ ...draft, email: t })} placeholder="e.g. john@example.com" keyboardType="email-address" />
+            <AdminField label="Unit Number" value={draft.unitId} onChangeText={(t) => setDraft({ ...draft, unitId: t })} placeholder="e.g. 1205" keyboardType="number-pad" />
 
-      {filtered.map((u: any) => {
-        const role = (u.role ?? 'resident') as Role;
-        return (
-          <View key={u.id} style={{ padding: 12, marginBottom: 8, backgroundColor: COLORS.card, borderRadius: 6 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: COLORS.text, fontWeight: 'bold' }}>
-                {u.name ?? '(no name)'}
-              </Text>
-              <Text style={{ color: ROLE_COLOR[role] ?? COLORS.muted, fontSize: 11, fontWeight: 'bold' }}>
-                {role.toUpperCase()}
-              </Text>
-            </View>
-            <Text style={{ color: COLORS.muted, fontSize: 11, marginTop: 4 }}>
-              #{u.id} · {u.email || '(no email)'} · {u.loginMethod || 'unknown auth'}
-            </Text>
-            <Text style={{ color: COLORS.muted, fontSize: 11 }}>
-              Tier: {u.tier ?? '-'} · Unit: {u.unitId ?? '-'} · Last sign-in:{' '}
-              {u.lastSignedIn ? new Date(u.lastSignedIn).toLocaleString() : 'never'}
-            </Text>
+            <AdminButton
+              title={addMut.isPending ? 'Adding…' : 'Register Resident'}
+              onPress={submitAdd}
+              disabled={addMut.isPending}
+            />
+          </AdminCard>
+        )}
+
+        {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+        
+        {filtered.length === 0 && !q.isLoading && (
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyText, { color: colors.muted }]}>No residents found.</Text>
           </View>
-        );
-      })}
-    </ScrollView>
+        )}
+
+        {filtered.map((u) => (
+          <AdminCard key={u.id} style={styles.userCard}>
+            <View style={styles.cardHeader}>
+              <View style={styles.avatarWrap}>
+                <View style={[styles.avatar, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}>
+                  <Text style={[styles.avatarText, { color: colors.primary }]}>
+                    {(u.name ?? 'U').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.info}>
+                <Text style={[styles.userName, { color: colors.foreground }]}>{u.name ?? '(no name)'}</Text>
+                <Text style={[styles.userMeta, { color: colors.muted }]}>
+                  #{u.id} · {u.email || 'No Email'}
+                </Text>
+                {u.unitId && (
+                  <View style={[styles.unitBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={[styles.unitText, { color: colors.foreground }]}>UNIT {u.unitId}</Text>
+                  </View>
+                )}
+              </View>
+              <AdminButton 
+                title="Del" 
+                type="danger" 
+                onPress={() => confirmDelete(u.id, u.name ?? 'this user')} 
+                style={styles.delBtn}
+              />
+            </View>
+          </AdminCard>
+        ))}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  searchBox: {
+    paddingHorizontal: 16,
+    marginBottom: -16,
+  },
+  composeCard: {
+    marginBottom: 24,
+    marginTop: 16,
+  },
+  userCard: {
+    marginBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatarWrap: {
+    justifyContent: 'center',
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  info: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  userMeta: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  unitBadge: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  unitText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  delBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  emptyState: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});

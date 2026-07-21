@@ -1,191 +1,261 @@
-import { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { useState, useMemo, useCallback } from 'react';
+import { View, Text, ScrollView, Alert, ActivityIndicator, RefreshControl, StyleSheet, Pressable } from 'react-native';
 import { trpc } from '@/lib/trpc';
+import { useColors } from '@/hooks/use-colors';
+import { ScreenContainer } from '@/components/screen-container';
+import { AdminHeader, AdminCard, AdminButton } from '@/components/admin/admin-ui';
+import { parseError } from '@/lib/error-utils';
 
-const COLORS = {
-  bg: '#1a1a1a',
-  card: '#252525',
-  accent: '#C9A96E',
-  text: '#fff',
-  muted: '#888',
-  error: '#ff6b6b',
-  success: '#4ade80',
-  warning: '#fbbf24',
-  info: '#60a5fa',
-};
+interface WorkOrderRecord {
+  id: number;
+  userId: number;
+  userName?: string;
+  title: string | null;
+  description: string | null;
+  category: string;
+  priority: string;
+  status: string;
+  assignedTo: string | null;
+  location?: string;
+  createdAt: string;
+}
 
 type WOStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
-type Priority = 'low' | 'medium' | 'high' | 'urgent';
-
 const STATUS_OPTIONS: WOStatus[] = ['open', 'in_progress', 'resolved', 'closed'];
 
-const STATUS_COLOR: Record<WOStatus, string> = {
-  open: COLORS.warning,
-  in_progress: COLORS.info,
-  resolved: COLORS.success,
-  closed: COLORS.muted,
-};
-const PRIORITY_COLOR: Record<Priority, string> = {
-  low: COLORS.muted,
-  medium: COLORS.accent,
-  high: COLORS.warning,
-  urgent: COLORS.error,
-};
-
-type StatusFilter = WOStatus | 'all';
-const FILTERS: StatusFilter[] = ['all', 'open', 'in_progress', 'resolved', 'closed'];
-
 export default function AdminWorkOrdersPage() {
-  const [filter, setFilter] = useState<StatusFilter>('open');
-  const [assignDraft, setAssignDraft] = useState<Record<number, string>>({});
+  const colors = useColors();
   const utils = trpc.useUtils();
   const q = trpc.workOrders.listAll.useQuery();
+  const [filter, setFilter] = useState<WOStatus | 'all'>('open');
 
-  const updateOrder = trpc.workOrders.update.useMutation({
-    onSuccess: () => {
-      utils.workOrders.listAll.invalidate();
-    },
-    onError: (err) => Alert.alert('Update failed', err.message),
+  const updateMut = trpc.workOrders.update.useMutation({
+    onSuccess: () => utils.workOrders.listAll.invalidate(),
+    onError: (err) => Alert.alert('Failed', parseError(err)),
+  });
+
+  const deleteMut = trpc.workOrders.delete.useMutation({
+    onSuccess: () => utils.workOrders.listAll.invalidate(),
+    onError: (err) => Alert.alert('Failed', parseError(err)),
   });
 
   const rows = useMemo(() => {
     if (!q.data) return [];
-    if (filter === 'all') return q.data;
-    return q.data.filter((r: any) => r.workOrder.status === filter);
+    const all = q.data as WorkOrderRecord[];
+    if (filter === 'all') return all;
+    return all.filter(w => w.status === filter);
   }, [q.data, filter]);
 
   const counts = useMemo(() => {
-    const c: Record<StatusFilter, number> = { all: 0, open: 0, in_progress: 0, resolved: 0, closed: 0 };
+    const c: Record<string, number> = { all: 0, open: 0, in_progress: 0, resolved: 0, closed: 0 };
     if (!q.data) return c;
-    c.all = q.data.length;
-    for (const r of q.data as any[]) c[r.workOrder.status as WOStatus]++;
+    const all = q.data as WorkOrderRecord[];
+    c.all = all.length;
+    for (const w of all) {
+      if (w.status in c) c[w.status]++;
+    }
     return c;
   }, [q.data]);
 
-  return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: COLORS.bg }}
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={COLORS.accent} />}
-    >
-      <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: 'bold', marginBottom: 4 }}>
-        工單管理 (Work Orders)
-      </Text>
-      <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 16 }}>
-        Default filter: open(待處理)。
-      </Text>
+  const getStatusColor = (status: WOStatus) => {
+    switch (status) {
+      case 'open': return colors.warning;
+      case 'in_progress': return '#60a5fa';
+      case 'resolved': return colors.success;
+      case 'closed': return colors.muted;
+      default: return colors.foreground;
+    }
+  };
 
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {FILTERS.map((f) => (
-          <Pressable
-            key={f}
-            onPress={() => setFilter(f)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 4,
-              backgroundColor: filter === f ? COLORS.accent : COLORS.card,
-            }}
-          >
-            <Text style={{ color: filter === f ? '#1a1a1a' : '#fff', fontSize: 12 }}>
-              {f} ({counts[f]})
-            </Text>
-          </Pressable>
-        ))}
+  const confirmDelete = useCallback((id: number) => {
+    Alert.alert('Delete Work Order', `Permanently delete WO-${id}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate({ id }) },
+    ]);
+  }, [deleteMut]);
+
+  return (
+    <ScreenContainer edges={['top']}>
+      <AdminHeader 
+        title="工單管理" 
+        subtitle="Maintenance and repair requests"
+      />
+
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          {(['all', ...STATUS_OPTIONS] as const).map((f) => (
+            <Pressable
+              key={f}
+              onPress={() => setFilter(f)}
+              style={[
+                styles.filterChip,
+                { backgroundColor: filter === f ? colors.primary : colors.surface, borderColor: colors.border }
+              ]}
+            >
+              <Text style={[styles.filterChipText, { color: filter === f ? '#000' : colors.foreground }]}>
+                {f.replace('_', ' ').toUpperCase()} ({counts[f]})
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
 
-      {q.isLoading && <ActivityIndicator color={COLORS.accent} />}
-      {q.error && <Text style={{ color: COLORS.error }}>Error: {q.error.message}</Text>}
-      {!q.isLoading && rows.length === 0 && (
-        <Text style={{ color: COLORS.muted, textAlign: 'center', marginTop: 32 }}>No work orders.</Text>
-      )}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
+      >
+        {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+        
+        {rows.length === 0 && !q.isLoading && (
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyText, { color: colors.muted }]}>No work orders found.</Text>
+          </View>
+        )}
 
-      {rows.map((row: any) => {
-        const w = row.workOrder;
-        const status = w.status as WOStatus;
-        const priority = w.priority as Priority;
-        const id = w.id as number;
-        return (
-          <View key={id} style={{ padding: 12, marginBottom: 8, backgroundColor: COLORS.card, borderRadius: 6 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Text style={{ color: COLORS.text, fontWeight: 'bold', flex: 1, marginRight: 8 }} numberOfLines={1}>
-                {w.title}
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                <Text style={{ color: PRIORITY_COLOR[priority], fontSize: 10, fontWeight: 'bold' }}>
-                  {priority.toUpperCase()}
+        {rows.map((w) => {
+          const statusColor = getStatusColor(w.status as WOStatus);
+          return (
+            <AdminCard key={w.id} style={styles.woCard}>
+              <View style={styles.cardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.woTitle, { color: colors.foreground }]}>{w.title}</Text>
+                  <Text style={[styles.woMeta, { color: colors.muted }]}>
+                    #WO-{w.id} · {w.userName ?? `User #${w.userId}`}
+                  </Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+                  <Text style={[styles.statusText, { color: statusColor }]}>{w.status.toUpperCase()}</Text>
+                </View>
+              </View>
+
+              <Text style={[styles.description, { color: colors.foreground }]}>{w.description}</Text>
+              
+              <View style={styles.timeInfo}>
+                <Text style={[styles.timeText, { color: colors.muted }]}>
+                  Created: {new Date(w.createdAt).toLocaleString()}
                 </Text>
-                <Text style={{ color: STATUS_COLOR[status], fontSize: 10, fontWeight: 'bold' }}>
-                  {status.toUpperCase()}
+                <Text style={[styles.timeText, { color: colors.muted }]}>
+                  Location: {w.location || 'Not specified'}
                 </Text>
               </View>
-            </View>
-            <Text style={{ color: COLORS.muted, fontSize: 11, marginTop: 4 }}>
-              #WO-{id} · {w.category} · From: {row.userName ?? 'N/A'}
-            </Text>
-            {w.description && (
-              <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 4 }} numberOfLines={3}>
-                {w.description}
-              </Text>
-            )}
 
-            {/* Assignment input — staff types a name and presses Save. The endpoint
-                accepts a free-text assignedTo so we don't gate on a user lookup. */}
-            <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, alignItems: 'center' }}>
-              <TextInput
-                value={assignDraft[id] ?? (w.assignedTo as string | null) ?? ''}
-                onChangeText={(t) => setAssignDraft((prev) => ({ ...prev, [id]: t }))}
-                placeholder="Assign to (housekeeper name)"
-                placeholderTextColor={COLORS.muted}
-                style={{
-                  flex: 1,
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  fontSize: 12,
-                  color: COLORS.text,
-                  borderWidth: 1,
-                  borderColor: COLORS.muted,
-                  borderRadius: 4,
-                }}
-              />
-              <Pressable
-                disabled={updateOrder.isPending}
-                onPress={() => updateOrder.mutate({ id, assignedTo: assignDraft[id] ?? '' })}
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 4,
-                  backgroundColor: COLORS.accent,
-                  opacity: updateOrder.isPending ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: '#1a1a1a', fontSize: 11, fontWeight: '600' }}>Save</Text>
-              </Pressable>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-              {STATUS_OPTIONS.filter((s) => s !== status).map((s) => (
-                <Pressable
-                  key={s}
-                  disabled={updateOrder.isPending}
-                  onPress={() => updateOrder.mutate({ id, status: s })}
-                  style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 4,
-                    backgroundColor: STATUS_COLOR[s] + '20',
-                    borderWidth: 1,
-                    borderColor: STATUS_COLOR[s] + '60',
-                    opacity: updateOrder.isPending ? 0.5 : 1,
-                  }}
-                >
-                  <Text style={{ color: STATUS_COLOR[s], fontSize: 11, fontWeight: '600' }}>→ {s}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        );
-      })}
-    </ScrollView>
+              <View style={styles.actionRow}>
+                <View style={styles.statusButtons}>
+                  {STATUS_OPTIONS.filter(s => s !== w.status).map(s => (
+                    <Pressable
+                      key={s}
+                      onPress={() => updateMut.mutate({ id: w.id, status: s })}
+                      disabled={updateMut.isPending}
+                      style={[styles.statusBtn, { borderColor: getStatusColor(s) + '40', backgroundColor: getStatusColor(s) + '10' }]}
+                    >
+                      <Text style={[styles.statusBtnText, { color: getStatusColor(s) }]}>{s.split('_')[0]}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <AdminButton title="Del" type="danger" onPress={() => confirmDelete(w.id)} style={styles.delBtn} />
+              </View>
+            </AdminCard>
+          );
+        })}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  filterContainer: {
+    marginBottom: 4,
+  },
+  filterRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  woCard: {
+    marginBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  woTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  woMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  timeInfo: {
+    gap: 4,
+    marginBottom: 16,
+  },
+  timeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 12,
+  },
+  statusButtons: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  statusBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  statusBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  delBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  emptyState: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});

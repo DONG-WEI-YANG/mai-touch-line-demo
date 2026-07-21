@@ -1,87 +1,93 @@
 import { useState } from 'react';
-import { Text, TextInput, Pressable, Alert, ScrollView } from 'react-native';
+import { Text, ScrollView, Alert, StyleSheet } from 'react-native';
 import { trpc } from '@/lib/trpc';
+import { useColors } from '@/hooks/use-colors';
+import { ScreenContainer } from '@/components/screen-container';
+import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
+import { parseError } from '@/lib/error-utils';
 
-const COLORS = { bg: '#1a1a1a', card: '#252525', accent: '#C9A96E', text: '#fff', muted: '#888' };
-
-export default function PushPage() {
+export default function ManualPushPage() {
+  const colors = useColors();
   const [lineUserId, setLineUserId] = useState('');
   const [text, setText] = useState('');
 
-  const mut = trpc.lineAdmin.manualPush.useMutation({
+  const pushMut = trpc.lineAdmin.manualPush.useMutation({
     onSuccess: () => {
-      Alert.alert('Sent', 'Message pushed (also written to audit log as outbound:debug)');
+      Alert.alert('Success', 'Message sent successfully');
       setText('');
     },
-    onError: (err) => Alert.alert('Error', err.message),
+    onError: (err) => Alert.alert('Push Failed', parseError(err)),
   });
 
-  const isValidUserId = /^U[0-9a-fA-F]{32}$/.test(lineUserId);
-  const canSend = isValidUserId && text.trim().length > 0 && !mut.isPending;
+  const handlePush = () => {
+    if (!lineUserId.trim()) { Alert.alert('Validation', 'LINE User ID is required'); return; }
+    if (!text.trim()) { Alert.alert('Validation', 'Message text is required'); return; }
+    
+    pushMut.mutate({ lineUserId: lineUserId.trim(), text: text.trim() });
+  };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg, padding: 16 }}>
-      <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>
-        Manual Push (Debug)
-      </Text>
-      <Text style={{ color: COLORS.muted, fontSize: 12, marginBottom: 16 }}>
-        Sends a text message directly to a LINE userId. Logged with direction=outbound:debug.
-      </Text>
-
-      <Text style={{ color: COLORS.muted, fontSize: 12 }}>LINE userId (U + 32 hex)</Text>
-      <TextInput
-        value={lineUserId}
-        onChangeText={setLineUserId}
-        placeholder="U0123456789abcdef..."
-        placeholderTextColor={COLORS.muted}
-        autoCapitalize="none"
-        style={{
-          padding: 8,
-          color: COLORS.text,
-          borderColor: lineUserId && !isValidUserId ? '#ff6b6b' : COLORS.muted,
-          borderWidth: 1,
-          borderRadius: 4,
-          marginBottom: 12,
-        }}
+    <ScreenContainer edges={['top']}>
+      <AdminHeader 
+        title="Manual Push" 
+        subtitle="Direct gateway for developer debugging"
       />
 
-      <Text style={{ color: COLORS.muted, fontSize: 12 }}>Message text (max 500)</Text>
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        multiline
-        maxLength={500}
-        placeholder="Hello from admin..."
-        placeholderTextColor={COLORS.muted}
-        style={{
-          minHeight: 80,
-          padding: 8,
-          color: COLORS.text,
-          borderColor: COLORS.muted,
-          borderWidth: 1,
-          borderRadius: 4,
-          marginBottom: 12,
-        }}
-      />
+      <ScrollView contentContainerStyle={styles.container}>
+        <AdminCard title="Direct Message Dispatch">
+          <Text style={[styles.warningText, { color: colors.warning }]}>
+            ⚠️ This tool bypasses AI and normal business logic. Use with caution.
+          </Text>
 
-      <Pressable
-        onPress={() => mut.mutate({ lineUserId, text })}
-        disabled={!canSend}
-        style={{
-          padding: 12,
-          borderRadius: 4,
-          alignItems: 'center',
-          backgroundColor: canSend ? COLORS.accent : COLORS.muted,
-        }}
-      >
-        <Text style={{ color: '#1a1a1a', fontWeight: 'bold' }}>
-          {mut.isPending ? 'Sending...' : 'Push'}
-        </Text>
-      </Pressable>
+          <AdminField 
+            label="LINE USER ID *" 
+            value={lineUserId} 
+            onChangeText={setLineUserId} 
+            placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+          />
+          
+          <AdminField 
+            label="MESSAGE CONTENT *" 
+            value={text} 
+            onChangeText={setText} 
+            multiline 
+            placeholder="Type raw text to send..." 
+          />
 
-      <Text style={{ color: COLORS.muted, fontSize: 11, marginTop: 8 }}>
-        Validation: userId must match LINE format (U + 32 hex chars).
-      </Text>
-    </ScrollView>
+          <AdminButton
+            title={pushMut.isPending ? "Sending..." : "Send Message"}
+            onPress={handlePush}
+            disabled={pushMut.isPending}
+            style={{ marginTop: 8 }}
+          />
+        </AdminCard>
+
+        <AdminCard title="Common Recipient IDs" style={{ marginTop: 16 }}>
+          <Text style={[styles.helperText, { color: colors.muted }]}>
+            You can find these IDs in the LINE Users or Live Logs pages.
+          </Text>
+        </AdminCard>
+      </ScrollView>
+    </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  warningText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 20,
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    padding: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.2)',
+  },
+  helperText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+});

@@ -1,38 +1,48 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TextInput, Pressable, Alert } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TextInput, Alert, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { trpc } from '@/lib/trpc';
-
-const COLORS = { bg: '#1a1a1a', card: '#252525', accent: '#C9A96E', text: '#fff', muted: '#888', error: '#ff6b6b' };
+import { useColors } from '@/hooks/use-colors';
+import { ScreenContainer } from '@/components/screen-container';
+import { AdminHeader, AdminCard, AdminButton } from '@/components/admin/admin-ui';
+import { parseError } from '@/lib/error-utils';
 
 export default function ConfigPage() {
+  const colors = useColors();
   const utils = trpc.useUtils();
   const q = trpc.lineAdmin.configList.useQuery();
+  
   const setMut = trpc.lineAdmin.configSet.useMutation({
-    onSuccess: () => utils.lineAdmin.configList.invalidate(),
-    onError: (err) => Alert.alert('Error', err.message),
+    onSuccess: () => {
+      utils.lineAdmin.configList.invalidate();
+      Alert.alert('Success', 'Configuration updated');
+    },
+    onError: (err) => Alert.alert('Error', parseError(err)),
   });
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg, padding: 16 }}>
-      <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: 'bold', marginBottom: 16 }}>
-        Runtime Config
-      </Text>
-      <Text style={{ color: COLORS.muted, marginBottom: 16, fontSize: 12 }}>
-        Changes apply immediately — no redeploy needed.
-      </Text>
+    <ScreenContainer edges={['top']}>
+      <AdminHeader 
+        title="Runtime Config" 
+        subtitle="Real-time system configuration updates"
+      />
 
-      {q.isLoading && <Text style={{ color: COLORS.muted }}>Loading...</Text>}
-      {q.error && <Text style={{ color: COLORS.error }}>Error: {q.error.message}</Text>}
+      <ScrollView 
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
+      >
+        {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+        {q.error && <Text style={[styles.errorText, { color: colors.error }]}>Error: {q.error.message}</Text>}
 
-      {q.data?.map((row) => (
-        <ConfigRow
-          key={row.key}
-          row={row}
-          onSave={(value) => setMut.mutate({ key: row.key, value })}
-          isPending={setMut.isPending}
-        />
-      ))}
-    </ScrollView>
+        {q.data?.map((row) => (
+          <ConfigRow
+            key={row.key}
+            row={row}
+            onSave={(value) => setMut.mutate({ key: row.key, value })}
+            isPending={setMut.isPending}
+          />
+        ))}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
@@ -45,65 +55,168 @@ type ConfigRowData = {
   updatedBy: string | null;
 };
 
-function ConfigRow(props: {
+function ConfigRow({ row, onSave, isPending }: {
   row: ConfigRowData;
   onSave: (value: unknown) => void;
   isPending: boolean;
 }) {
-  const [draft, setDraft] = useState(props.row.value);
-  useEffect(() => setDraft(props.row.value), [props.row.value]);
+  const colors = useColors();
+  const [draft, setDraft] = useState(row.value);
+  const [isJsonValid, setIsJsonValid] = useState(true);
 
-  const dirty = draft !== props.row.value;
+  useEffect(() => {
+    setDraft(row.value);
+  }, [row.value]);
 
-  const handleSave = () => {
+  const dirty = draft !== row.value;
+
+  const handleSave = useCallback(() => {
     let parsed: unknown;
     try {
       parsed = JSON.parse(draft);
+      onSave(parsed);
     } catch {
-      Alert.alert('Invalid JSON', 'Wrap strings in double quotes; numbers/booleans/arrays unquoted.');
-      return;
+      setIsJsonValid(false);
+      Alert.alert('Invalid JSON', 'Format error: Ensure strings have double quotes, and booleans/numbers are unquoted.');
     }
-    props.onSave(parsed);
-  };
+  }, [draft, onSave]);
+
+  // Real-time JSON validation hint
+  useEffect(() => {
+    try {
+      JSON.parse(draft);
+      setIsJsonValid(true);
+    } catch {
+      setIsJsonValid(false);
+    }
+  }, [draft]);
 
   return (
-    <View style={{ padding: 12, marginBottom: 8, backgroundColor: COLORS.card, borderRadius: 4 }}>
-      <Text style={{ color: COLORS.accent, fontWeight: 'bold' }}>{props.row.key}</Text>
-      {props.row.description && (
-        <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 2 }}>{props.row.description}</Text>
+    <AdminCard style={styles.configCard}>
+      <View style={styles.cardHeader}>
+        <Text style={[styles.configKey, { color: colors.primary }]}>{row.key}</Text>
+        <View style={[styles.typeBadge, { backgroundColor: colors.background }]}>
+          <Text style={[styles.typeText, { color: colors.muted }]}>{row.type.toUpperCase()}</Text>
+        </View>
+      </View>
+
+      {row.description && (
+        <Text style={[styles.configDesc, { color: colors.muted }]}>{row.description}</Text>
       )}
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+
+      <View style={styles.inputRow}>
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholderTextColor={COLORS.muted}
-          style={{
-            flex: 1,
-            padding: 8,
-            color: COLORS.text,
-            borderColor: COLORS.muted,
-            borderWidth: 1,
-            borderRadius: 4,
-          }}
+          placeholderTextColor={colors.muted}
+          multiline
+          style={[
+            styles.jsonInput,
+            {
+              color: colors.foreground,
+              backgroundColor: colors.background,
+              borderColor: !isJsonValid ? colors.error : dirty ? colors.primary : colors.border,
+            }
+          ]}
         />
-        <Pressable
-          onPress={handleSave}
-          disabled={!dirty || props.isPending}
-          style={({ pressed }) => ({
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            borderRadius: 4,
-            backgroundColor: dirty ? COLORS.accent : COLORS.muted,
-            opacity: pressed ? 0.7 : 1,
-          })}
-        >
-          <Text style={{ color: '#1a1a1a', fontWeight: 'bold' }}>Save</Text>
-        </Pressable>
       </View>
-      <Text style={{ color: COLORS.muted, fontSize: 10, marginTop: 4 }}>
-        type={props.row.type} | updated {props.row.updatedAt}
-        {props.row.updatedBy ? ` by ${props.row.updatedBy}` : ''}
-      </Text>
-    </View>
+
+      <View style={styles.footerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.metaText, { color: colors.muted }]}>
+            Updated: {new Date(row.updatedAt).toLocaleString()}
+          </Text>
+          {row.updatedBy && (
+            <Text style={[styles.metaText, { color: colors.muted }]}>
+              By: {row.updatedBy}
+            </Text>
+          )}
+        </View>
+        
+        <AdminButton
+          title={isPending ? "Saving..." : "Save"}
+          onPress={handleSave}
+          disabled={!dirty || isPending}
+          type={!isJsonValid ? "danger" : "primary"}
+          style={styles.saveBtn}
+        />
+      </View>
+      
+      {!isJsonValid && (
+        <Text style={[styles.validationHint, { color: colors.error }]}>
+          ⚠️ Invalid JSON format
+        </Text>
+      )}
+    </AdminCard>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  errorText: {
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  configCard: {
+    marginBottom: 16,
+    paddingBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  configKey: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  typeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  typeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  configDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  inputRow: {
+    marginBottom: 12,
+  },
+  jsonInput: {
+    minHeight: 60,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    fontFamily: 'monospace',
+    fontSize: 13,
+    textAlignVertical: 'top',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  metaText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  saveBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    minWidth: 80,
+  },
+  validationHint: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+});
