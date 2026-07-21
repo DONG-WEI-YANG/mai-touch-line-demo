@@ -49,6 +49,9 @@ const I = (col) => ({
   check:   line(col, `<circle cx="12" cy="12" r="8.8"/><path d="M8 12.3l2.7 2.7L16.3 9"/>`),
   users:   line(col, `<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 6.2a3.2 3.2 0 0 1 0 6"/><path d="M17 14.5a5.5 5.5 0 0 1 3.5 5.5"/>`),
   build:   line(col, `<path d="M3 21h18"/><path d="M5 21V8l7-4.5L19 8v13"/><path d="M9.5 21v-4h5v4M9.5 11h.01M14.5 11h.01M9.5 14h.01M14.5 14h.01"/>`),
+  shield:  line(col, `<path d="M12 3l7.5 2.8v5.4c0 4.6-3.1 7.9-7.5 9.8-4.4-1.9-7.5-5.2-7.5-9.8V5.8z"/><path d="M8.8 12l2.3 2.3 4.1-4.4"/>`),
+  db:      line(col, `<ellipse cx="12" cy="5.5" rx="7" ry="2.6"/><path d="M5 5.5v13c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-13"/><path d="M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6"/>`),
+  help:    line(col, `<circle cx="12" cy="12" r="8.8"/><path d="M9.6 9.2a2.5 2.5 0 0 1 4.9.6c0 1.6-2.4 2-2.4 3.4"/><path d="M12 16.6h.01"/>`),
   gear:    line(col, `<circle cx="12" cy="12" r="3.1"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M18 6l-1.6 1.6M7.6 16.4 6 18"/>`),
 });
 
@@ -392,7 +395,84 @@ const PH = [
     ],
     "本階段全數為選配,可依社區營運需求逐項導入 —— 每一項都在既有閘道與網路基礎上疊加。");
 
-  // ============ Slide 10 · 導入分工與下一步 ============
+  // ============ Slide 10 · 資安與維運保障 ============
+  const sec = pres.addSlide();
+  sec.background = { data: bgPlain };
+  header(sec, "SECURITY & OPERATIONS", "資安與維運保障",
+    "資訊安全與長期維運是平台的一部分,不是附加選項",
+    [{ text: "全面資安稽核\n", options: { color: C.muted, fontSize: 11.5 } },
+     { text: "已完成・全數修復", options: { color: C.live, fontSize: 12, bold: true } }]);
+  legend(sec, 1.28);
+
+  const secCols = [
+    { ic: gold.shield, t: "資訊安全", items: [
+      { st: "LIVE", n: "權限分級控管", s: "住戶/物業/管理員三級角色 —— 後台每項操作皆經授權驗證" },
+      { st: "LIVE", n: "全面資安稽核", s: "已完成整體安全稽核,發現項目全數修復並部署上線" },
+      { st: "LIVE", n: "加密與金鑰管理", s: "全程 HTTPS/TLS 加密;金鑰以環境變數管理,具輪替流程" },
+      { st: "CORE", n: "網路分段隔離", s: "IoT/管理/訪客 VLAN 隔離(P1 佈建),設備不直通外網" },
+      { st: "LIVE", n: "紀錄可追溯", s: "訊息與操作事件留存紀錄,異常行為可稽核回溯" },
+    ]},
+    { ic: gold.gear, t: "維運保障", items: [
+      { st: "LIVE", n: "健康監控儀表板", s: "LINE 通道流量/錯誤率即時監控,異常提前掌握" },
+      { st: "LIVE", n: "不中斷更新", s: "雲端自動化部署 —— 功能迭代與修補不停機" },
+      { st: "CORE", n: "斷電・離線韌性", s: "機房 UPS 續航;實體門禁獨立運作,平台恢復後資料補同步" },
+      { st: "OPT",  n: "資料持久與自主", s: "持久磁碟儲存;P3 可升級自架 PostgreSQL,資料完全落地" },
+      { st: "LIVE", n: "維運支援", s: "平台方負責監控、版本更新與技術支援(見導入分工)" },
+    ]},
+  ];
+  const scY = 1.72, scH = 4.78, scW = 6.07;
+  secCols.forEach((col, i) => {
+    const cx = 0.5 + i * (scW + 0.19);
+    card(sec, cx, scY, scW, scH, i === 0 ? {} : { fill: C.band, tr: 12 });
+    sec.addShape(pres.shapes.OVAL, { x: cx + 0.24, y: scY + 0.16, w: 0.5, h: 0.5, fill: { color: "0f1c33" }, line: { color: C.gold, width: 0.8, transparency: 35 } });
+    sec.addImage({ data: col.ic, x: cx + 0.365, y: scY + 0.285, w: 0.25, h: 0.25 });
+    sec.addText(col.t, { x: cx + 0.88, y: scY + 0.16, w: scW - 1.1, h: 0.5, fontSize: 15, bold: true, color: C.paper, valign: "middle", margin: 0, fontFace: JH });
+    sec.addShape(pres.shapes.LINE, { x: cx + 0.24, y: scY + 0.82, w: scW - 0.48, h: 0, line: { color: C.gold, width: 0.5, dashType: "dash", transparency: 55 } });
+    const n2 = col.items.length, rowH2 = (scH - 1.0) / n2;
+    col.items.forEach((it, k) => {
+      const ry = scY + 0.92 + k * rowH2;
+      sec.addText([dot(it.st), { text: it.n, options: { color: C.paper, bold: true, fontSize: 12 } }],
+        { x: cx + 0.26, y: ry, w: scW - 0.5, h: 0.26, margin: 0, fontFace: JH });
+      sec.addText(it.s, { x: cx + 0.5, y: ry + 0.27, w: scW - 0.78, h: rowH2 - 0.3, fontSize: 9.8, color: C.capt, margin: 0, fontFace: JH, lineSpacingMultiple: 1.0, valign: "top" });
+    });
+  });
+  sec.addText("※ 資安稽核與修復為平台既有成果,非額外收費項目;VLAN 與 UPS 屬 Phase 1 基礎硬體。",
+    { x: 0.5, y: 6.7, w: 12.33, h: 0.3, fontSize: 10, italic: true, color: C.cardMute, margin: 0, fontFace: JH });
+  footer(sec, "系統方案規劃書 ── 資安與維運保障", "安全是平台的一部分,不是附加選項");
+
+  // ============ Slide 11 · 常見問題 FAQ ============
+  const fq = pres.addSlide();
+  fq.background = { data: bgPlain };
+  header(fq, "FAQ", "常見問題",
+    "建商與管委會最常提出的六個疑問,一次說清楚",
+    [{ text: "疑慮先回答\n", options: { color: C.muted, fontSize: 11.5 } },
+     { text: "決策更安心", options: { color: C.goldSoft, fontSize: 12, bold: true } }]);
+
+  const faqs = [
+    { q: "外網斷線,社區會癱瘓嗎?", a: "門禁、柵欄等實體系統具獨立運作能力,平台離線不影響基本進出;機房 UPS 斷電續航,恢復後紀錄自動補同步。" },
+    { q: "資料是誰的?", a: "資料歸屬建案/管委會。Phase 3 可自架語意服務與 PostgreSQL,資料與 AI 完全落地自主,不依賴外部供應商。" },
+    { q: "換物業公司怎麼辦?", a: "平台角色權限分級,移交即帳號交接 —— 住戶資料、帳務、工單流程完整留存於平台,營運不中斷。" },
+    { q: "會被特定硬體廠牌綁死嗎?", a: "分層解耦架構:設備經標準協定(HTTP/MQTT/Modbus)接入閘道,單一設備可獨立替換,不牽動整套系統。" },
+    { q: "住戶不會用怎麼辦?", a: "LINE 免安裝即可綁定、接收通知與客服;App 承載進階功能,雙軌並行。導入期由平台方支援住戶教育訓練。" },
+    { q: "後續維護費用怎麼算?", a: "雲端資源按階段升級、硬體分批投入,避免一次性重投資;維運與授權模式於報價單另行詳列。" },
+  ];
+  const fw = 3.98, fh = 2.32, fx0 = 0.5, fy0 = 1.78, fgx = 0.19, fgy = 0.18;
+  faqs.forEach((f, i) => {
+    const cx = fx0 + (i % 3) * (fw + fgx);
+    const cy = fy0 + Math.floor(i / 3) * (fh + fgy);
+    card(fq, cx, cy, fw, fh);
+    fq.addText([
+      { text: "Q  ", options: { color: C.gold, bold: true, fontSize: 14 } },
+      { text: f.q, options: { color: C.paper, bold: true, fontSize: 12.5 } },
+    ], { x: cx + 0.22, y: cy + 0.16, w: fw - 0.44, h: 0.6, valign: "middle", margin: 0, fontFace: JH, lineSpacingMultiple: 1.05 });
+    fq.addShape(pres.shapes.LINE, { x: cx + 0.22, y: cy + 0.84, w: fw - 0.44, h: 0, line: { color: C.gold, width: 0.5, dashType: "dash", transparency: 55 } });
+    fq.addText(f.a, { x: cx + 0.24, y: cy + 0.94, w: fw - 0.48, h: fh - 1.1, fontSize: 10.3, color: C.capt, margin: 0, fontFace: JH, lineSpacingMultiple: 1.12, valign: "top" });
+  });
+  fq.addText("※ 其他技術與商務問題,歡迎於需求盤點會議提出 —— 我們以實際系統現況回答,不做誇大承諾。",
+    { x: 0.5, y: 6.7, w: 12.33, h: 0.3, fontSize: 10, italic: true, color: C.cardMute, margin: 0, fontFace: JH });
+  footer(fq, "系統方案規劃書 ── 常見問題", "疑慮先回答 · 決策更安心");
+
+  // ============ Slide 12 · 導入分工與下一步 ============
   const nx = pres.addSlide();
   nx.background = { data: bgPlain };
   header(nx, "ROLES & NEXT STEPS", "導入分工與下一步",
@@ -442,5 +522,5 @@ const PH = [
   footer(nx, "系統方案規劃書 ── 導入分工與下一步", "P0 開發 → P1 基礎 → P2 智慧 → P3 旗艦");
 
   await pres.writeFile({ fileName: "../系統方案規劃.pptx" });
-  console.log("written ../系統方案規劃.pptx (10 slides)");
+  console.log("written ../系統方案規劃.pptx (12 slides)");
 })();
