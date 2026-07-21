@@ -97,6 +97,11 @@ const stColor = { LIVE: C.live, CORE: C.core, OPT: C.opt };
     s.addText(r, { x: 6.0, y: 7.12, w: 6.73, h: 0.3, fontSize: 10.5, color: C.cardMute, align: "right", margin: 0 });
   };
   const dot = (st) => ({ text: (st === "OPT" ? "○ " : "● "), options: { color: stColor[st], fontSize: 10 } });
+  const card = (s, x, y, w, h, opts = {}) =>
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y, w, h, rectRadius: 0.11,
+      fill: { color: opts.fill || C.cardFill, transparency: opts.tr ?? 20 },
+      line: { color: opts.line || C.gold, width: opts.lw || 0.75, transparency: opts.ltr ?? 58 },
+      shadow: { type: "outer", color: "000000", blur: 8, offset: 3, angle: 90, opacity: 0.3 } });
 
   // ============ Slide 1 · 封面 ============
   const cov = pres.addSlide();
@@ -107,7 +112,7 @@ const stColor = { LIVE: C.live, CORE: C.core, OPT: C.opt };
   cov.addText("推薦硬體配置清單",
     { x: 0, y: 3.42, w: 13.333, h: 0.9, fontSize: 44, bold: true, color: C.paper, align: "center", margin: 0, fontFace: JH });
   cov.addShape(pres.shapes.LINE, { x: 6.16, y: 4.52, w: 1.0, h: 0, line: { color: C.gold, width: 1.2 } });
-  cov.addText("高級住宅・智慧管理平台　｜　從雲端到終端，一次配齊",
+  cov.addText("高級住宅・智慧管理平台　｜　從雲端到終端，分階段配齊",
     { x: 0, y: 4.7, w: 13.333, h: 0.4, fontSize: 15, color: C.capt, align: "center", margin: 0, fontFace: JH });
   cov.addText([
     { text: "邊緣閘道 × 網路基礎 × 公設門禁 × 住戶智慧 × 管理終端 × 雲端服務", options: { color: C.goldSoft, bold: true } },
@@ -292,64 +297,82 @@ const stColor = { LIVE: C.live, CORE: C.core, OPT: C.opt };
   });
   footer(g, "推薦硬體配置清單 ── 分區明細", "狀態依實際程式整合現況標註");
 
-  // ============ Slide 4 · 三級部署方案 ============
+  // ============ Slide 5 · 分階段採購建議（對齊系統方案規劃書 P0–P3）============
   const t = pres.addSlide();
   t.background = { data: bgPlain };
-  header(t, "DEPLOYMENT TIERS", "三級部署方案：依規模逐級擴充",
-    "從接待中心示範，到單棟上線，再到多棟大型建案",
+  header(t, "PHASED PROCUREMENT PLAN", "分階段採購建議：什麼階段，買什麼",
+    "與《系統方案規劃書》P0–P3 對齊 —— 硬體隨建案工程分批就位,避免一次性重投資",
     [{ text: "同一平台\n", options: { color: C.muted, fontSize: 11.5 } },
-     { text: "三種硬體規模", options: { color: C.goldSoft, fontSize: 12, bold: true } }]);
+     { text: "四階段分批採購", options: { color: C.goldSoft, fontSize: 12, bold: true } }]);
+  legend(t, 1.28);
 
-  const tiers = [
-    { ic: blu.mic, tag: "PoC · 示範驗證", name: "體驗版", col: C.opt, use: "接待中心 · 樣品屋",
-      rows: [
-        "現有雲端:Render Free + Vercel",
-        "櫃檯平板 ×1 + 住戶手機 App",
-        "示範閘道 ×1(或 DRY_RUN 乾跑)",
-        "少量燈光 / 空調示範設備",
-        "Google Nest 音箱 ×1(裝置控制)",
-      ]},
-    { ic: gold.hub, tag: "Standard · 單棟上線", name: "標準版", col: C.core, use: "單棟社區正式營運",
-      rows: [
-        "邊緣閘道主機 + UPS",
-        "網路:路由/防火牆 · PoE · AP",
-        "大廳掃碼門禁 + 電梯介接",
-        "住戶 IoT(光/空調/窗簾)",
-        "雲端升級:Render Starter(持久碟)",
-      ]},
-    { ic: gold.route, tag: "Flagship · 多棟旗艦", name: "旗艦版", col: C.gold, use: "大型建案 · 多棟社區",
-      rows: [
-        "含『標準版』全部項目",
-        "車牌辨識柵欄 + 智能包裹櫃",
-        "全區 Nest Wifi Pro(6E)+ 協定橋接",
-        "自架 NLP(FastAPI)+ PostgreSQL",
-        "冗餘:雙 UPS / 雙上聯備援",
-      ]},
+  // Phase 定義(與 proposal.build.cjs 一致)
+  const PH = [
+    { id: "P0", name: "平台開發・客製", tag: "預售期・即刻啟動", col: C.live },
+    { id: "P1", name: "基礎上線",       tag: "工程期・交屋前",   col: C.core },
+    { id: "P2", name: "智慧擴充",       tag: "交屋・入住期",     col: C.opt },
+    { id: "P3", name: "旗艦完善",       tag: "營運成熟期",       col: C.goldSoft },
   ];
-  const tY = 1.86, tH = 4.7, tW = 3.9, tGap = 0.27, tx0 = 0.62;
-  tiers.forEach((tr, i) => {
+  const buys = [
+    { note: "幾乎零硬體投入", items: [
+      { st: "CORE", n: "櫃檯平板 ×1", s: "樣品屋語音預約→派單實演" },
+      { st: "CORE", n: "Nest 音箱 ×1", s: "語音裝置控制展示" },
+      { st: "OPT",  n: "示範閘道＋情境設備", s: "少量燈光/空調(或乾跑展示)" },
+      { st: "LIVE", n: "雲端(免費層)", s: "Render + Vercel + LINE OA" },
+    ]},
+    { note: "機房/弱電需工程期預留", items: [
+      { st: "CORE", n: "路由/防火牆(VLAN)", s: "IoT/管理/訪客網段隔離" },
+      { st: "CORE", n: "PoE 交換器 8–24 埠", s: "供電掃碼機/攝影機/AP" },
+      { st: "CORE", n: "邊緣閘道主機 + UPS", s: "工控機常駐 + 斷電續航" },
+      { st: "CORE", n: "櫃檯平板・管理 Kiosk", s: "物業營運雙終端" },
+      { st: "LIVE", n: "雲端升級 Starter", s: "持久磁碟,正式營運等級" },
+    ]},
+    { note: "住戶體驗集中在此階段", items: [
+      { st: "OPT",  n: "大廳 QR 掃碼門禁", s: "通行證 QR 已實作,接上即用" },
+      { st: "LIVE", n: "住戶 IoT 設備", s: "光/空調/窗簾,App 控制" },
+      { st: "LIVE", n: "Nest 音箱/顯示器", s: "住戶語音裝置控制" },
+      { st: "CORE", n: "Nest Wifi Pro(6E)", s: "公區與示範戶無線覆蓋" },
+      { st: "OPT",  n: "協定橋接模組", s: "MQTT/Modbus 對接設備廠牌" },
+    ]},
+    { note: "全數選配,逐項導入", items: [
+      { st: "OPT", n: "車牌辨識柵欄(LPR)", s: "住戶車自動放行" },
+      { st: "OPT", n: "智能包裹櫃", s: "自助取件免排隊" },
+      { st: "OPT", n: "電梯介接控制器", s: "乾接點/BACnet 呼梯" },
+      { st: "OPT", n: "Nest Hub Max 看板", s: "公設迎賓/管理大屏" },
+      { st: "OPT", n: "自架 NLP + PG・雙備援", s: "資料自主 + 旗艦可用性" },
+    ]},
+  ];
+  const tY = 1.72, tH = 4.62, tW = 3.0, tGap = 0.12, tx0 = 0.52;
+  buys.forEach((b, i) => {
+    const p = PH[i];
     const cx = tx0 + i * (tW + tGap);
-    const flagship = i === 2;
-    t.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: cx, y: tY, w: tW, h: tH, rectRadius: 0.12,
-      fill: { color: flagship ? "1a2942" : C.cardFill, transparency: flagship ? 6 : 18 },
-      line: { color: C.gold, width: flagship ? 1.4 : 0.75, transparency: flagship ? 20 : 55 },
-      shadow: { type: "outer", color: "000000", blur: 9, offset: 3, angle: 90, opacity: 0.32 } });
-    // 圖示圈
-    t.addShape(pres.shapes.OVAL, { x: cx + tW / 2 - 0.44, y: tY + 0.34, w: 0.88, h: 0.88, fill: { color: "0f1c33" }, line: { color: tr.col, width: 1, transparency: 25 } });
-    t.addImage({ data: tr.ic, x: cx + tW / 2 - 0.24, y: tY + 0.54, w: 0.48, h: 0.48 });
-    t.addText(tr.name, { x: cx, y: tY + 1.3, w: tW, h: 0.46, fontSize: 24, bold: true, color: C.paper, align: "center", margin: 0, fontFace: JH });
-    t.addText(tr.tag, { x: cx, y: tY + 1.8, w: tW, h: 0.28, fontSize: 11, bold: true, color: tr.col, align: "center", charSpacing: 1, margin: 0, fontFace: JH });
-    t.addShape(pres.shapes.LINE, { x: cx + 0.5, y: tY + 2.16, w: tW - 1.0, h: 0, line: { color: C.gold, width: 0.5, dashType: "dash", transparency: 50 } });
-    t.addText(tr.rows.map((r) => ({ text: r, options: { color: C.capt, fontSize: 11, bullet: { code: "2022", indent: 14 }, paraSpaceAfter: 8 } })),
-      { x: cx + 0.36, y: tY + 2.3, w: tW - 0.62, h: 1.7, valign: "top", margin: 0, fontFace: JH, lineSpacingMultiple: 1.05 });
-    // 適用帶
-    t.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: cx + 0.28, y: tY + tH - 0.62, w: tW - 0.56, h: 0.42, rectRadius: 0.08, fill: { color: "0e1a30", transparency: 10 }, line: { color: tr.col, width: 0.75, transparency: 45 } });
-    t.addText([{ text: "適用　", options: { color: C.cardMute, fontSize: 9.5 } }, { text: tr.use, options: { color: C.goldSoft, fontSize: 10.5, bold: true } }],
-      { x: cx + 0.28, y: tY + tH - 0.62, w: tW - 0.56, h: 0.42, align: "center", valign: "middle", margin: 0, fontFace: JH });
+    card(t, cx, tY, tW, tH, i === 0 ? { fill: "13241d", tr: 10, line: C.live, ltr: 40, lw: 1 } : {});
+    // 階段頭:圓形節點 + 名稱 + 時點
+    t.addShape(pres.shapes.OVAL, { x: cx + 0.22, y: tY + 0.16, w: 0.44, h: 0.44, fill: { color: p.col }, line: { color: "0b1220", width: 1.2 } });
+    t.addText(p.id, { x: cx + 0.22, y: tY + 0.16, w: 0.44, h: 0.44, fontSize: 11.5, bold: true, color: "0b1220", align: "center", valign: "middle", margin: 0 });
+    t.addText([
+      { text: p.name + "\n", options: { fontSize: 12.5, bold: true, color: C.paper } },
+      { text: p.tag, options: { fontSize: 9, bold: true, color: p.col, charSpacing: 1 } },
+    ], { x: cx + 0.76, y: tY + 0.12, w: tW - 0.9, h: 0.54, valign: "middle", margin: 0, fontFace: JH, lineSpacingMultiple: 1.0 });
+    t.addShape(pres.shapes.LINE, { x: cx + 0.2, y: tY + 0.76, w: tW - 0.4, h: 0, line: { color: p.col, width: 0.6, dashType: "dash", transparency: 40 } });
+    // 採購項目列
+    const n = b.items.length, rowH = (tH - 1.42) / n;
+    b.items.forEach((it, k) => {
+      const ry = tY + 0.88 + k * rowH;
+      t.addText([dot(it.st), { text: it.n, options: { color: C.paper, bold: true, fontSize: 10.3 } }],
+        { x: cx + 0.2, y: ry, w: tW - 0.36, h: 0.24, margin: 0, fontFace: JH });
+      t.addText(it.s, { x: cx + 0.42, y: ry + 0.24, w: tW - 0.58, h: rowH - 0.26, fontSize: 8.2, color: C.capt, margin: 0, fontFace: JH, lineSpacingMultiple: 0.98, valign: "top" });
+    });
+    // 底部採購註記
+    t.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: cx + 0.16, y: tY + tH - 0.5, w: tW - 0.32, h: 0.36, rectRadius: 0.07, fill: { color: "0e1a30", transparency: 10 }, line: { color: p.col, width: 0.6, transparency: 45 } });
+    t.addText(b.note, { x: cx + 0.16, y: tY + tH - 0.5, w: tW - 0.32, h: 0.36, fontSize: 9, bold: true, color: C.goldSoft, align: "center", valign: "middle", margin: 0, fontFace: JH });
+    // 欄間箭頭
+    if (i < buys.length - 1)
+      t.addText("→", { x: cx + tW - 0.03, y: tY + 0.16, w: tGap + 0.06, h: 0.44, fontSize: 13, bold: true, color: C.gold, align: "center", valign: "middle", margin: 0 });
   });
-  t.addText("※ 各級可疊加：先以體驗版驗證流程與住戶接受度，再逐棟升級標準版、擴至旗艦版；雲端與 App 用戶端全程沿用同一套系統。",
-    { x: 0.62, y: 6.74, w: 12.1, h: 0.3, fontSize: 10, italic: true, color: C.cardMute, margin: 0, fontFace: JH });
-  footer(t, "推薦硬體配置清單 ── 三級部署方案", "體驗 → 標準 → 旗艦，逐級擴充");
+  t.addText("※ 每階段獨立驗收,採購節奏可依銷售進度調節;P1 的機房位置與弱電管線需於建案工程期預留(與土建併行)。",
+    { x: 0.52, y: 6.72, w: 12.3, h: 0.3, fontSize: 10, italic: true, color: C.cardMute, margin: 0, fontFace: JH });
+  footer(t, "推薦硬體配置清單 ── 分階段採購建議", "P0 開發 → P1 基礎 → P2 智慧 → P3 旗艦");
 
   await pres.writeFile({ fileName: "../推薦硬體配置清單.pptx" });
   console.log("written ../推薦硬體配置清單.pptx (5 slides)");

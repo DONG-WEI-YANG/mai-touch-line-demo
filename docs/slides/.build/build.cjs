@@ -169,20 +169,29 @@ const bgPlainSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1333" height=
 
   // ---------- 三場景卡片 ----------
   const cardY = 4.46, cardH = 2.56, cardW = 2.40, gap = 0.16, x0 = 0.34;
+  // 階段徽章(對齊《系統方案規劃書》P0–P3):此場景最早於哪個階段可體驗
+  const PHC = { P0: C.property, P1: C.gold, P2: C.resident, P3: C.goldSoft };
+  s.addText([
+    { text: "場景可體驗階段　", options: { color: C.cardMute, bold: true } },
+    { text: "P0 ", options: { color: PHC.P0, bold: true } }, { text: "預售樣品屋　", options: { color: C.cardMute } },
+    { text: "P1 ", options: { color: PHC.P1, bold: true } }, { text: "交屋營運　", options: { color: C.cardMute } },
+    { text: "P2 ", options: { color: PHC.P2, bold: true } }, { text: "智慧入住　", options: { color: C.cardMute } },
+    { text: "P3 ", options: { color: PHC.P3, bold: true } }, { text: "旗艦完善", options: { color: C.cardMute } },
+  ], { x: 6.0, y: 4.02, w: 6.99, h: 0.26, fontSize: 10, align: "right", margin: 0, fontFace: "Microsoft JhengHei" });
   const scenes = [
-    { no: "1", t1: "口說設備", t2: "　說一句話就完成",
+    { no: "1", ph: "P0", t1: "口說設備", t2: "　說一句話就完成",
       steps: [[ic.mic, "住戶口說\n「冷氣壞了」"], [ic.target, "大腦聽懂\n建立報修工單"], [ic.check, "物業到府\n維修並回報"]],
       ex: [{ text: "情境：對", b: 0 }, { text: "智能音箱", b: 1 }, { text: "說一句話即派工，LINE 補單、免裝 App。", b: 0 }] },
-    { no: "2", t1: "電梯禮賓", t2: "　一句話到門口",
+    { no: "2", ph: "P3", t1: "電梯禮賓", t2: "　一句話到門口",
       steps: [[ic.mic, "住戶說\n「我要下樓」"], [ic.elevator, "大腦呼叫電梯\n升到你樓層"], [ic.door, "到門口\n正好開門"]],
       ex: [{ text: "情境：出門前一句話，電梯", b: 0 }, { text: "預先升到你樓層", b: 1 }, { text: "，到門口正好開門。", b: 0 }] },
-    { no: "3", t1: "機器人派送", t2: "　包裹自己會走",
+    { no: "3", ph: "P3", t1: "機器人派送", t2: "　包裹自己會走",
       steps: [[ic.mic, "住戶說\n「寄放包裹」"], [ic.robot, "大腦派出\n配送機器人"], [ic.box, "到府取件\n送達管理室"]],
       ex: [{ text: "情境：一句話叫出", b: 0 }, { text: "配送機器人", b: 1 }, { text: "，到府取件、自動送達管理室。", b: 0 }] },
-    { no: "4", t1: "智能生活", t2: "　動口不動手",
+    { no: "4", ph: "P2", t1: "智能生活", t2: "　動口不動手",
       steps: [[ic.gridplus, "預約公設\n包裹 · 訪客"], [ic.clock, "大腦排程\n連動 IoT 設備"], [ic.activity, "準時就緒\n主動通知"]],
       ex: [{ text: "情境：預約公設，大腦", b: 0 }, { text: "自動排程", b: 1 }, { text: "連動 IoT，準時就緒才通知你。", b: 0 }] },
-    { no: "5", t1: "任務分派", t2: "　大腦自動調度",
+    { no: "5", ph: "P1", t1: "任務分派", t2: "　大腦自動調度",
       steps: [[ic.lines, "多筆需求\n同時湧入"], [ic.network, "判斷優先級\n就近指派"], [ic.shield, "進度可追蹤\n結案存證"]],
       ex: [{ text: "情境：多筆需求湧入，", b: 0 }, { text: "就近指派", b: 1 }, { text: "合適人員，進度全程可追蹤。", b: 0 }] },
   ];
@@ -198,6 +207,11 @@ const bgPlainSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1333" height=
     s.addShape(pres.shapes.OVAL, { x: cx + 0.18, y: cardY - 0.16, w: 0.34, h: 0.34, fill: { color: C.gold },
       shadow: { type: "outer", color: "000000", blur: 5, offset: 2, angle: 90, opacity: 0.4 } });
     s.addText(sc.no, { x: cx + 0.18, y: cardY - 0.16, w: 0.34, h: 0.34, fontSize: 13, bold: true, color: "1a1304", align: "center", valign: "middle", margin: 0 });
+    // 階段徽章(右上)
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: cx + cardW - 0.72, y: cardY - 0.14, w: 0.56, h: 0.3, rectRadius: 0.08,
+      fill: { color: PHC[sc.ph] }, line: { color: "0b1220", width: 0.9 },
+      shadow: { type: "outer", color: "000000", blur: 5, offset: 2, angle: 90, opacity: 0.4 } });
+    s.addText(sc.ph, { x: cx + cardW - 0.72, y: cardY - 0.14, w: 0.56, h: 0.3, fontSize: 11, bold: true, color: "0b1220", align: "center", valign: "middle", margin: 0 });
     // 標題
     s.addText([
       { text: sc.t1, options: { bold: true, color: C.paper, fontSize: 12.5 } },
