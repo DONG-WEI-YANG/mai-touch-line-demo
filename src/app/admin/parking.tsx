@@ -5,6 +5,7 @@ import { useColors } from '@/hooks/use-colors';
 import { ScreenContainer } from '@/components/screen-container';
 import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
 import { parseError } from '@/lib/error-utils';
+import { invalidateDomainCaches } from '@/lib/mutation-cache';
 
 type SpotType = 'resident' | 'guest' | 'ev';
 type Purpose = 'resident_lease' | 'visitor' | 'ev_charge' | 'staff';
@@ -21,8 +22,8 @@ export default function AdminParkingPage() {
   });
 
   const addSpot = trpc.parking.addSpot.useMutation({
-    onSuccess: () => { 
-      utils.parking.spots.invalidate(); 
+    onSuccess: async () => {
+      await invalidateDomainCaches('parking', utils);
       setShowAdd(false); 
       setNewSpot({ label: '', type: 'resident', zone: '' }); 
     },
@@ -30,13 +31,13 @@ export default function AdminParkingPage() {
   });
 
   const removeSpot = trpc.parking.removeSpot.useMutation({
-    onSuccess: () => utils.parking.spots.invalidate(),
+    onSuccess: () => invalidateDomainCaches('parking', utils),
     onError: (err) => Alert.alert('Remove failed', parseError(err)),
   });
 
   const assign = trpc.parking.assign.useMutation({
-    onSuccess: () => { 
-      utils.parking.spots.invalidate(); 
+    onSuccess: async () => {
+      await invalidateDomainCaches('parking', utils);
       setAssignSpotId(null); 
       setAssignDraft({ plate: '', driverName: '', purpose: 'visitor' }); 
     },
@@ -44,7 +45,7 @@ export default function AdminParkingPage() {
   });
 
   const release = trpc.parking.release.useMutation({
-    onSuccess: () => utils.parking.spots.invalidate(),
+    onSuccess: () => invalidateDomainCaches('parking', utils),
     onError: (err) => Alert.alert('Release failed', parseError(err)),
   });
 

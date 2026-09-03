@@ -24,20 +24,19 @@ m'AI Touch 是一個創新的豪華建築管理應用程序，通過 AI 技術�
 - **動態生活策劃** - 個性化設施預約和活動安排
 
 ### 🤖 AI 功能
-- **100+ NLP 模型** - 意圖分類、情感分析、實體提取等
-- **MLOps 監控** - 性能追蹤、健康檢查、自動告警
-- **多語言語音識別** - 中文、英文等
-- **智能意圖識別** - 12+ 意圖類別
-- **情感分析** - 情緒和緊急程度檢測
-- **上下文感知對話** - 智能響應生成
-- **自動工作訂單** - 基於意圖自動創建
+- **真實供應商對話** - 住戶訊息由後端呼叫設定的 OpenAI 相容 API，失敗時回傳可重試錯誤，不產生假回覆
+- **可選 NLP 服務** - 提供意圖、情感與實體分析；只以實際載入模型和健康檢查結果宣告可用
+- **語音工作流** - 語音轉錄與指令提交皆透過後端服務，未設定供應商時明確顯示不可用
+- **可追蹤同步** - 對話與業務操作具有傳送中、已排隊、已確認及失敗狀態
+- **系統完整性診斷** - 管理員可檢查資料庫、AI、NLP 與離線同步的真實狀態
 
 ## 🚀 快速開始
 
 ### 環境要求
-- Node.js 18+
-- MySQL 8.0+
-- Expo CLI
+- Node.js 24 LTS
+- npm 11+
+- SQLite（本機預設）；MySQL 8 或 PostgreSQL 為選用後端
+- Python 3.13/3.14（僅在啟用 NLP 服務時需要）
 
 ### 安裝
 
@@ -83,6 +82,22 @@ npm run local:smoke
 - 可用 `LOCAL_API_PORT` / `LOCAL_WEB_PORT` 覆蓋預設埠
 - 若要查看設定說明，可執行 `npm run local:help`
 
+### 完整性驗證
+
+```bash
+npm test
+npm run test:coverage
+npm run type-check
+npm run lint
+npm run web:build
+npm run smoke:system
+python -m pytest -q nlp-service --disable-warnings
+```
+
+2026-09-03 本機驗證結果：Vitest 73 個測試檔、435 項測試全數通過；Python NLP 9 項測試通過；執行路徑覆蓋率為 statements 47.93%、branches 42.16%、functions 46.46%、lines 48.90%，並已設定防倒退門檻。隔離 smoke 會建立暫存 SQLite，驗證權限、診斷、預約寫入／讀取／取消、AI 成功與失敗契約及 Web 輸出。
+
+外部能力不會被模擬成成功：正式 AI 需設定 `OPENAI_API_KEY`（或搭配 `OPENAI_BASE_URL` 的相容供應商）；獨立 NLP 需設定服務 URL 並啟動 Python 服務；錢包加值需另行配置付款供應商，在此之前 UI 會維持停用並說明原因。Vercel 與 GitHub 操作可分別使用已安裝的 `vercel`、`gh` CLI。
+
 ## 📱 技術棧
 
 ### 前端
@@ -100,9 +115,9 @@ npm run local:smoke
 
 ### NLP 服務
 - Python + FastAPI
-- 100+ 預訓練模型
-- MLOps 監控系統
-- 模型池化（3個實例）
+- 任務感知模型池與實際載入狀態
+- 意圖、情感與實體分析
+- 健康檢查及執行指標；候選模型目錄不等同已下載模型
 
 ## 📚 文檔
 

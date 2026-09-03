@@ -195,7 +195,7 @@ class AuditCleanupScheduler {
   private lastRunAt: string | null = null;
   private lastError: string | null = null;
   private lastResult: BatchControlAuditCleanupResult | null = null;
-  private timer: NodeJS.Timeout | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
   private started = false;
   private reportMaxSize = parseMaxReports(process.env.BATCH_AUDIT_CLEANUP_REPORT_MAX, 200);
   private presetHistoryMaxSize = parseMaxReports(

@@ -13,6 +13,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useApp } from "@/lib/app-context";
+import { invalidateDomainCaches } from "@/lib/mutation-cache";
 import { trpc } from "@/lib/trpc";
 
 type IssueType = "noise" | "odor" | "parking" | "common_area" | "other";
@@ -29,13 +30,16 @@ export default function SocialMediationScreen() {
   const colors = useColors();
   const router = useRouter();
   const { state } = useApp();
+  const utils = trpc.useUtils();
   const isZh = state.language === "zh";
 
   const [issueType, setIssueType] = useState<IssueType>("noise");
   const [details, setDetails] = useState("");
   const [submitted, setSubmitted] = useState<{ id: number } | null>(null);
 
-  const createMutation = trpc.workOrders.create.useMutation();
+  const createMutation = trpc.workOrders.create.useMutation({
+    onSuccess: () => invalidateDomainCaches("workOrder", utils),
+  });
 
   const handleSubmit = useCallback(async () => {
     if (!details.trim()) return;

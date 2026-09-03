@@ -1,12 +1,15 @@
 import React, { createContext, useContext, useReducer, useCallback, type ReactNode } from "react";
 import type { ChatMessage, WorkOrder, Booking } from "./types";
-import { SAMPLE_WORK_ORDERS, DEFAULT_PROFILE, getAIResponse, generateId } from "./store";
-import { SAMPLE_BOOKINGS } from "./amenities";
+import { DEFAULT_PROFILE, generateId } from "./store";
 import type { ResidentProfile } from "./types";
-import { analyzeMessage, type NLPResult, type RoutingSuggestion } from "./nlp";
+import type { RoutingSuggestion } from "./voice-router";
 import { toClientBookings, toClientWorkOrders } from "./api-types";
-
 import { translations, type Language, type TranslationKey } from "./i18n";
+import { deliverChatMessage } from "./chat-client";
+import { normalizeChatHistory } from "./chat-history";
+import { updateMessageDelivery, updateQueuedOperationDelivery, type ChatDeliveryUpdate } from "./chat-messages";
+import { offlineService, type OfflineOperation } from "./offline";
+import { trpc, trpcProxy } from "./trpc";
 
 interface NLPMetadata {
   intent: string;
@@ -29,6 +32,8 @@ interface AppState {
 
 type AppAction =
   | { type: "ADD_MESSAGE"; payload: ChatMessage }
+  | { type: "UPDATE_MESSAGE_DELIVERY"; payload: { id: string; update: ChatDeliveryUpdate } }
+  | { type: "UPDATE_QUEUED_DELIVERY"; payload: { operationId: string; update: ChatDeliveryUpdate } }
   | { type: "SET_TYPING"; payload: boolean }
   | { type: "ADD_WORK_ORDER"; payload: WorkOrder }
   | { type: "UPDATE_WORK_ORDER"; payload: { id: string; status: WorkOrder["status"] } }
@@ -43,8 +48,8 @@ type AppAction =
 
 const initialState: AppState = {
   messages: [], // Initialized in Provider based on lang
-  workOrders: SAMPLE_WORK_ORDERS,
-  bookings: SAMPLE_BOOKINGS,
+  workOrders: [],
+  bookings: [],
   profile: DEFAULT_PROFILE,
   privacyMode: false,
   isTyping: false,
@@ -59,6 +64,20 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, language: action.payload };
     case "ADD_MESSAGE":
       return { ...state, messages: [...state.messages, action.payload] };
+    case "UPDATE_MESSAGE_DELIVERY":
+      return {
+        ...state,
+        messages: updateMessageDelivery(state.messages, action.payload.id, action.payload.update),
+      };
+    case "UPDATE_QUEUED_DELIVERY":
+      return {
+        ...state,
+        messages: updateQueuedOperationDelivery(
+          state.messages,
+          action.payload.operationId,
+          action.payload.update,
+        ),
+      };
     case "SET_TYPING":
       return { ...state, isTyping: action.payload };
     case "ADD_WORK_ORDER":
@@ -99,6 +118,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 interface AppContextValue {
   state: AppState;
   sendMessage: (content: string) => void;
+  retryMessage: (id: string) => void;
   togglePrivacy: () => void;
   updateProfile: (profile: Partial<ResidentProfile>) => void;
   updateWorkOrder: (id: string, status: WorkOrder["status"]) => void;
@@ -110,74 +130,6 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
-
-/**
- * Generate an NLP-enhanced AI response based on analysis results
- */
-function generateNLPResponse(content: string, nlpResult: NLPResult): string {
-  const topIntent = nlpResult.intents[0];
-  const intent = topIntent?.category || "unknown";
-  const emotion = nlpResult.sentiment.emotion;
-  const isZh = nlpResult.language === "zh";
-
-  // 1. Emotion-aware Prefix
-  let prefix = "";
-  if (emotion === "frustration" || emotion === "urgency") {
-    prefix = isZh 
-      ? "很抱歉讓您感到困擾，我會立即優先處理此事。\n\n"
-      : "I sincerely apologize for the inconvenience. I am prioritizing this immediately.\n\n";
-  } else if (emotion === "fatigue") {
-    prefix = isZh
-      ? "辛苦了，歡迎回家。這件事交給我來處理就好。\n\n"
-      : "You've had a long day. Welcome home. Let me take care of this for you.\n\n";
-  }
-
-  // 2. Intent-specific Responses (Aligned with NLP Service)
-  let response = "";
-  switch (intent) {
-    case "amenity_booking":
-      response = isZh
-        ? "沒問題，我來為您安排預約。請問您偏好的時段？您也可以點擊下方卡片直接查看可用空位。"
-        : "Certainly. I'll arrange that booking for you. Which time slot do you prefer? You can also tap the card below to see available slots.";
-      break;
-    case "maintenance_request":
-      response = isZh
-        ? "已收到您的報修請求。我已經為您建立了工單並通知維修團隊，預計在 15 分鐘內與您聯繫。"
-        : "I've logged your maintenance request. A work order has been created and our team will be notified. Expect a follow-up within 15 minutes.";
-      break;
-    case "space_control":
-      response = isZh
-        ? "正在為您調整空間設定。溫度與燈光將在幾分鐘內達到您的理想狀態。"
-        : "Adjusting your space settings now. The climate and lighting will reach your preferred levels shortly.";
-      break;
-    case "guest_management":
-      response = isZh
-        ? "好的，我會為您的訪客準備無接觸通行證。請提供訪客姓名，我會將 QR Code 發送給您。"
-        : "Understood. I'll prepare a touchless entry pass for your guest. Please provide their name and I'll send you the QR code.";
-      break;
-    case "privacy_request":
-      response = isZh
-        ? "隱私模式已啟動。電梯已鎖定，且大廳工作人員已收到「請勿打擾」指令。"
-        : "Privacy mode activated. Elevators are secured and staff have been instructed not to disturb.";
-      break;
-    case "emergency":
-      response = isZh
-        ? "⚠️ 緊急情況已通報！保全與緊急服務團隊正在前往您的位置。請保持冷靜，我會持續為您追蹤。"
-        : "⚠️ Emergency alert triggered! Security and emergency services are on their way. Please remain calm, I am tracking the response.";
-      break;
-    case "greeting":
-      response = isZh
-        ? "您好，Alex。今天有什麼我能為您效勞的嗎？"
-        : `Hello, ${DEFAULT_PROFILE.name}. How may I assist you today?`;
-      break;
-    default:
-      response = getAIResponse(content);
-  }
-
-  return prefix + response;
-}
-
-import { trpc } from "./trpc";
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
@@ -194,6 +146,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // resident dashboard is the only consumer of remoteWorkOrders/remoteBookings,
   // so admins/logistics don't need them at all.
   const isResident = (userProfile as { role?: string } | undefined)?.role === 'resident';
+  const authenticatedUserId = (userProfile as { id?: number } | undefined)?.id;
 
   const { data: remoteWorkOrders } = trpc.workOrders.myOrders.useQuery(undefined, {
     enabled: !!userProfile && isResident,
@@ -204,6 +157,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     enabled: !!userProfile && isResident,
     refetchOnWindowFocus: false,
   });
+
+  // Include the authenticated user id in the input solely as a cache key. The
+  // server still derives authorization from the session and ignores viewerKey.
+  const { data: remoteChatHistory, refetch: refetchChatHistory } = trpc.chat.history.useQuery(
+    { limit: 50, viewerKey: String(authenticatedUserId ?? "anonymous") },
+    {
+      enabled: !!authenticatedUserId && isResident,
+      refetchOnWindowFocus: false,
+    },
+  );
 
   // Load user profile
   React.useEffect(() => {
@@ -236,10 +199,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [remoteBookings]);
 
+  // Prevent a cached conversation from the previous token being visible while
+  // the next resident-specific query loads.
+  React.useEffect(() => {
+    dispatch({ type: "LOAD_STATE", payload: { messages: [] } });
+  }, [authenticatedUserId]);
+
+  React.useEffect(() => {
+    if (remoteChatHistory === undefined) return;
+    dispatch({
+      type: "LOAD_STATE",
+      payload: { messages: normalizeChatHistory(remoteChatHistory) },
+    });
+  }, [remoteChatHistory]);
+
+  React.useEffect(() => {
+    const onCompleted = (operation: OfflineOperation) => {
+      if (operation.type !== "send_message") return;
+      dispatch({
+        type: "UPDATE_QUEUED_DELIVERY",
+        payload: { operationId: operation.id, update: { delivery: "confirmed" } },
+      });
+      void refetchChatHistory();
+    };
+    const onFailed = (operation: OfflineOperation) => {
+      if (operation.type !== "send_message") return;
+      dispatch({
+        type: "UPDATE_QUEUED_DELIVERY",
+        payload: {
+          operationId: operation.id,
+          update: {
+            delivery: "failed",
+            deliveryError: state.language === "zh" ? "同步重試已用盡" : "Sync retries exhausted",
+          },
+        },
+      });
+    };
+    offlineService.on("operation:completed", onCompleted);
+    offlineService.on("operation:failed", onFailed);
+    return () => {
+      offlineService.off("operation:completed", onCompleted);
+      offlineService.off("operation:failed", onFailed);
+    };
+  }, [refetchChatHistory, state.language]);
+
   // Translation helper
   const t = useCallback((key: TranslationKey) => {
     return translations[state.language][key] || key;
-  }, [state.language]);
+  }, [state.language, state.messages.length]);
 
   // Set language and update welcome message
   const setLanguage = useCallback((lang: Language) => {
@@ -247,8 +254,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     // Add a localized system message to indicate language change
     const welcomeMsg = lang === "zh" 
-      ? `您好，${DEFAULT_PROFILE.name}。我是您的數位大腦，現在以中文模式為您服務。`
-      : `Hello, ${DEFAULT_PROFILE.name}. I am your Digital Brain, now serving you in English mode.`;
+      ? `您好，${state.profile.name}。我是您的數位大腦，現在以中文模式為您服務。`
+      : `Hello, ${state.profile.name}. I am your Digital Brain, now serving you in English mode.`;
       
     dispatch({
       type: "ADD_MESSAGE",
@@ -259,14 +266,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timestamp: Date.now(),
       }
     });
-  }, []);
+  }, [state.profile.name]);
 
   // Initialize welcome message if empty
   React.useEffect(() => {
-    if (state.messages.length === 0) {
+    if (userProfile && state.messages.length === 0) {
       const initialWelcome = state.language === "zh"
-        ? `晚安，${DEFAULT_PROFILE.name}。歡迎回家。\n\n我是您的數位大腦 — 已準備好管理您的空間、協調各項服務並確保您的舒適。今晚有什麼我可以幫您的？`
-        : `Good evening, ${DEFAULT_PROFILE.name}. Welcome home.\n\nI'm your Digital Brain — ready to manage your space, coordinate services, and ensure your comfort. How may I assist you tonight?`;
+        ? `晚安，${state.profile.name}。歡迎回家。\n\n我是您的數位大腦。今晚有什麼我可以幫您的？`
+        : `Good evening, ${state.profile.name}. Welcome home.\n\nI'm your Digital Brain. How may I assist you tonight?`;
       
       dispatch({
         type: "ADD_MESSAGE",
@@ -278,92 +285,91 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       });
     }
-  }, [state.language]);
+  }, [state.language, state.messages.length, state.profile.name, userProfile]);
 
-  const createWorkOrderMutation = trpc.workOrders.create.useMutation();
-
-  const sendMessage = useCallback((content: string) => {
-    const userMsg: ChatMessage = {
-      id: generateId(),
-      role: "user",
-      content,
-      timestamp: Date.now(),
-    };
-    dispatch({ type: "ADD_MESSAGE", payload: userMsg });
-    dispatch({ type: "SET_TYPING", payload: true });
-
-    // Run NLP analysis asynchronously
-    (async () => {
+  const deliverMessage = useCallback((id: string, message: string) => {
+    void (async () => {
+      dispatch({
+        type: "UPDATE_MESSAGE_DELIVERY",
+        payload: { id, update: { delivery: "sending" } },
+      });
+      dispatch({ type: "SET_TYPING", payload: true });
       try {
-        const { nlpResult } = await analyzeMessage(content);
-        const topIntent = nlpResult.intents[0];
+        const result = await deliverChatMessage(
+          { message, language: state.language },
+          {
+            isOnline: () => offlineService.isDeviceOnline(),
+            send: (input) => trpcProxy.chat.send.mutate(input),
+            enqueue: (input) => offlineService.queueOperation({
+              type: "send_message",
+              data: input,
+            }),
+          },
+        );
 
-        // Generate NLP-enhanced response
-        let aiContent = generateNLPResponse(content, nlpResult);
-        const isZh = state.language === "zh";
-
-        // PERSISTENCE & TASK LOGIC: Use TinyNLP results to drive behavior
-        if (topIntent && topIntent.confidence > 0.5) {
-          const entities = nlpResult.entities;
-          
-          // 1. Dynamic Work Order Creation — use `category` to match router schema
-          if (topIntent.category === "maintenance_request") {
-            const problemType = entities.find(e => e.type === "service")?.value || topIntent.subIntent || "General";
-            try {
-              await createWorkOrderMutation.mutateAsync({
-                title: `${isZh ? "維修" : "Fix"}: ${problemType}`,
-                description: content,
-                category: "maintenance",   // router field is `category`, not `type`
-                priority: nlpResult.sentiment.emotion === "urgency" ? "urgent" : "medium",
-              });
-            } catch (e) { console.error(e); }
-          }
-
-          // 2. Intelligent follow-up for missing information (The non-canned logic)
-          if (topIntent.category === "amenity_booking") {
-            const amenityEntity = entities.find(e => e.type === "amenity")?.value;
-            const timeEntity = entities.find(e => e.type === "time" || e.type === "date")?.value;
-            
-            if (!amenityEntity) {
-              aiContent = isZh 
-                ? "好的，我來為您安排設施預約。請問您具體想要預約哪項設施？（例如：游泳池、健身房或私廚）" 
-                : "Certainly. I'll help you with that booking. Which facility would you like to reserve? (e.g., Pool, Gym, or Dining Room)";
-            } else if (!timeEntity) {
-              aiContent = isZh
-                ? `沒問題，我來為您準備${amenityEntity}的預約。請問您預計在哪個日期或時段使用？`
-                : `Understood. I'll arrange the ${amenityEntity} for you. At what date and time would you like to visit?`;
-            }
-          }
+        if (result.status === "confirmed") {
+          dispatch({
+            type: "UPDATE_MESSAGE_DELIVERY",
+            payload: { id, update: { delivery: "confirmed" } },
+          });
+          const assistantMessage: ChatMessage = {
+            id: generateId(),
+            role: "assistant",
+            content: result.text,
+            timestamp: Date.now(),
+          };
+          dispatch({ type: "ADD_MESSAGE", payload: assistantMessage });
+          void refetchChatHistory();
+        } else {
+          dispatch({
+            type: "UPDATE_MESSAGE_DELIVERY",
+            payload: {
+              id,
+              update: { delivery: "queued", operationId: result.operationId },
+            },
+          });
         }
-
-        // Add Processing Metadata to Message
-        // Simulate slight delay for natural feel
-        setTimeout(() => {
-          const aiMsg: ChatMessage = {
-            id: generateId(),
-            role: "assistant",
-            content: aiContent,
-            timestamp: Date.now(),
-          };
-          dispatch({ type: "ADD_MESSAGE", payload: aiMsg });
-          dispatch({ type: "SET_TYPING", payload: false });
-        }, 800);
       } catch {
-        // Fallback to basic response if NLP fails
-        setTimeout(() => {
-          const aiContent = getAIResponse(content);
-          const aiMsg: ChatMessage = {
-            id: generateId(),
-            role: "assistant",
-            content: aiContent,
-            timestamp: Date.now(),
-          };
-          dispatch({ type: "ADD_MESSAGE", payload: aiMsg });
-          dispatch({ type: "SET_TYPING", payload: false });
-        }, 1500);
+        dispatch({
+          type: "UPDATE_MESSAGE_DELIVERY",
+          payload: {
+            id,
+            update: {
+              delivery: "failed",
+              deliveryError: state.language === "zh"
+                ? "Digital Brain 未確認處理"
+                : "Digital Brain did not confirm processing",
+            },
+          },
+        });
+      } finally {
+        dispatch({ type: "SET_TYPING", payload: false });
       }
     })();
-  }, [createWorkOrderMutation]);
+  }, [refetchChatHistory, state.language]);
+
+  const sendMessage = useCallback((content: string) => {
+    const message = content.trim();
+    if (!message) return;
+    const id = generateId();
+    dispatch({
+      type: "ADD_MESSAGE",
+      payload: {
+        id,
+        role: "user",
+        content: message,
+        timestamp: Date.now(),
+        delivery: "sending",
+      },
+    });
+    deliverMessage(id, message);
+  }, [deliverMessage]);
+
+  const retryMessage = useCallback((id: string) => {
+    const message = state.messages.find((item) => item.id === id);
+    if (!message || message.role !== "user" || message.delivery !== "failed") return;
+    deliverMessage(message.id, message.content);
+  }, [deliverMessage, state.messages]);
 
   const togglePrivacy = useCallback(() => {
     dispatch({ type: "TOGGLE_PRIVACY" });
@@ -391,7 +397,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider
-      value={{ state, sendMessage, togglePrivacy, updateProfile, updateWorkOrder, addBooking, cancelBooking, dismissRoutingSuggestion, setLanguage, t }}
+      value={{ state, sendMessage, retryMessage, togglePrivacy, updateProfile, updateWorkOrder, addBooking, cancelBooking, dismissRoutingSuggestion, setLanguage, t }}
     >
       {children}
     </AppContext.Provider>

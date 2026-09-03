@@ -728,7 +728,14 @@ export async function getOpenWorkOrderCount() {
 export async function getUserChatMessages(userId: number, limit = 50) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(chatMessages).where(eq(chatMessages.userId, userId)).orderBy(desc(chatMessages.createdAt)).limit(limit);
+  // SQLite timestamps have one-second precision, so createdAt alone is not a
+  // stable ordering key during rapid chat turns. The descending primary key
+  // tie-breaker keeps the newest message first deterministically.
+  return db.select()
+    .from(chatMessages)
+    .where(eq(chatMessages.userId, userId))
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(limit);
 }
 
 export async function createChatMessage(data: InsertChatMessage) {

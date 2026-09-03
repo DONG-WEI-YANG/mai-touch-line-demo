@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc";
 
 export default function GuestPassScreen() {
   const colors = useColors();
-  const { t, state: _state } = useApp();
+  const { t } = useApp();
   const router = useRouter();
   
   const [scanAnim] = useState(new Animated.Value(0));
@@ -22,7 +22,7 @@ export default function GuestPassScreen() {
         result: "success"
       });
       Alert.alert("Access Granted", "Welcome to m'AI Touch Residence.\nThe gate is now open.");
-    } catch (e) {
+    } catch {
       Alert.alert("Access Denied", "Invalid pass or system error.");
     }
   };

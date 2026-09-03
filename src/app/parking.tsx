@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { ScreenContainer } from '@/components/screen-container';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColors } from '@/hooks/use-colors';
+import { invalidateDomainCaches } from '@/lib/mutation-cache';
 import { trpc } from '@/lib/trpc';
 
 export default function ParkingScreen() {
@@ -15,8 +16,8 @@ export default function ParkingScreen() {
   const [draft, setDraft] = useState({ plate: '', driver: '' });
 
   const requestVisitor = trpc.parking.requestVisitor.useMutation({
-    onSuccess: (r) => {
-      utils.parking.myAssignments.invalidate();
+    onSuccess: async (r) => {
+      await invalidateDomainCaches('parking', utils);
       Alert.alert('車位已分配', `車位:${r.spotLabel}\n請告知您的訪客`);
       setDraft({ plate: '', driver: '' });
       setShowVisitor(false);
@@ -24,7 +25,7 @@ export default function ParkingScreen() {
     onError: (err) => Alert.alert('Request failed', err.message),
   });
   const release = trpc.parking.release.useMutation({
-    onSuccess: () => utils.parking.myAssignments.invalidate(),
+    onSuccess: () => invalidateDomainCaches('parking', utils),
     onError: (err) => Alert.alert('Release failed', err.message),
   });
 

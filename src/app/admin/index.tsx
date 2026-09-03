@@ -6,6 +6,13 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AdminHeader } from '@/components/admin/admin-ui';
 
 const MENU_ITEMS = [
+  {
+    title: '系統完整性',
+    subtitle: '檢查資料庫、OpenAI、NLP 與執行環境',
+    icon: 'shield.fill',
+    route: '/admin/system-integrity',
+    color: '#81C784'
+  },
   { 
     title: '公告管理', 
     subtitle: '發布社區公告與置頂重要資訊',

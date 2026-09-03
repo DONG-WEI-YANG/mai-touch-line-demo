@@ -6,6 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { EventEmitter } from 'events';
+import { parseOfflineQueue } from './offline-schema';
 
 // We only consume `isConnected` (OS/browser connectivity events), never
 // `isInternetReachable`, so NetInfo's active reachability probe is pure
@@ -38,6 +39,8 @@ export type OfflineOperation = {
 export type OfflineOperationHandler = (op: OfflineOperation) => Promise<void>;
 
 const MAX_RETRIES = 3;
+const SYNC_QUEUE_KEY = '@offline_sync_queue';
+const QUARANTINE_KEY = '@offline_sync_quarantine';
 
 export type OfflineData = {
   amenities: any[];
@@ -47,13 +50,24 @@ export type OfflineData = {
   userProfile: any | null;
 };
 
+export interface OfflineQueueSnapshot {
+  online: boolean;
+  syncing: boolean;
+  pendingCount: number;
+  failedCount: number;
+  totalCount: number;
+  lastSyncAt: number | null;
+}
+
 export class OfflineService extends EventEmitter {
   private static instance: OfflineService;
   private isOnline = true;
   private syncQueue: OfflineOperation[] = [];
   private isSyncing = false;
-  private syncInterval: NodeJS.Timeout | null = null;
+  private syncPromise: Promise<void> | null = null;
+  private syncInterval: ReturnType<typeof setInterval> | null = null;
   private operationHandler: OfflineOperationHandler | null = null;
+  private lastSyncAt: number | null = null;
 
   // Public for testability — but treat `getInstance()` as the canonical entry
   // point in app code so we share one queue + one network listener.
@@ -98,11 +112,12 @@ export class OfflineService extends EventEmitter {
       if (!wasOnline && this.isOnline) {
         // Went from offline to online - trigger sync
         this.emit('network:online');
-        this.startSync();
+        void this.startSync();
       } else if (wasOnline && !this.isOnline) {
         // Went from online to offline
         this.emit('network:offline');
       }
+      this.notifyStatus();
     });
   }
 
@@ -111,12 +126,36 @@ export class OfflineService extends EventEmitter {
    */
   private async loadSyncQueue(): Promise<void> {
     try {
-      const queueJson = await AsyncStorage.getItem('@offline_sync_queue');
-      if (queueJson) {
-        this.syncQueue = JSON.parse(queueJson);
+      const queueJson = await AsyncStorage.getItem(SYNC_QUEUE_KEY);
+      const parsed = parseOfflineQueue(queueJson);
+      let requiresRewrite = parsed.quarantined.length > 0;
+      this.syncQueue = parsed.operations
+        .filter((operation) => {
+          if (operation.status === 'completed') {
+            requiresRewrite = true;
+            return false;
+          }
+          return true;
+        })
+        .map((operation) => {
+          if (operation.status !== 'processing') return operation;
+          requiresRewrite = true;
+          return { ...operation, status: 'pending' as const };
+        });
+      if (parsed.quarantined.length > 0) {
+        const report = {
+          quarantinedAt: Date.now(),
+          count: parsed.quarantined.length,
+          findings: parsed.quarantined,
+        };
+        await AsyncStorage.setItem(QUARANTINE_KEY, JSON.stringify(report));
+        this.emit('queue:quarantined', report);
       }
+      if (requiresRewrite) await this.saveSyncQueue();
     } catch (error) {
       console.error('Failed to load sync queue:', error);
+    } finally {
+      this.notifyStatus();
     }
   }
 
@@ -125,9 +164,10 @@ export class OfflineService extends EventEmitter {
    */
   private async saveSyncQueue(): Promise<void> {
     try {
-      await AsyncStorage.setItem('@offline_sync_queue', JSON.stringify(this.syncQueue));
+      await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(this.syncQueue));
     } catch (error) {
       console.error('Failed to save sync queue:', error);
+      throw error;
     }
   }
 
@@ -136,6 +176,30 @@ export class OfflineService extends EventEmitter {
    */
   isDeviceOnline(): boolean {
     return this.isOnline;
+  }
+
+  isSyncInProgress(): boolean {
+    return this.isSyncing;
+  }
+
+  getSnapshot(): Readonly<OfflineQueueSnapshot> {
+    return Object.freeze({
+      online: this.isOnline,
+      syncing: this.isSyncing,
+      pendingCount: this.syncQueue.filter((op) => op.status === 'pending').length,
+      failedCount: this.syncQueue.filter((op) => op.status === 'failed').length,
+      totalCount: this.syncQueue.length,
+      lastSyncAt: this.lastSyncAt,
+    });
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.on('status:changed', listener);
+    return () => this.off('status:changed', listener);
+  }
+
+  private notifyStatus(): void {
+    this.emit('status:changed');
   }
 
   /**
@@ -151,12 +215,18 @@ export class OfflineService extends EventEmitter {
     };
 
     this.syncQueue.push(op);
-    await this.saveSyncQueue();
+    try {
+      await this.saveSyncQueue();
+    } catch (error) {
+      this.syncQueue = this.syncQueue.filter((queued) => queued.id !== op.id);
+      throw error;
+    }
     this.emit('operation:queued', op);
+    this.notifyStatus();
 
     // If online, try to sync immediately
     if (this.isOnline) {
-      this.startSync();
+      void this.startSync();
     }
 
     return op.id;
@@ -165,36 +235,48 @@ export class OfflineService extends EventEmitter {
   /**
    * Start sync process
    */
-  async startSync(): Promise<void> {
-    if (this.isSyncing || this.syncQueue.length === 0 || !this.isOnline) {
-      return;
-    }
+  startSync(): Promise<void> {
+    if (this.syncPromise) return this.syncPromise;
+    if (this.syncQueue.length === 0 || !this.isOnline) return Promise.resolve();
+    const running = this.runSync().finally(() => {
+      if (this.syncPromise === running) this.syncPromise = null;
+    });
+    this.syncPromise = running;
+    return running;
+  }
 
+  private async runSync(): Promise<void> {
     this.isSyncing = true;
     this.emit('sync:started');
+    this.notifyStatus();
 
     try {
+      const completed: OfflineOperation[] = [];
       // Process operations in order. Skip failed ops that have exhausted
       // retries — they need user intervention (clearOperations) or reset.
       for (let i = 0; i < this.syncQueue.length; i++) {
         const op = this.syncQueue[i];
         if (op.status === 'pending') {
-          await this.processOperation(op);
+          if (await this.processOperation(op)) completed.push(op);
         } else if (op.status === 'failed' && op.retryCount < MAX_RETRIES) {
-          await this.processOperation(op);
+          if (await this.processOperation(op)) completed.push(op);
         }
       }
 
-      // Remove completed operations
+      // Each successful entry was first persisted as `completed`. Removing it
+      // is a second durable write, so a crash can never resurrect it as pending.
       this.syncQueue = this.syncQueue.filter(op => op.status !== 'completed');
       await this.saveSyncQueue();
+      completed.forEach((op) => this.emit('operation:completed', op));
 
+      this.lastSyncAt = Date.now();
       this.emit('sync:completed');
     } catch (error) {
       console.error('Sync failed:', error);
       this.emit('sync:failed', error);
     } finally {
       this.isSyncing = false;
+      this.notifyStatus();
     }
   }
 
@@ -203,25 +285,31 @@ export class OfflineService extends EventEmitter {
    * Without a handler, the op stays pending — we never silently mark it
    * completed (the previous implementation did, which was a data-loss bug).
    */
-  private async processOperation(op: OfflineOperation): Promise<void> {
+  private async processOperation(op: OfflineOperation): Promise<boolean> {
     if (!this.operationHandler) {
       op.status = 'pending';
       this.emit('operation:pending', op);
-      return;
+      return false;
     }
 
     op.status = 'processing';
+    await this.saveSyncQueue();
     this.emit('operation:processing', op);
+    this.notifyStatus();
 
     try {
       await this.operationHandler(op);
       op.status = 'completed';
       op.error = undefined;
-      this.emit('operation:completed', op);
+      await this.saveSyncQueue();
+      this.notifyStatus();
+      return true;
     } catch (error) {
       op.status = 'failed';
       op.error = error instanceof Error ? error.message : 'Unknown error';
       op.retryCount++;
+      await this.saveSyncQueue();
+      this.notifyStatus();
 
       if (op.retryCount >= MAX_RETRIES) {
         this.emit('operation:failed', op);
@@ -232,6 +320,7 @@ export class OfflineService extends EventEmitter {
           setTimeout(() => this.startSync(), 5000);
         }
       }
+      return false;
     }
   }
 
@@ -249,6 +338,46 @@ export class OfflineService extends EventEmitter {
     return [...this.syncQueue];
   }
 
+  async retryOperation(id: string): Promise<boolean> {
+    const operation = this.syncQueue.find((item) => item.id === id && item.status === 'failed');
+    if (!operation) return false;
+    const previous = { ...operation };
+    operation.status = 'pending';
+    operation.retryCount = 0;
+    operation.error = undefined;
+    try {
+      await this.saveSyncQueue();
+    } catch (error) {
+      Object.assign(operation, previous);
+      throw error;
+    }
+    this.emit('operation:retried', operation);
+    this.notifyStatus();
+    if (this.isOnline) void this.startSync();
+    return true;
+  }
+
+  async retryAllFailed(): Promise<number> {
+    const failed = this.syncQueue.filter((operation) => operation.status === 'failed');
+    if (failed.length === 0) return 0;
+    const previous = failed.map((operation) => ({ operation, snapshot: { ...operation } }));
+    failed.forEach((operation) => {
+      operation.status = 'pending';
+      operation.retryCount = 0;
+      operation.error = undefined;
+    });
+    try {
+      await this.saveSyncQueue();
+    } catch (error) {
+      previous.forEach(({ operation, snapshot }) => Object.assign(operation, snapshot));
+      throw error;
+    }
+    failed.forEach((operation) => this.emit('operation:retried', operation));
+    this.notifyStatus();
+    if (this.isOnline) void this.startSync();
+    return failed.length;
+  }
+
   /**
    * Clear all operations
    */
@@ -256,6 +385,7 @@ export class OfflineService extends EventEmitter {
     this.syncQueue = [];
     await this.saveSyncQueue();
     this.emit('operations:cleared');
+    this.notifyStatus();
   }
 
   /**

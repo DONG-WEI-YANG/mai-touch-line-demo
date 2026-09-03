@@ -14,7 +14,9 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useApp } from "@/lib/app-context";
-import { AMENITIES, formatDateDisplay, getDayLabel, getNext7Days } from "@/lib/amenities";
+import { formatDateDisplay, getDayLabel, getNext7Days } from "@/lib/amenities";
+import { toAmenityView } from "@/lib/amenity-view";
+import { invalidateDomainCaches } from "@/lib/mutation-cache";
 import { trpc } from "@/lib/trpc";
 
 type BookingStep = "details" | "slots" | "confirm" | "success";
@@ -23,9 +25,15 @@ export default function AmenityDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const router = useRouter();
-  const { t, state: _state } = useApp();
+  const utils = trpc.useUtils();
+  const { t } = useApp();
 
-  const amenity = AMENITIES.find((a) => a.id === id);
+  const numericAmenityId = Number(id?.replace("am-", ""));
+  const amenityQuery = trpc.amenities.getById.useQuery(
+    { id: numericAmenityId },
+    { enabled: Number.isInteger(numericAmenityId) && numericAmenityId > 0 },
+  );
+  const amenity = useMemo(() => toAmenityView(amenityQuery.data), [amenityQuery.data]);
 
   const [step, setStep] = useState<BookingStep>("details");
   const [selectedDate, setSelectedDate] = useState<string>("");
@@ -37,11 +45,13 @@ export default function AmenityDetailScreen() {
 
   // Real-time slot availability from backend
   const { data: slots = [], isLoading: slotsLoading } = trpc.amenities.getSlots.useQuery(
-    { amenityId: parseInt(id?.replace("am-", "") || "0"), date: selectedDate },
-    { enabled: !!selectedDate && !!id }
+    { amenityId: numericAmenityId, date: selectedDate },
+    { enabled: !!selectedDate && Number.isInteger(numericAmenityId) && numericAmenityId > 0 }
   );
 
-  const createBookingMutation = trpc.bookings.create.useMutation();
+  const createBookingMutation = trpc.bookings.create.useMutation({
+    onSuccess: () => invalidateDomainCaches("booking", utils),
+  });
 
   const handleSelectDate = useCallback((date: string) => {
     setSelectedDate(date);
@@ -69,7 +79,7 @@ export default function AmenityDetailScreen() {
 
     try {
       await createBookingMutation.mutateAsync({
-        amenityId: parseInt(amenity.id.replace("am-", "")),
+        amenityId: amenity.id,
         date: selectedDate,
         startTime: selectedSlot.startTime,
         endTime: selectedSlot.endTime,
@@ -81,6 +91,14 @@ export default function AmenityDetailScreen() {
       Alert.alert("Booking Failed", error.message || "Something went wrong");
     }
   }, [amenity, selectedSlot, selectedDate, guestCount, notes, createBookingMutation]);
+
+  if (amenityQuery.isLoading) {
+    return (
+      <ScreenContainer edges={["top"]}>
+        <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>
+      </ScreenContainer>
+    );
+  }
 
   if (!amenity) {
     return (

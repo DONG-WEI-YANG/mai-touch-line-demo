@@ -37,6 +37,12 @@ const queryClient = new QueryClient({
 // Create tRPC client
 const trpcClient = createTRPCClient();
 
+// Queue operations run outside React hooks. Once the server confirms one,
+// invalidate active queries so every mounted list reconciles to server truth.
+offlineService.on('operation:completed', () => {
+  void queryClient.invalidateQueries();
+});
+
 // ── Offline operation handler ────────────────────────────────────────────────
 // Register once at module load so any queued operations from a previous session
 // can drain on next online tick. The handler dispatches by op.type to the
@@ -218,6 +224,7 @@ function ResidentLayout() {
       <Tabs.Screen name="admin/index" options={{ href: null }} />
       <Tabs.Screen name="admin/line" options={{ href: null }} />
       <Tabs.Screen name="admin/amenity-iot" options={{ href: null }} />
+      <Tabs.Screen name="admin/system-integrity" options={{ href: null }} />
       <Tabs.Screen name="admin/bookings" options={{ href: null }} />
       <Tabs.Screen name="admin/work-orders" options={{ href: null }} />
       <Tabs.Screen name="admin/amenities" options={{ href: null }} />

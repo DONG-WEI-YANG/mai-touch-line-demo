@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { invalidateDomainCaches } from "@/lib/mutation-cache";
 import { trpc } from "@/lib/trpc";
 
 type WorkOrder = {
@@ -22,6 +23,7 @@ type WorkOrder = {
 type BookingRow = {
   booking: {
     id: number;
+    amenityId: number;
     date: string;
     startTime: string;
     endTime: string;
@@ -36,6 +38,7 @@ type BookingRow = {
 
 export default function LogisticsDashboardScreen() {
   const colors = useColors();
+  const utils = trpc.useUtils();
   const { data: workOrders, isLoading, refetch } = trpc.workOrders.listAll.useQuery();
   const { data: bookings, refetch: refetchBookings } = trpc.bookings.listAll.useQuery();
 
@@ -43,7 +46,10 @@ export default function LogisticsDashboardScreen() {
   // "工單 #WO-N 狀態更新:…" message back to the original LINE requester, so the
   // resident sees the change in real time on LINE — that's the demo money shot.
   const updateWO = trpc.workOrders.update.useMutation({
-    onSuccess: () => { refetch(); Alert.alert('已更新', '住戶已收到 LINE 通知 📲'); },
+    onSuccess: async () => {
+      await invalidateDomainCaches('workOrder', utils);
+      Alert.alert('已更新', '住戶已收到 LINE 通知 📲');
+    },
     onError: (err) => Alert.alert('更新失敗', err.message),
   });
 
@@ -162,7 +168,7 @@ export default function LogisticsDashboardScreen() {
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.cardHeader}>
         <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={1}>
-          {item.amenityName ?? `Amenity #${item.booking.id}`}
+          {item.amenityName ?? `Amenity #${item.booking.amenityId}`}
         </Text>
         <View style={[styles.statusBadge, { backgroundColor: bookingStatusColor[item.booking.status] + '20' }]}>
           <Text style={[styles.statusText, { color: bookingStatusColor[item.booking.status] }]}>

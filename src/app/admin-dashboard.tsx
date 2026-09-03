@@ -128,8 +128,8 @@ export default function AdminDashboardScreen() {
       <Text style={[styles.diagLabel, { color: colors.foreground }]}>{label}</Text>
       <View style={styles.diagRight}>
         {!isConfigured && <View style={styles.warningTag}><Text style={styles.warningTagText}>UNCONFIGURED</Text></View>}
-        <View style={[styles.statusBadgeSmall, { backgroundColor: (status === 'connected' || status === 'online' || status === 'ready') ? colors.success + '20' : colors.error + '20' }]}>
-          <Text style={[styles.statusTextSmall, { color: (status === 'connected' || status === 'online' || status === 'ready') ? colors.success : colors.error }]}>
+        <View style={[styles.statusBadgeSmall, { backgroundColor: status === 'healthy' ? colors.success + '20' : colors.error + '20' }]}>
+          <Text style={[styles.statusTextSmall, { color: status === 'healthy' ? colors.success : colors.error }]}>
             {status.toUpperCase()}
           </Text>
         </View>
@@ -166,9 +166,9 @@ export default function AdminDashboardScreen() {
         {/* API Diagnostics */}
         <Text style={[styles.sectionTitle, { color: colors.muted, marginTop: 32 }]}>API & CONNECTIVITY</Text>
         <View style={[styles.monitorBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <StatusRow label="Database (SQLite)" status={diag?.services?.database?.status || "Check..."} />
-          <StatusRow label="NLP Neural Engine" status={diag?.services?.nlp_engine?.status || "Check..."} />
-          <StatusRow label="Forge External AI" status={diag?.services?.forge_api?.status || "Offline"} isConfigured={diag?.services?.forge_api?.configured} />
+          <StatusRow label={`Database (${diag?.services.database.dialect || "checking"})`} status={diag?.services.database.status || "checking"} />
+          <StatusRow label="NLP Neural Engine" status={diag?.services.nlp.status || "checking"} isConfigured={diag?.services.nlp.configured} />
+          <StatusRow label="OpenAI Provider" status={diag?.services.ai.status || "checking"} isConfigured={diag?.services.ai.configured} />
         </View>
 
         {/* AI & NLP Health */}

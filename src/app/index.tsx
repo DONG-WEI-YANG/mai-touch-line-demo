@@ -23,6 +23,9 @@ import { RoutingSuggestionCard } from "@/components/routing-suggestion-card";
 import { trpc } from "@/lib/trpc";
 import AdminDashboardScreen from "./admin-dashboard";
 import { useWebVoiceRecorder } from "@/hooks/use-web-voice-recorder";
+import { getDeliveryPresentation } from "@/lib/chat-messages";
+import type { ChatMessage } from "@/lib/types";
+import { SyncStatusBanner } from "@/components/sync-status-banner";
 
 const { width } = Dimensions.get("window");
 
@@ -35,7 +38,7 @@ const QUICK_ACTIONS = [
 
 export default function HomeScreen() {
   const colors = useColors();
-  const { state, sendMessage, dismissRoutingSuggestion, t, setLanguage } = useApp();
+  const { state, sendMessage, retryMessage, dismissRoutingSuggestion, t, setLanguage } = useApp();
   const [ttsEnabled, setTtsEnabled] = useState(false);
   // Speak the latest assistant message via the Web Speech API. Only on web —
   // gated by `window.speechSynthesis` existence so RN-native (iOS/Android)
@@ -119,8 +122,11 @@ export default function HomeScreen() {
     setInputText("");
   }, [sendMessage, runJobMutation]);
 
-  const renderMessage = useCallback(({ item }: { item: any }) => {
+  const renderMessage = useCallback(({ item }: { item: ChatMessage }) => {
     const isUser = item.role === "user";
+    const delivery = isUser && item.delivery
+      ? getDeliveryPresentation(item.delivery, state.language)
+      : null;
     return (
       <View style={[styles.messageContainer, isUser ? styles.userMessageContainer : styles.assistantMessageContainer]}>
         {!isUser && (
@@ -131,10 +137,27 @@ export default function HomeScreen() {
         <View style={[styles.messageBubble, { backgroundColor: isUser ? colors.primary : colors.surface, borderBottomRightRadius: isUser ? 4 : 20, borderBottomLeftRadius: isUser ? 20 : 4, borderColor: isUser ? colors.primary : colors.border, borderWidth: 1.5 }]}>
           <Text style={[styles.messageText, { color: isUser ? "#000" : colors.foreground }]}>{item.content}</Text>
           <Text style={[styles.timestamp, { color: isUser ? "rgba(0,0,0,0.6)" : colors.muted }]}>{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+          {delivery && (
+            <View style={styles.deliveryRow}>
+              <Text style={[styles.deliveryText, { color: "rgba(0,0,0,0.65)" }]}>
+                {delivery.label}
+              </Text>
+              {delivery.canRetry && (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={state.language === "zh" ? "重試未送達訊息" : "Retry undelivered message"}
+                  onPress={() => retryMessage(item.id)}
+                  style={styles.retryButton}
+                >
+                  <Text style={styles.retryText}>{state.language === "zh" ? "重試" : "Retry"}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
       </View>
     );
-  }, [colors]);
+  }, [colors, retryMessage, state.language]);
 
   useEffect(() => {
     if (state.messages.length > 0) {
@@ -287,6 +310,8 @@ export default function HomeScreen() {
           ListFooterComponent={() => state.isTyping ? <View style={styles.typingContainer}><ActivityIndicator size="small" color={colors.primary} /><Text style={[styles.typingText, { color: colors.muted }]}>{t("home.thinking")}</Text></View> : null}
         />
 
+        <SyncStatusBanner language={state.language} />
+
         <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
           <View style={[styles.inputContainer, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
             <TextInput style={[styles.input, { color: colors.foreground }]} placeholder={t("home.how_help")} placeholderTextColor={colors.muted} value={inputText} onChangeText={setInputText} multiline />
@@ -334,6 +359,10 @@ const styles = StyleSheet.create({
   messageBubble: { maxWidth: "85%", paddingHorizontal: 18, paddingVertical: 14, borderRadius: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 3 },
   messageText: { fontSize: 16, lineHeight: 22, fontWeight: "500" },
   timestamp: { fontSize: 11, marginTop: 6, textAlign: "right" },
+  deliveryRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, marginTop: 4 },
+  deliveryText: { fontSize: 10, fontWeight: "600" },
+  retryButton: { borderRadius: 10, backgroundColor: "rgba(0,0,0,0.12)", paddingHorizontal: 8, paddingVertical: 3 },
+  retryText: { color: "#000", fontSize: 10, fontWeight: "800" },
   typingContainer: { flexDirection: "row", alignItems: "center", paddingVertical: 16, gap: 12 },
   typingText: { fontSize: 14, fontStyle: "italic" },
   inputWrapper: { paddingHorizontal: 20, paddingVertical: 24, borderTopWidth: 1 },

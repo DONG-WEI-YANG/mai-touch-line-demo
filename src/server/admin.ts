@@ -1,6 +1,6 @@
 /**
  * Admin Dashboard Routes
- * 預留給未來真實主機的管理後台 UI
+ * Authenticated read-only operations dashboard for the backend host.
  */
 import { Router } from "express";
 import crypto from "crypto";
@@ -76,15 +76,29 @@ function sanitizeFilenamePart(value: unknown, fallback: string): string {
   return value;
 }
 
+function renderDataTablePage(title: string, headers: string[], rows: string[][]): string {
+  const head = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("");
+  const body = rows.length > 0
+    ? rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${headers.length}">No records</td></tr>`;
+  return `<!DOCTYPE html>
+  <html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${escapeHtml(title)} - m'AI Touch</title><style>
+  *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1A1A1A;color:#F0EDE8;padding:2rem;margin:0}
+  .container{max-width:1200px;margin:0 auto}h1,a{color:#C4A882}a{text-decoration:none}table{width:100%;margin-top:1.5rem;background:#242424;border:1px solid #3A3530;border-collapse:collapse}
+  th,td{padding:.85rem;text-align:left;border-bottom:1px solid #3A3530}th{color:#C4A882;background:#2C2C2C}td{font-size:.9rem}tr:last-child td{border-bottom:0}
+  </style></head><body><div class="container"><p><a href="/admin">← Dashboard</a></p><h1>${escapeHtml(title)}</h1>
+  <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></body></html>`;
+}
+
 /**
  * Admin Dashboard Home
- * TODO: 實現完整的管理後台 UI
+ * Summary of persisted operational records.
  */
 adminRouter.get("/", async (_req, res) => {
   try {
     const stats = await db.getDashboardStats();
     
-    // 返回簡單的 HTML 頁面（預留給未來的完整 UI）
     res.send(`
       <!DOCTYPE html>
       <html lang="zh-TW">
@@ -198,20 +212,8 @@ adminRouter.get("/", async (_req, res) => {
           </div>
           
           <div class="notice">
-            <h3>📝 開發中</h3>
-            <p>
-              這是管理後台的預留介面。完整的管理後台 UI 將在未來版本中實現，包括：
-            </p>
-            <ul style="margin-top: 0.5rem; padding-left: 1.5rem; color: #9B9590;">
-              <li>用戶管理和權限控制</li>
-              <li>預約和工作訂單管理</li>
-              <li>數據分析和報表</li>
-              <li>系統配置和監控</li>
-              <li>NLP 服務狀態監控</li>
-            </ul>
-            <p style="margin-top: 1rem;">
-              目前可以通過 tRPC API 端點訪問所有管理功能。
-            </p>
+            <h3>Operations snapshot</h3>
+            <p>All figures above come from the active database. Use the linked pages for current users, bookings, work orders, and NLP audit data.</p>
           </div>
         </div>
       </body>
@@ -225,7 +227,7 @@ adminRouter.get("/", async (_req, res) => {
 
 /**
  * Users Management
- * TODO: 實現用戶管理 UI
+ * Users Management
  */
 adminRouter.get("/users", async (_req, res) => {
   try {
@@ -352,96 +354,46 @@ adminRouter.get("/users", async (_req, res) => {
 
 /**
  * Bookings Management
- * TODO: 實現預約管理 UI
  */
 adminRouter.get("/bookings", async (_req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="zh-TW">
-    <head>
-      <meta charset="UTF-8">
-      <title>Bookings - Admin Dashboard</title>
-      <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          background: #1A1A1A;
-          color: #F0EDE8;
-          padding: 2rem;
-        }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { color: #C4A882; }
-        .notice {
-          background: #2C2C2C;
-          border-left: 4px solid #C4A882;
-          padding: 1rem;
-          margin-top: 2rem;
-          border-radius: 4px;
-        }
-        a {
-          color: #C4A882;
-          text-decoration: none;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>📅 Bookings Management</h1>
-        <div class="notice">
-          <p><a href="/admin">← Back to Dashboard</a></p>
-          <p style="margin-top: 1rem;">預約管理 UI 開發中...</p>
-          <p>請使用 tRPC API 端點訪問預約數據。</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `);
+  try {
+    const records = await db.getBookingsWithDetails();
+    const rows = records.map(({ booking, userName, amenityName }) => [
+      `BK-${booking.id}`,
+      amenityName ?? `Amenity #${booking.amenityId}`,
+      userName ?? `User #${booking.userId}`,
+      booking.date,
+      `${booking.startTime}–${booking.endTime}`,
+      String(booking.guestCount),
+      booking.status,
+    ]);
+    res.send(renderDataTablePage("Bookings", ["ID", "Amenity", "Resident", "Date", "Time", "Guests", "Status"], rows));
+  } catch (error) {
+    logError(ErrorIds.ADMIN_RENDER_FAILED, "bookings render failed", { cause: error });
+    res.status(500).send("Error loading bookings");
+  }
 });
 
 /**
  * Work Orders Management
- * TODO: 實現工作訂單管理 UI
  */
 adminRouter.get("/work-orders", async (_req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="zh-TW">
-    <head>
-      <meta charset="UTF-8">
-      <title>Work Orders - Admin Dashboard</title>
-      <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          background: #1A1A1A;
-          color: #F0EDE8;
-          padding: 2rem;
-        }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { color: #C4A882; }
-        .notice {
-          background: #2C2C2C;
-          border-left: 4px solid #C4A882;
-          padding: 1rem;
-          margin-top: 2rem;
-          border-radius: 4px;
-        }
-        a {
-          color: #C4A882;
-          text-decoration: none;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>🔧 Work Orders Management</h1>
-        <div class="notice">
-          <p><a href="/admin">← Back to Dashboard</a></p>
-          <p style="margin-top: 1rem;">工作訂單管理 UI 開發中...</p>
-          <p>請使用 tRPC API 端點訪問工作訂單數據。</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `);
+  try {
+    const records = await db.getWorkOrdersWithDetails();
+    const rows = records.map(({ workOrder, userName }) => [
+      `WO-${workOrder.id}`,
+      workOrder.title,
+      userName ?? `User #${workOrder.userId}`,
+      workOrder.category,
+      workOrder.priority,
+      workOrder.status,
+      formatDateTime(workOrder.updatedAt),
+    ]);
+    res.send(renderDataTablePage("Work Orders", ["ID", "Title", "Resident", "Category", "Priority", "Status", "Updated"], rows));
+  } catch (error) {
+    logError(ErrorIds.ADMIN_RENDER_FAILED, "work orders render failed", { cause: error });
+    res.status(500).send("Error loading work orders");
+  }
 });
 
 /**
@@ -613,5 +565,4 @@ adminRouter.get("/audit/export/csv", (req, res) => {
   }
 });
 
-console.log("[Admin] Dashboard routes registered (placeholder UI)");
-console.log("[Admin] TODO: Implement full admin UI for production");
+console.log("[Admin] Authenticated operations dashboard routes registered");

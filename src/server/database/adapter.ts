@@ -28,6 +28,8 @@ export interface DatabaseAdapter {
   db: any;
   type: DatabaseType;
   close: () => Promise<void>;
+  probe: () => Promise<void>;
+  listTables: () => Promise<string[]>;
   /** Raw better-sqlite3 Database instance. Only populated for SQLite adapters. */
   rawSqlite?: import('better-sqlite3').Database;
 }
@@ -106,6 +108,15 @@ async function createMysqlAdapter(config: DatabaseConfig): Promise<DatabaseAdapt
   return {
     db,
     type: 'mysql',
+    probe: async () => {
+      await connection.query('SELECT 1');
+    },
+    listTables: async () => {
+      const [rows] = await connection.query(
+        'SELECT TABLE_NAME AS name FROM information_schema.tables WHERE table_schema = DATABASE()',
+      );
+      return (rows as Array<{ name: string }>).map((row) => row.name);
+    },
     close: async () => {
       await connection.end();
     },
@@ -133,6 +144,13 @@ function createSqliteAdapter(config: DatabaseConfig): DatabaseAdapter {
     db,
     type: 'sqlite',
     rawSqlite: sqlite,
+    probe: async () => {
+      sqlite.prepare('SELECT 1').get();
+    },
+    listTables: async () => sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+      .all()
+      .map((row) => (row as { name: string }).name),
     close: async () => {
       sqlite.close();
     },
@@ -157,6 +175,15 @@ async function createPostgresAdapter(config: DatabaseConfig): Promise<DatabaseAd
   return {
     db,
     type: 'postgres',
+    probe: async () => {
+      await client.unsafe('SELECT 1');
+    },
+    listTables: async () => {
+      const rows = await client.unsafe(
+        "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'public'",
+      );
+      return (rows as unknown as Array<{ name: string }>).map((row) => row.name);
+    },
     close: async () => {
       await client.end();
     },

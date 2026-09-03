@@ -18,29 +18,13 @@ import { lineAdminRouter } from "./lineAdminRouter";
 import { announcementsRouter } from "./announcements";
 import { packagesRouter } from "./packages";
 import { parkingRouter } from "./parking";
+import { getSystemDiagnostics } from "../services/systemDiagnostics";
 
 export const appRouter = router({
   system: router({
     health: publicProcedure.query(() => ({ status: "ok", timestamp: Date.now() })),
 
-    diagnostics: adminProcedure.query(async () => {
-      let dbStatus = "connected";
-      try { await db.getDb(); } catch { dbStatus = "error"; }
-      let nlpStatus = "online";
-      try {
-        const res = await fetch("http://localhost:8000/health");
-        if (!res.ok) nlpStatus = "degraded";
-      } catch { nlpStatus = "offline"; }
-      const forgeConfigured = !!process.env.EXPO_PUBLIC_API_KEY && process.env.EXPO_PUBLIC_API_KEY !== "mock-key";
-      return {
-        services: {
-          database: { status: dbStatus, type: "SQLite" },
-          nlp_engine: { status: nlpStatus, url: "http://localhost:8000" },
-          forge_api: { configured: forgeConfigured, status: forgeConfigured ? "ready" : "unconfigured" }
-        },
-        environment: process.env.NODE_ENV || "development"
-      };
-    }),
+    diagnostics: adminProcedure.query(() => getSystemDiagnostics()),
 
     activeJobs: residentProcedure.query(async ({ ctx }) => db.getActiveJobsByUser(ctx.user.id)),
 

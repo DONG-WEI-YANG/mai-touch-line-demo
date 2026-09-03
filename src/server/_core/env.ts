@@ -55,6 +55,7 @@ export const ENV = {
   
   // OpenAI
   openaiApiKey: process.env.OPENAI_API_KEY || "",
+  openaiBaseUrl: process.env.OPENAI_BASE_URL || "",
   
   // Storage
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL || "",

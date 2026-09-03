@@ -5,6 +5,7 @@ import { useColors } from '@/hooks/use-colors';
 import { ScreenContainer } from '@/components/screen-container';
 import { AdminHeader, AdminCard } from '@/components/admin/admin-ui';
 import { parseError } from '@/lib/error-utils';
+import { invalidateDomainCaches } from '@/lib/mutation-cache';
 
 type BookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed';
 const STATUS_OPTIONS: BookingStatus[] = ['confirmed', 'pending', 'cancelled', 'completed'];
@@ -19,7 +20,7 @@ export default function AdminBookingsPage() {
   const q = trpc.bookings.listAll.useQuery();
 
   const updateStatus = trpc.bookings.updateStatus.useMutation({
-    onSuccess: () => utils.bookings.listAll.invalidate(),
+    onSuccess: () => invalidateDomainCaches('booking', utils),
     onError: (err) => Alert.alert('Update failed', parseError(err)),
   });
 

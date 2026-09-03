@@ -6,13 +6,20 @@ import React from "react";
 import { Text, ScrollView, StyleSheet } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
+import { invalidateDomainCaches } from "@/lib/mutation-cache";
 import { trpc } from "@/lib/trpc";
 import { VoiceBookingPanel, type VoiceSlots } from "@/components/voice-booking-panel";
 
 export default function VoiceBookingScreen() {
   const colors = useColors();
+  const utils = trpc.useUtils();
   const commandMutation = trpc.voice.command.useMutation();
-  const commitMutation = trpc.voice.commit.useMutation();
+  const commitMutation = trpc.voice.commit.useMutation({
+    onSuccess: async () => {
+      await invalidateDomainCaches("booking", utils);
+      await invalidateDomainCaches("workOrder", utils);
+    },
+  });
 
   return (
     <ScreenContainer edges={["top"]}>

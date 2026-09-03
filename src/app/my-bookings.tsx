@@ -10,6 +10,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { offlineService } from "@/lib/offline";
+import { invalidateDomainCaches } from "@/lib/mutation-cache";
 
 type Booking = {
   id: number;
@@ -26,9 +27,12 @@ type Booking = {
 export default function MyBookingsScreen() {
   const colors = useColors();
   const router = useRouter();
+  const utils = trpc.useUtils();
 
-  const { data: bookings = [], isLoading, refetch } = trpc.bookings.myBookings.useQuery();
-  const cancelBookingMutation = trpc.bookings.cancel.useMutation();
+  const { data: bookings = [], isLoading } = trpc.bookings.myBookings.useQuery();
+  const cancelBookingMutation = trpc.bookings.cancel.useMutation({
+    onSuccess: () => invalidateDomainCaches("booking", utils),
+  });
 
   const handleCancelBooking = useCallback(async (bookingId: number) => {
     Alert.alert(
@@ -54,7 +58,6 @@ export default function MyBookingsScreen() {
             }
             try {
               await cancelBookingMutation.mutateAsync({ id: bookingId });
-              refetch();
               Alert.alert("Success", "Booking cancelled successfully");
             } catch (error) {
               // Network errors during a "should-be-online" call still benefit
@@ -76,7 +79,7 @@ export default function MyBookingsScreen() {
         },
       ]
     );
-  }, [cancelBookingMutation, refetch]);
+  }, [cancelBookingMutation]);
 
   const renderBooking = useCallback(({ item }: { item: Booking }) => {
     const statusColor = item.status === "confirmed" ? colors.success : colors.muted;

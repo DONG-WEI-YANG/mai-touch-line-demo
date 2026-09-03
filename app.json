@@ -4,6 +4,7 @@
     "slug": "mai-touch",
     "version": "1.0.0",
     "scheme": "mai-touch",
+    "icon": "./assets/images/app-icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "assetBundlePatterns": [
@@ -16,7 +17,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0B0D10"
       },
       "package": "space.manus.mai.touch"
     },

@@ -5,6 +5,7 @@ import { useColors } from '@/hooks/use-colors';
 import { ScreenContainer } from '@/components/screen-container';
 import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
 import { parseError } from '@/lib/error-utils';
+import { invalidateDomainCaches } from '@/lib/mutation-cache';
 
 interface PackageRecord {
   id: number;
@@ -40,8 +41,8 @@ export default function AdminPackagesPage() {
   const [userSearch, setUserSearch] = useState('');
 
   const logMut = trpc.packages.register.useMutation({
-    onSuccess: () => {
-      utils.packages.list.invalidate();
+    onSuccess: async () => {
+      await invalidateDomainCaches('package', utils);
       setDraft({ userId: 0, courier: '', notes: '' });
       setUserSearch('');
       setShowLog(false);
@@ -51,12 +52,12 @@ export default function AdminPackagesPage() {
   });
 
   const pickupMut = trpc.packages.markPickedUp.useMutation({
-    onSuccess: () => utils.packages.list.invalidate(),
+    onSuccess: () => invalidateDomainCaches('package', utils),
     onError: (err) => Alert.alert('Failed', parseError(err)),
   });
 
   const deleteMut = trpc.packages.delete.useMutation({
-    onSuccess: () => utils.packages.list.invalidate(),
+    onSuccess: () => invalidateDomainCaches('package', utils),
     onError: (err) => Alert.alert('Failed', parseError(err)),
   });
 

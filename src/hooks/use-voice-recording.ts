@@ -13,7 +13,7 @@ export function useVoiceRecording() {
   const [duration, setDuration] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
   const recordingRef = useRef<Audio.Recording | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const requestPermissions = useCallback(async () => {
     try {

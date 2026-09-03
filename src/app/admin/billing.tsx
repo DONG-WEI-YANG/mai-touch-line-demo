@@ -5,6 +5,7 @@ import { useColors } from '@/hooks/use-colors';
 import { ScreenContainer } from '@/components/screen-container';
 import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
 import { parseError } from '@/lib/error-utils';
+import { invalidateDomainCaches } from '@/lib/mutation-cache';
 
 function formatMoney(cents: number, currency = 'TWD') {
   const major = cents / 100;
@@ -26,8 +27,8 @@ export default function AdminBillingPage() {
   const [recipientFilter, setRecipientFilter] = useState('');
 
   const issueMut = trpc.finance.issueInvoice.useMutation({
-    onSuccess: () => {
-      utils.finance.invoicesList.invalidate();
+    onSuccess: async () => {
+      await invalidateDomainCaches('invoice', utils);
       setDraft({ userId: 0, description: '', amount: '', dueDate: '', notes: '' });
       setRecipientFilter('');
       setShowIssue(false);
@@ -37,12 +38,12 @@ export default function AdminBillingPage() {
   });
 
   const markPaidMut = trpc.finance.markInvoicePaid.useMutation({
-    onSuccess: () => utils.finance.invoicesList.invalidate(),
+    onSuccess: () => invalidateDomainCaches('invoice', utils),
     onError: (err) => Alert.alert('Mark paid failed', parseError(err)),
   });
 
   const deleteMut = trpc.finance.deleteInvoice.useMutation({
-    onSuccess: () => utils.finance.invoicesList.invalidate(),
+    onSuccess: () => invalidateDomainCaches('invoice', utils),
     onError: (err) => Alert.alert('Delete failed', parseError(err)),
   });
 

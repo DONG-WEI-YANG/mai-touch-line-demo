@@ -606,7 +606,7 @@ export class NLPNodeScheduler {
   runHealthCheck(): void {
     const now = Date.now();
 
-    for (const [_id, node] of this.nodes) {
+    for (const node of this.nodes.values()) {
       // Update uptime
       node.metrics.uptime = (now - node.createdAt) / 1000;
 

@@ -29,7 +29,7 @@ export default function ProfileEditScreen() {
       Alert.alert("Success", "Profile updated successfully", [
         { text: "OK", onPress: () => router.back() }
       ]);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to update profile");
     } finally {
       setIsSaving(false);

@@ -81,11 +81,14 @@ temp/
 
 # Caches
 .cache/
+.npm-task-cache/
 .kiro/
 
-# Data dirs (downloaded models, etc.)
+# Data dirs (downloaded models, etc.). Keep executable model source tracked.
 data/
-nlp-service/models/
+/models/pretrained/
+nlp-service/models/pretrained/
+nlp-service/models/cache/
 nlp-service/venv/
 
 # Crash logs

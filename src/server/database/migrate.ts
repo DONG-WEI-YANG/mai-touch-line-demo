@@ -78,7 +78,7 @@ async function getAppliedMigrations(db: any): Promise<string[]> {
   try {
     const result = await db.all(sql.raw('SELECT version FROM _migrations ORDER BY version'));
     return result?.map((r: any) => r.version) || [];
-  } catch (error) {
+  } catch {
     return [];
   }
 }

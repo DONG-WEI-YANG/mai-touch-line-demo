@@ -4,6 +4,7 @@ import { trpc } from '@/lib/trpc';
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
+import { invalidateDomainCaches } from '@/lib/mutation-cache';
 
 type Audience = 'all' | 'resident' | 'staff';
 const AUDIENCES: Audience[] = ['all', 'resident', 'staff'];
@@ -22,26 +23,19 @@ export default function AdminAnnouncementsPage() {
   const [draft, setDraft] = useState({ title: '', body: '', audience: 'all' as Audience, isPinned: false });
 
   const createMut = trpc.announcements.create.useMutation({
-    onSuccess: () => {
-      utils.announcements.listAll.invalidate();
-      utils.announcements.list.invalidate();
+    onSuccess: async () => {
+      await invalidateDomainCaches('announcement', utils);
       setDraft({ title: '', body: '', audience: 'all', isPinned: false });
       setShowCompose(false);
     },
     onError: (err) => Alert.alert('Post failed', err.message),
   });
   const updateMut = trpc.announcements.update.useMutation({
-    onSuccess: () => {
-      utils.announcements.listAll.invalidate();
-      utils.announcements.list.invalidate();
-    },
+    onSuccess: () => invalidateDomainCaches('announcement', utils),
     onError: (err) => Alert.alert('Update failed', err.message),
   });
   const deleteMut = trpc.announcements.delete.useMutation({
-    onSuccess: () => {
-      utils.announcements.listAll.invalidate();
-      utils.announcements.list.invalidate();
-    },
+    onSuccess: () => invalidateDomainCaches('announcement', utils),
     onError: (err) => Alert.alert('Delete failed', err.message),
   });
 

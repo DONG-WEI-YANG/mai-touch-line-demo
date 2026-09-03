@@ -1,44 +1,20 @@
 import React from "react";
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useApp } from "@/lib/app-context";
+import { formatCurrencyCents } from "@/lib/currency";
 import { trpc } from "@/lib/trpc";
 import { useRouter } from "expo-router";
 
 export default function WalletScreen() {
   const colors = useColors();
-  const { t } = useApp();
+  const { t, state } = useApp();
   const router = useRouter();
 
-  const { data: wallet, isLoading, refetch } = trpc.finance.myWallet.useQuery();
+  const { data: wallet, isLoading } = trpc.finance.myWallet.useQuery();
   const { data: transactions = [] } = trpc.finance.history.useQuery();
-
-  // Mock payment handling
-  const handlePayment = (_type: string) => {
-    Alert.alert(
-      "Confirm Payment",
-      "Proceed with secure mock transaction?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Confirm", 
-          onPress: () => {
-            // In a real app, this would call a mutation
-            setTimeout(() => {
-              Alert.alert("Success", "Transaction completed successfully.");
-              refetch();
-            }, 1000);
-          } 
-        }
-      ]
-    );
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(amount);
-  };
 
   return (
     <ScreenContainer edges={["top"]}>
@@ -66,7 +42,7 @@ export default function WalletScreen() {
               {isLoading ? (
                 <ActivityIndicator color="#FFD700" />
               ) : (
-                <Text style={styles.cardBalance}>{formatCurrency(wallet?.balance || 0)}</Text>
+                <Text style={styles.cardBalance}>{formatCurrencyCents(wallet?.balance ?? 0)}</Text>
               )}
             </View>
 
@@ -84,7 +60,7 @@ export default function WalletScreen() {
         <View style={styles.actionsGrid}>
           <TouchableOpacity 
             style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => handlePayment("fee")}
+            onPress={() => router.push("/bills" as never)}
           >
             <View style={[styles.actionIcon, { backgroundColor: colors.primary + "20" }]}>
               <IconSymbol name="doc.text.fill" size={24} color={colors.primary} />
@@ -93,13 +69,17 @@ export default function WalletScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => handlePayment("topup")}
+            style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border, opacity: 0.55 }]}
+            disabled
+            accessibilityState={{ disabled: true }}
           >
             <View style={[styles.actionIcon, { backgroundColor: "#5B9A6F20" }]}>
               <IconSymbol name="plus.circle.fill" size={24} color="#5B9A6F" />
             </View>
             <Text style={[styles.actionText, { color: colors.foreground }]}>{t("wallet.topup")}</Text>
+            <Text style={[styles.actionHint, { color: colors.muted }]}>
+              {state.language === "zh" ? "尚未設定付款服務" : "Payment provider not configured"}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -126,7 +106,7 @@ export default function WalletScreen() {
                   <Text style={[styles.txDate, { color: colors.muted }]}>{new Date(tx.createdAt).toLocaleDateString()}</Text>
                 </View>
                 <Text style={[styles.txAmount, { color: tx.amount < 0 ? colors.foreground : colors.success }]}>
-                  {tx.amount > 0 ? "+" : ""}{formatCurrency(tx.amount)}
+                  {tx.amount > 0 ? "+" : ""}{formatCurrencyCents(tx.amount)}
                 </Text>
               </View>
             ))}
@@ -168,6 +148,7 @@ const styles = StyleSheet.create({
   actionBtn: { flex: 1, padding: 16, borderRadius: 20, borderWidth: 1, alignItems: "center", gap: 10 },
   actionIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   actionText: { fontWeight: "700", fontSize: 14 },
+  actionHint: { fontSize: 10, textAlign: "center" },
   sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 1, marginBottom: 16 },
   emptyState: { alignItems: "center", padding: 40, opacity: 0.6 },
   txList: { gap: 0 },

@@ -5,6 +5,7 @@ import { useColors } from '@/hooks/use-colors';
 import { ScreenContainer } from '@/components/screen-container';
 import { AdminHeader, AdminCard, AdminButton } from '@/components/admin/admin-ui';
 import { parseError } from '@/lib/error-utils';
+import { invalidateDomainCaches } from '@/lib/mutation-cache';
 
 interface WorkOrderRecord {
   id: number;
@@ -30,12 +31,12 @@ export default function AdminWorkOrdersPage() {
   const [filter, setFilter] = useState<WOStatus | 'all'>('open');
 
   const updateMut = trpc.workOrders.update.useMutation({
-    onSuccess: () => utils.workOrders.listAll.invalidate(),
+    onSuccess: () => invalidateDomainCaches('workOrder', utils),
     onError: (err) => Alert.alert('Failed', parseError(err)),
   });
 
   const deleteMut = trpc.workOrders.delete.useMutation({
-    onSuccess: () => utils.workOrders.listAll.invalidate(),
+    onSuccess: () => invalidateDomainCaches('workOrder', utils),
     onError: (err) => Alert.alert('Failed', parseError(err)),
   });
 

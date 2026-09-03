@@ -51,7 +51,7 @@ function getAppliedMigrations(db: Database.Database): string[] {
     const stmt = db.prepare('SELECT version FROM _migrations ORDER BY version');
     const rows = stmt.all() as Array<{ version: string }>;
     return rows.map(r => r.version);
-  } catch (error) {
+  } catch {
     return [];
   }
 }
@@ -169,7 +169,7 @@ export async function seedDatabase(dbPath: string): Promise<void> {
     try {
       const result = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
       userCount = result.count;
-    } catch (error) {
+    } catch {
       console.log('[Seed] Users table not found, skipping seed');
       return;
     }

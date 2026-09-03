@@ -7,16 +7,23 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin/admin-ui";
 import { useColors } from "@/hooks/use-colors";
+import { invalidateDomainCaches } from "@/lib/mutation-cache";
 import { trpc } from "@/lib/trpc";
 import { VoiceBookingPanel, type VoiceSlots } from "@/components/voice-booking-panel";
 
 export default function VoiceDeskScreen() {
   const colors = useColors();
+  const utils = trpc.useUtils();
   const [targetUserId, setTargetUserId] = useState<number | null>(null);
 
   const { data: residents = [], isLoading } = trpc.voice.residents.useQuery();
   const commandMutation = trpc.voice.staffCommand.useMutation();
-  const commitMutation = trpc.voice.staffCommit.useMutation();
+  const commitMutation = trpc.voice.staffCommit.useMutation({
+    onSuccess: async () => {
+      await invalidateDomainCaches("booking", utils);
+      await invalidateDomainCaches("workOrder", utils);
+    },
+  });
 
   const selected = residents.find((r: any) => r.id === targetUserId);
 
