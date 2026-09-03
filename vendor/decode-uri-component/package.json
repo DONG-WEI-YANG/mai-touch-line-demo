@@ -1,0 +1,12 @@
+{
+  "name": "decode-uri-component",
+  "version": "0.5.0",
+  "description": "CommonJS compatibility build of the CVE-2026-45822 fix",
+  "main": "index.cjs",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=14.16"
+  },
+  "license": "MIT",
+  "private": true
+}
