@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import ignore from "ignore";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
@@ -41,6 +42,19 @@ describe("web assets and deployment configuration", () => {
     const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
     expect(packageJson.engines.node).toBe(">=24 <25");
     expect(packageJson.scripts["web:build"]).toBe("expo export -p web --output-dir dist");
+  });
+
+  it("keeps downloaded root models out of Vercel deployment inputs", () => {
+    const deploymentIgnore = ignore().add(
+      readFileSync(resolve(root, ".vercelignore"), "utf8"),
+    );
+
+    expect(
+      deploymentIgnore.ignores(
+        "models/pretrained/sentiment-bert/model.safetensors",
+      ),
+    ).toBe(true);
+    expect(deploymentIgnore.ignores("assets/icon.png")).toBe(false);
   });
 
   it("does not exclude executable NLP model source from deployments", () => {
