@@ -44,6 +44,19 @@ describe("web assets and deployment configuration", () => {
     expect(packageJson.scripts["web:build"]).toBe("expo export -p web --output-dir dist");
   });
 
+  it("keeps the GitHub Pages build on the supported Node 24 action runtime", () => {
+    const workflow = readFileSync(
+      resolve(root, ".github/workflows/deploy-pages.yml"),
+      "utf8",
+    );
+
+    expect(workflow).toContain("node-version: 24");
+    expect(workflow).toContain("actions/checkout@v7");
+    expect(workflow).toContain("actions/setup-node@v7");
+    expect(workflow).toContain("actions/upload-pages-artifact@v5");
+    expect(workflow).toContain("actions/deploy-pages@v5");
+  });
+
   it("keeps downloaded root models out of Vercel deployment inputs", () => {
     const deploymentIgnore = ignore().add(
       readFileSync(resolve(root, ".vercelignore"), "utf8"),
