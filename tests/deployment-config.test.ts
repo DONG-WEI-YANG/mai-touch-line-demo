@@ -70,6 +70,18 @@ describe("web assets and deployment configuration", () => {
     expect(deploymentIgnore.ignores("assets/icon.png")).toBe(false);
   });
 
+  it("keeps local caches and diagnostic artifacts out of Vercel uploads", () => {
+    const deploymentIgnore = ignore().add(
+      readFileSync(resolve(root, ".vercelignore"), "utf8"),
+    );
+
+    expect(deploymentIgnore.ignores(".npm-task-cache/_cacache/index-v5/data")).toBe(true);
+    expect(deploymentIgnore.ignores(".dbg/server-live.log")).toBe(true);
+    expect(deploymentIgnore.ignores(".playwright-mcp/page.yml")).toBe(true);
+    expect(deploymentIgnore.ignores("_local/screenshots/resident.png")).toBe(true);
+    expect(deploymentIgnore.ignores("src/app/index.tsx")).toBe(false);
+  });
+
   it("does not exclude executable NLP model source from deployments", () => {
     const ignoreLines = readFileSync(resolve(root, ".gitignore"), "utf8")
       .split(/\r?\n/)

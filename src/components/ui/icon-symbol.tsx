@@ -3,7 +3,7 @@
  * Wrapper for SF Symbols / Lucide icons
  */
 import React from "react";
-import { View } from "react-native";
+import { View, type ColorValue } from "react-native";
 import * as Icons from "lucide-react-native";
 
 type IconName = keyof typeof Icons;
@@ -11,7 +11,7 @@ type IconName = keyof typeof Icons;
 type IconSymbolProps = {
   name: IconName | string;
   size?: number;
-  color?: string;
+  color?: ColorValue;
   strokeWidth?: number;
 };
 

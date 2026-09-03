@@ -1,24 +1,42 @@
 /**
  * useVoiceRecording Hook
- * Handles voice recording with expo-av
+ * Handles native voice recording with expo-audio.
  */
 import { useState, useCallback, useRef } from "react";
-import { Audio } from "expo-av";
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from "expo-audio";
 import { Alert } from "react-native";
+
+import { normalizeRecordingMetering } from "@/lib/audio-metering";
 
 export type RecordingState = "idle" | "recording" | "processing" | "error";
 
+const VOICE_RECORDING_OPTIONS = {
+  ...RecordingPresets.HIGH_QUALITY,
+  isMeteringEnabled: true,
+};
+
 export function useVoiceRecording() {
   const [state, setState] = useState<RecordingState>("idle");
-  const [duration, setDuration] = useState(0);
-  const [audioLevel, setAudioLevel] = useState(0);
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingActiveRef = useRef(false);
+  const recorder = useAudioRecorder(VOICE_RECORDING_OPTIONS);
+  const recorderStatus = useAudioRecorderState(recorder, 100);
+
+  const duration = state === "recording" ? recorderStatus.durationMillis / 1000 : 0;
+  const audioLevel =
+    state === "recording"
+      ? normalizeRecordingMetering(recorderStatus.metering)
+      : 0;
 
   const requestPermissions = useCallback(async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
+      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+      if (!granted) {
         Alert.alert(
           "Permission Required",
           "Microphone access is required for voice input."
@@ -37,32 +55,15 @@ export function useVoiceRecording() {
       const hasPermission = await requestPermissions();
       if (!hasPermission) return false;
 
-      // Configure audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      // Create recording
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      recordingRef.current = recording;
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      recordingActiveRef.current = true;
       setState("recording");
-      setDuration(0);
-
-      // Update duration and audio level
-      intervalRef.current = setInterval(async () => {
-        if (recordingRef.current) {
-          const status = await recordingRef.current.getStatusAsync();
-          if (status.isRecording) {
-            setDuration(status.durationMillis / 1000);
-            // Simulate audio level (expo-av doesn't provide real-time metering)
-            setAudioLevel(Math.random() * 0.5 + 0.3);
-          }
-        }
-      }, 100);
 
       return true;
     } catch (error) {
@@ -70,28 +71,20 @@ export function useVoiceRecording() {
       setState("error");
       return false;
     }
-  }, [requestPermissions]);
+  }, [recorder, requestPermissions]);
 
   const stopRecording = useCallback(async (): Promise<string | null> => {
     try {
-      if (!recordingRef.current) return null;
+      if (!recordingActiveRef.current) return null;
 
       setState("processing");
 
-      // Clear interval
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-
-      // Stop recording
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+      await recorder.stop();
+      recordingActiveRef.current = false;
+      const uri = recorder.uri;
+      await setAudioModeAsync({ allowsRecording: false });
 
       setState("idle");
-      setDuration(0);
-      setAudioLevel(0);
 
       return uri;
     } catch (error) {
@@ -99,27 +92,21 @@ export function useVoiceRecording() {
       setState("error");
       return null;
     }
-  }, []);
+  }, [recorder]);
 
   const cancelRecording = useCallback(async () => {
     try {
-      if (recordingRef.current) {
-        await recordingRef.current.stopAndUnloadAsync();
-        recordingRef.current = null;
+      if (recordingActiveRef.current) {
+        await recorder.stop();
+        recordingActiveRef.current = false;
       }
 
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-
+      await setAudioModeAsync({ allowsRecording: false });
       setState("idle");
-      setDuration(0);
-      setAudioLevel(0);
     } catch (error) {
       console.error("Cancel recording error:", error);
     }
-  }, []);
+  }, [recorder]);
 
   return {
     state,

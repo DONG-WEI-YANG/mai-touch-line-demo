@@ -40,6 +40,9 @@ Thumbs.db
 # Logs + caches
 *.log
 .cache/
+.npm-task-cache/
+.pytest_cache/
+.benchmarks/
 .kiro/
 crash.log
 init.log
@@ -55,6 +58,11 @@ model_download.log
 .env.*
 
 # Local scratch
+.claude/
+.dbg/
+.mocia/
+.playwright-mcp/
+_local/
 scratch_*.mjs
 scratch_*.js
 web-tokens.txt

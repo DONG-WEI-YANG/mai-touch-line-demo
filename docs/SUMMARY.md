@@ -111,7 +111,6 @@ m-ai-touch/
 │   │   ├── scheduler.ts
 │   │   ├── schema.ts
 │   │   └── storage.ts
-│   └── app.config.ts
 ├── tests/                      # 測試文件
 │   ├── amenities.test.ts
 │   ├── calendar-utils.test.ts
@@ -120,6 +119,7 @@ m-ai-touch/
 │   └── store.test.ts
 ├── .env.example               # 環境變量模板
 ├── .gitignore                 # Git 忽略
+├── app.config.js              # Expo 動態部署路徑配置
 ├── package.json               # 項目配置
 ├── README.md                  # 項目說明
 ├── theme.config.js            # 主題配置
