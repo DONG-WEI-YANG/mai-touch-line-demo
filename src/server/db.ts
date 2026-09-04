@@ -601,10 +601,26 @@ export async function createAmenity(data: InsertAmenity) {
   return Array.isArray(result) ? result[0].insertId : (result as { lastInsertRowid: number }).lastInsertRowid;
 }
 
+/**
+ * better-sqlite3 只能綁 number / string / bigint / buffer / null —— JS boolean 會丟出
+ * "SQLite3 can only bind numbers, strings, bigints, buffers, and null"。
+ *
+ * schema 是 MySQL 型的,布林欄位(如 amenities.isActive)宣告成 boolean,於是任何
+ * 傳 true/false 的呼叫端都會在 SQLite 上炸掉。轉成 0/1 兩種方言都吃。
+ * 這是本檔案 create* 系列已經處理過的同一類陷阱。
+ */
+export function normalizeForSqlite<T extends Record<string, unknown>>(data: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    out[k] = typeof v === "boolean" ? (v ? 1 : 0) : v;
+  }
+  return out as T;
+}
+
 export async function updateAmenity(id: number, data: Partial<InsertAmenity>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(amenities).set(data).where(eq(amenities.id, id));
+  await db.update(amenities).set(normalizeForSqlite(data)).where(eq(amenities.id, id));
 }
 
 export async function deleteAmenity(id: number) {
