@@ -460,36 +460,85 @@ function MobileHandoffScenario() {
   );
 }
 
-/** 情境 4 —— LINE 沒設定就不演;推播是真推,推不出去不用假畫面補。 */
+/**
+ * 情境 4 —— 客戶掃碼加官方帳號,業務點一下,**客戶自己的手機**當場收到訊息。
+ *
+ * 刻意不用 lineAdmin.scriptRun:那支只推得到操作者自己綁定的裝置,推到業務
+ * 手機上證明不了簡報承諾的那句「客戶的 LINE 當場收到」。
+ */
 function LinePushScenario({ onNotice }: { onNotice: (message: string) => void }) {
-  const scriptsQuery = trpc.lineAdmin.scriptsList.useQuery(undefined, {
+  const audienceQuery = trpc.showcase.lineAudience.useQuery(undefined, {
     refetchOnWindowFocus: false,
+    // 客戶掃碼加好友後要很快出現在名單上,不然業務會以為壞了。
+    refetchInterval: 5000,
   });
-  const runMutation = trpc.lineAdmin.scriptRun.useMutation({
-    onSuccess: (result) => onNotice(result.message),
+  const pushMutation = trpc.showcase.linePush.useMutation({
+    onSuccess: () => onNotice("已推送 —— 請客戶看自己的手機"),
     onError: (error) => onNotice(`推播失敗:${error.message}`),
   });
 
-  const scripts = scriptsQuery.data ?? [];
+  const [recipient, setRecipient] = useState<string | null>(null);
+  const audience = audienceQuery.data;
+  const recipients = audience?.recipients ?? [];
+  const scripts = audience?.scripts ?? [];
+  const selected = recipient ?? recipients[0]?.lineUserId ?? null;
+
+  if (audienceQuery.isLoading) return <ActivityIndicator color={C.gold} />;
 
   return (
     <View style={styles.lineBlock}>
-      <Text style={styles.lineHint}>
-        選一段示範腳本,系統會推到已綁定的 LINE 裝置上 —— 客戶當場看到訊息進來。
-      </Text>
+      {audience?.addFriendUrl ? (
+        <ShowcaseQrCode
+          value={audience.addFriendUrl}
+          size={170}
+          caption="請客戶用手機掃碼加入社區官方帳號"
+        />
+      ) : (
+        <Text style={styles.emptyHint}>
+          尚未設定官方帳號的基本 ID(LINE_BOT_BASIC_ID),無法產生加好友碼。
+        </Text>
+      )}
+
+      <Text style={styles.lineSectionLabel}>推給誰</Text>
+      {recipients.length === 0 ? (
+        <Text style={styles.emptyHint}>
+          還沒有人加入。請客戶掃上面的碼,加入後會自動出現在這裡(最新的排最前面)。
+        </Text>
+      ) : (
+        <View style={styles.recipientRow}>
+          {recipients.slice(0, 6).map((person: { lineUserId: string; displayName: string }) => {
+            const active = person.lineUserId === selected;
+            return (
+              <Pressable
+                key={person.lineUserId}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                onPress={() => setRecipient(person.lineUserId)}
+                style={[styles.recipient, active && styles.recipientActive]}
+              >
+                <Text style={[styles.recipientText, active && styles.recipientTextActive]}>
+                  {person.displayName}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      <Text style={styles.lineSectionLabel}>推什麼</Text>
       {scripts.map((script: { id: string; name: string }) => (
         <ShowcaseButton
           key={script.id}
           label={`推送:${script.name}`}
           variant="ghost"
-          onPress={() => runMutation.mutate({ id: script.id })}
-          disabled={runMutation.isLoading}
+          onPress={() =>
+            selected && pushMutation.mutate({ scriptId: script.id, lineUserId: selected })
+          }
+          disabled={!selected || pushMutation.isLoading}
           style={styles.lineButton}
         />
       ))}
-      {scripts.length === 0 ? (
-        <Text style={styles.emptyHint}>尚無可用的示範腳本。</Text>
-      ) : null}
+      {scripts.length === 0 ? <Text style={styles.emptyHint}>尚無可用的示範腳本。</Text> : null}
     </View>
   );
 }
@@ -627,7 +676,25 @@ const styles = StyleSheet.create({
   qrHint: { color: C.muted, fontSize: 12.5, lineHeight: 20, textAlign: "center", maxWidth: 380 },
 
   lineBlock: { gap: 12 },
-  lineHint: { color: C.muted, fontSize: 12.5, lineHeight: 20 },
+  lineSectionLabel: {
+    color: C.gold,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 2.5,
+    marginTop: 6,
+  },
+  recipientRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  recipient: {
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: R.chip,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    backgroundColor: C.cardDeep,
+  },
+  recipientActive: { borderColor: C.gold, backgroundColor: "#1b2b4a" },
+  recipientText: { color: C.muted, fontSize: 12.5, fontWeight: "700" },
+  recipientTextActive: { color: C.paper },
   lineButton: { alignSelf: "flex-start" },
 
   emptyHint: { color: C.faint, fontSize: 12.5, lineHeight: 20 },

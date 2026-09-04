@@ -10,8 +10,12 @@
  */
 import { z } from "zod";
 
+import { TRPCError } from "@trpc/server";
+
 import { router, staffProcedure } from "../_core/trpc";
 import * as db from "../db";
+import { listScripts } from "../line/demo-scripts";
+import { startDemo } from "../line/handlers/demo";
 import { hardwareGatewayService } from "../services/hardwareGatewayService";
 import {
   countShowcaseResidue,
@@ -78,6 +82,19 @@ async function amenityNames(): Promise<Map<number, string>> {
     if (row?.id != null) map.set(row.id, row.name ?? "");
   }
   return map;
+}
+
+/** LINE user id 的格式 —— 直接在 schema 擋掉亂填的字串。 */
+const lineUserIdSchema = z.string().regex(/^U[0-9a-fA-F]{32}$/);
+
+/**
+ * 加好友連結。基本 ID 沒設定就回 null —— 拼不出正確連結時,寧可不給,
+ * 也不要讓客戶掃到一個開不起來的碼。
+ */
+function addFriendUrl(): string | null {
+  const basicId = (process.env.LINE_BOT_BASIC_ID ?? "").trim();
+  if (!basicId) return null;
+  return `https://line.me/R/ti/p/${encodeURIComponent(basicId)}`;
 }
 
 export const showcaseRouter = router({
@@ -165,6 +182,99 @@ export const showcaseRouter = router({
     const devices = await db.getDevicesByUnit(resident.unitId);
     return { devices, hardware };
   }),
+
+  /**
+   * 情境 4 需要的東西:加好友連結、可推送的好友名單、示範腳本。
+   *
+   * 名單按加入時間新到舊 —— 客戶剛掃碼加好友,就會排在第一個,業務不必找。
+   */
+  lineAudience: staffProcedure.query(({ ctx }) => {
+    const lineAdmin = ctx.lineAdmin;
+    if (!lineAdmin) {
+      return { configured: false, addFriendUrl: null, recipients: [], scripts: [] };
+    }
+
+    const rows = lineAdmin.db
+      .prepare(
+        `SELECT lu.line_user_id as lineUserId, lu.display_name as displayName,
+                lu.language, lu.is_demo as isDemo, lu.created_at as createdAt
+         FROM line_user lu
+         WHERE lu.channel_id = ?
+         ORDER BY lu.id DESC LIMIT 20`,
+      )
+      .all(lineAdmin.channelId) as Array<{
+      lineUserId: string;
+      displayName: string | null;
+      language: string | null;
+      isDemo: number;
+      createdAt: string;
+    }>;
+
+    return {
+      configured: true,
+      addFriendUrl: addFriendUrl(),
+      recipients: rows.map((r) => ({
+        lineUserId: r.lineUserId,
+        displayName: r.displayName ?? "(未命名好友)",
+        isDemo: !!r.isDemo,
+        createdAt: r.createdAt,
+      })),
+      scripts: listScripts().map((script) => ({
+        id: script.id,
+        name: script.title["zh-TW"] || script.id,
+      })),
+    };
+  }),
+
+  /**
+   * 把示範腳本推給**指定的** LINE 好友 —— 也就是剛掃碼加入的客戶。
+   *
+   * 既有的 lineAdmin.scriptRun 只推得到「操作者自己綁定的裝置」
+   * (WHERE app_user_id = ctx.user.id),對展示模式而言有兩個問題:
+   *  1. 展示模式用 token 合成管理員,資料庫裡永遠沒有那一列 → 必定失敗
+   *  2. 簡報承諾的是「客戶的 LINE 當場收到」,推給業務自己不成立
+   *
+   * 收件者必須在好友名單內才推得出去 —— 不接受任意 LINE id。
+   */
+  linePush: staffProcedure
+    .input(z.object({ scriptId: z.string().min(1), lineUserId: lineUserIdSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const lineAdmin = ctx.lineAdmin;
+      if (!lineAdmin) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "LINE 尚未設定,無法推播。此情境不以假畫面代替。",
+        });
+      }
+
+      const known = lineAdmin.db
+        .prepare(
+          `SELECT line_user_id as lineUserId, language FROM line_user
+           WHERE channel_id = ? AND line_user_id = ? LIMIT 1`,
+        )
+        .get(lineAdmin.channelId, input.lineUserId) as
+        | { lineUserId: string; language: string | null }
+        | undefined;
+
+      if (!known) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "這個 LINE 使用者不在好友名單中,請先請對方掃碼加入官方帳號。",
+        });
+      }
+
+      await startDemo(input.scriptId, {
+        store: lineAdmin.sessionStore,
+        client: lineAdmin.lineClient,
+        lineUser: {
+          lineUserId: known.lineUserId,
+          language: (known.language ?? "zh-TW") as "zh-TW",
+        },
+        runSideEffect: lineAdmin.runSideEffect,
+      });
+
+      return { ok: true as const, lineUserId: known.lineUserId };
+    }),
 
   /**
    * 清掉本場次的痕跡,讓下一組客戶從乾淨畫面開始。
