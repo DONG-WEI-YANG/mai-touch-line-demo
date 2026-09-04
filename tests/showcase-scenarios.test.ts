@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   SHOWCASE_SCENARIOS,
   scenarioAvailability,
+  showcaseBlockReason,
   type ShowcaseReadiness,
 } from "../src/lib/showcase-scenarios";
 
@@ -76,5 +77,32 @@ describe("scenarioAvailability", () => {
   it("掃碼試用不依賴硬體與 LINE", () => {
     const a = scenarioAvailability(find("mobile-handoff"), { resident: true, hardware: false, line: false });
     expect(a.runnable).toBe(true);
+  });
+});
+
+
+describe("showcaseBlockReason", () => {
+  it("連不上伺服器時說的是連線問題,不是叫人去建示範資料", () => {
+    // 限流或斷線時 session 查詢也會失敗。若照著「尚未建立示範住戶」的訊息去跑
+    // seed,只會浪費展示現場的時間 —— 真正的問題在連線。
+    const reason = showcaseBlockReason({ sessionError: true, session: undefined });
+    expect(reason).toContain("連線");
+    expect(reason).not.toContain("示範資料建置");
+  });
+
+  it("順利拿到 session 但確實沒有示範住戶時,才說去建資料", () => {
+    const reason = showcaseBlockReason({
+      sessionError: false,
+      session: { ready: false, blockedReason: "尚未建立示範住戶,請先執行 npm run seed:showcase" },
+    });
+    expect(reason).toContain("示範住戶");
+  });
+
+  it("一切就緒時沒有阻擋訊息", () => {
+    expect(showcaseBlockReason({ sessionError: false, session: { ready: true } })).toBeNull();
+  });
+
+  it("查詢還沒回來時不下結論", () => {
+    expect(showcaseBlockReason({ sessionError: false, session: undefined })).toBeNull();
   });
 });

@@ -43,6 +43,11 @@ export function setStoredToken(token: string): void {
   try { globalThis.localStorage.setItem(TOKEN_STORAGE_KEY, token); } catch {}
 }
 
+/** 本機是否存有 token —— authGate 用它判斷「查不出來」該留在原地還是導向登入。 */
+export function hasStoredToken(): boolean {
+  return !!getStoredToken();
+}
+
 export function clearStoredToken(): void {
   if (typeof globalThis.localStorage === 'undefined') return;
   try { globalThis.localStorage.removeItem(TOKEN_STORAGE_KEY); } catch {}

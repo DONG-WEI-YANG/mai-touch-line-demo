@@ -120,3 +120,24 @@ export function scenarioAvailability(
 
   return { runnable: true };
 }
+
+/**
+ * 展示頁的全域阻擋訊息。
+ *
+ * 存在的理由是一個反覆出現的錯誤模式:**把「不知道」當成「否定」**。
+ * 限流或斷線時 session 查詢會失敗,若沿用「尚未建立示範住戶」的訊息,業務會
+ * 跑去執行一個根本不是問題的 seed 腳本,在客戶面前浪費時間。
+ *
+ * 回 null 代表沒有需要阻擋的理由(或還沒有足夠資訊下結論)。
+ */
+export function showcaseBlockReason(input: {
+  sessionError: boolean;
+  session: { ready: boolean; blockedReason?: string | null } | undefined;
+}): string | null {
+  if (input.sessionError) {
+    return "連線異常,暫時取得不到展示狀態。系統會自動重試,請稍候再操作。";
+  }
+  if (!input.session) return null;
+  if (input.session.ready) return null;
+  return input.session.blockedReason ?? "展示模式尚未就緒";
+}

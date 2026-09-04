@@ -36,9 +36,11 @@ import { VoiceBookingPanel, type VoiceSlots } from "@/components/voice-booking-p
 import {
   SHOWCASE_SCENARIOS,
   scenarioAvailability,
+  showcaseBlockReason,
   type ShowcaseScenario,
   type ShowcaseScenarioId,
 } from "@/lib/showcase-scenarios";
+import { recoveryRefetchInterval } from "@/lib/recovery-interval";
 import { trpc, type RouterOutputs } from "@/lib/trpc";
 
 /** 分割版面的門檻 —— 接待中心平板橫放約 1024pt,窄於此就改上下堆疊。 */
@@ -63,6 +65,9 @@ export default function ShowcaseScreen() {
 
   const sessionQuery = trpc.showcase.session.useQuery(undefined, {
     refetchOnWindowFocus: false,
+    // 失敗後開慢速輪詢自己活過來 —— 否則限流過去了畫面還是死的,而畫面上
+    // 那句「系統會自動重試」就成了假承諾。成功後自動關掉。
+    refetchInterval: (_data, query) => recoveryRefetchInterval(query.state.status),
   });
   const timelineQuery = trpc.showcase.timeline.useQuery(
     {},
@@ -85,15 +90,32 @@ export default function ShowcaseScreen() {
   );
 
   const active = SHOWCASE_SCENARIOS.find((s) => s.id === activeId) ?? SHOWCASE_SCENARIOS[0];
-  const availability = scenarioAvailability(active, readiness);
+  // 全域阻擋(連線異常 / 尚未建資料)優先於單一情境的前置條件 —— 不然連線斷了
+  // 畫面會叫業務去跑 seed,那不是問題所在。
+  const globalBlock = showcaseBlockReason({
+    sessionError: sessionQuery.isError,
+    session: session ? { ready: session.ready, blockedReason: session.blockedReason } : undefined,
+  });
+  const availability = globalBlock
+    ? { runnable: false, blockedReason: globalBlock, degraded: undefined }
+    : scenarioAvailability(active, readiness);
+
+  // 深層重置會清掉先前場次 —— 同一台伺服器上若有同事正在演,他的場次也會被清掉。
+  // 所以需要按第二次確認,而且按鈕上直接寫出會刪幾筆。
+  const [confirmDeep, setConfirmDeep] = useState(false);
 
   const resetMutation = trpc.showcase.reset.useMutation({
     onSuccess: async (result) => {
       const { bookings, workOrders, voiceEvents } = result.removed;
-      setNotice(`已清除本場次:${bookings} 筆預約、${workOrders} 張工單、${voiceEvents} 筆語音紀錄`);
+      const label = result.scope === "all" ? "已清除全部示範紀錄" : "已清除本場次";
+      setNotice(`${label}:${bookings} 筆預約、${workOrders} 張工單、${voiceEvents} 筆語音紀錄`);
+      setConfirmDeep(false);
       await Promise.all([utils.showcase.timeline.invalidate(), utils.showcase.session.invalidate()]);
     },
-    onError: (error) => setNotice(`重置失敗:${error.message}`),
+    onError: (error) => {
+      setConfirmDeep(false);
+      setNotice(`重置失敗:${error.message}`);
+    },
   });
 
   const events = timelineQuery.data?.events ?? [];
@@ -103,7 +125,16 @@ export default function ShowcaseScreen() {
       <TopBar
         session={session}
         loading={sessionQuery.isLoading}
-        onReset={() => resetMutation.mutate()}
+        unreachable={sessionQuery.isError}
+        onReset={() => resetMutation.mutate({ scope: "session" })}
+        onDeepReset={() => {
+          if (!confirmDeep) {
+            setConfirmDeep(true);
+            return;
+          }
+          resetMutation.mutate({ scope: "all" });
+        }}
+        confirmDeep={confirmDeep}
         resetting={resetMutation.isLoading}
       />
 
@@ -180,15 +211,23 @@ type SessionData = RouterOutputs["showcase"]["session"] | undefined;
 function TopBar({
   session,
   loading,
+  unreachable,
   onReset,
+  onDeepReset,
+  confirmDeep,
   resetting,
 }: {
   session: SessionData;
   loading: boolean;
+  /** 查詢失敗 —— 狀態是「不知道」,不可以顯示成「沒有」。 */
+  unreachable: boolean;
   onReset: () => void;
+  onDeepReset: () => void;
+  confirmDeep: boolean;
   resetting: boolean;
 }) {
   const hardware = session?.hardware;
+  const residue = session?.residue?.total ?? 0;
   return (
     <View style={styles.topBar}>
       <View style={styles.brandBlock}>
@@ -206,10 +245,14 @@ function TopBar({
                 label={`代 ${session.resident.name}${session.resident.unitNumber ? ` · ${session.resident.unitNumber}` : ""}`}
                 tone="gold"
               />
+            ) : unreachable ? (
+              // 連不上時狀態是「不知道」—— 不能斷言示範住戶不存在。
+              <StatusPill label="連線中…" tone="warn" />
             ) : (
               <StatusPill label="尚未建立示範住戶" tone="warn" />
             )}
-            {hardware ? (
+            {/* 硬體狀態同理:查不到就不顯示,而不是顯示成未連線。 */}
+            {hardware && !unreachable ? (
               <StatusPill label={hardware.label} tone={hardware.connected ? "live" : "warn"} />
             ) : null}
           </>
@@ -220,6 +263,17 @@ function TopBar({
           onPress={onReset}
           disabled={resetting}
         />
+        {/* 先前場次的殘留:一般重置碰不到它們(時間護欄擋著)。把筆數寫在按鈕上,
+            按下去的人才知道自己在刪什麼。 */}
+        {residue > 0 ? (
+          <ShowcaseButton
+            label={confirmDeep ? `確定刪除 ${residue} 筆?` : `先前場次殘留 ${residue} 筆`}
+            variant="ghost"
+            onPress={onDeepReset}
+            disabled={resetting}
+            style={confirmDeep ? styles.deepConfirm : undefined}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -493,6 +547,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
+  deepConfirm: { borderColor: C.warn },
   noticeText: { color: C.paper, fontSize: 13, flex: 1 },
   noticeDismiss: { color: C.faint, fontSize: 11 },
 

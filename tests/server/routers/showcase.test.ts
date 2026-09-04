@@ -190,4 +190,50 @@ describe("showcase.reset", () => {
     expect(state.deletedWorkOrders).toEqual([]);
     expect(result.removed).toEqual({ bookings: 0, workOrders: 0, voiceEvents: 0 });
   });
+
+  it("scope:\"all\" 連先前場次一起清,但仍不碰別的住戶", async () => {
+    const c = await caller(STAFF);
+    const result = await c.reset({ scope: "all" });
+    expect(state.deletedBookings.sort()).toEqual([1, 3]);
+    expect(state.deletedWorkOrders.sort()).toEqual([10, 11]);
+    expect(state.deletedBookings).not.toContain(2);
+    expect(result.scope).toBe("all");
+  });
+
+  it("不帶參數時仍是保守的本場次重置", async () => {
+    const c = await caller(STAFF);
+    const result = await c.reset();
+    expect(result.scope).toBe("session");
+    expect(state.deletedBookings).toEqual([1]);
+  });
+});
+
+describe("showcase.session 殘留統計", () => {
+  it("回報先前場次留下、一般重置清不掉的筆數", async () => {
+    state.bookings = [
+      { id: 1, userId: 7, createdAt: "2026-09-05T10:05:00.000Z" },
+      { id: 2, userId: 7, createdAt: "2020-01-01T00:00:00.000Z" },
+      { id: 3, userId: 99, createdAt: "2020-01-01T00:00:00.000Z" },
+    ];
+    state.workOrders = [{ id: 10, userId: 7, createdAt: "2020-01-01T00:00:00.000Z" }];
+    const c = await caller(STAFF);
+    const session = await c.session();
+    expect(session.residue).toEqual({ bookings: 1, workOrders: 1, total: 2 });
+  });
+
+  it("沒有殘留時回零", async () => {
+    state.bookings = [{ id: 1, userId: 7, createdAt: "2026-09-05T10:05:00.000Z" }];
+    state.workOrders = [];
+    const c = await caller(STAFF);
+    const session = await c.session();
+    expect(session.residue.total).toBe(0);
+  });
+
+  it("示範住戶不存在時殘留為零,不亂數別人的資料", async () => {
+    state.users = [];
+    state.bookings = [{ id: 1, userId: 7, createdAt: "2020-01-01T00:00:00.000Z" }];
+    const c = await caller(STAFF);
+    const session = await c.session();
+    expect(session.residue.total).toBe(0);
+  });
 });

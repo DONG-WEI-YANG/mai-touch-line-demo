@@ -13,7 +13,11 @@ import { z } from "zod";
 import { router, staffProcedure } from "../_core/trpc";
 import * as db from "../db";
 import { hardwareGatewayService } from "../services/hardwareGatewayService";
-import { selectShowcaseResetTargets, type ShowcaseResetCandidate } from "../services/showcaseReset";
+import {
+  countShowcaseResidue,
+  selectShowcaseResetTargets,
+  type ShowcaseResetCandidate,
+} from "../services/showcaseReset";
 import {
   SHOWCASE_RESIDENT_EMAIL,
   describeShowcaseHardware,
@@ -48,6 +52,25 @@ async function resolveResident(): Promise<ShowcaseResident | null> {
   };
 }
 
+/** 把預約與工單攤平成刪除/計數用的候選清單。 */
+async function resetCandidates(): Promise<ShowcaseResetCandidate[]> {
+  const [bookings, workOrders] = await Promise.all([db.getAllBookings(), db.getAllWorkOrders()]);
+  return [
+    ...(bookings as Array<Record<string, unknown>>).map((b) => ({
+      kind: "booking" as const,
+      id: b.id as number,
+      userId: b.userId as number,
+      createdAt: b.createdAt,
+    })),
+    ...(workOrders as Array<Record<string, unknown>>).map((w) => ({
+      kind: "workOrder" as const,
+      id: w.id as number,
+      userId: w.userId as number,
+      createdAt: w.createdAt,
+    })),
+  ];
+}
+
 async function amenityNames(): Promise<Map<number, string>> {
   const rows = await db.getAllAmenities();
   const map = new Map<number, string>();
@@ -64,7 +87,16 @@ export const showcaseRouter = router({
     const hardware = describeShowcaseHardware(hardwareGatewayService.getHealthInfo());
     // LINE 情境不容降級演出 —— 推不出去就是推不出去,寧可擋下也不演假畫面。
     const lineConfigured = Boolean(ctx.lineAdmin);
+    const startedAt = showcaseSessionService.getStartedAt();
+    // 先前場次留下、一般重置清不掉的紀錄。攤在畫面上,深層重置才不是盲按。
+    const residue = resident
+      ? countShowcaseResidue(await resetCandidates(), {
+          residentUserId: resident.id,
+          sessionStartedAt: startedAt,
+        })
+      : { bookings: 0, workOrders: 0, total: 0 };
     return {
+      residue,
       startedAt: showcaseSessionService.getStartedAt(),
       resident: resident
         ? { id: resident.id, name: resident.name, unitNumber: resident.unitNumber }
@@ -140,29 +172,19 @@ export const showcaseRouter = router({
    * 破壞範圍由 selectShowcaseResetTargets 的兩道護欄決定(示範住戶 + 本場次),
    * 這裡只負責執行與計數。刪完把場次邊界推到現在。
    */
-  reset: staffProcedure.mutation(async () => {
+  reset: staffProcedure
+    .input(z.object({ scope: z.enum(["session", "all"]).default("session") }).optional())
+    .mutation(async ({ input }) => {
+    const scope = input?.scope ?? "session";
     const resident = await resolveResident();
     const startedAt = showcaseSessionService.getStartedAt();
 
-    const [bookings, workOrders] = await Promise.all([db.getAllBookings(), db.getAllWorkOrders()]);
-    const candidates: ShowcaseResetCandidate[] = [
-      ...(bookings as Array<Record<string, unknown>>).map((b) => ({
-        kind: "booking" as const,
-        id: b.id as number,
-        userId: b.userId as number,
-        createdAt: b.createdAt,
-      })),
-      ...(workOrders as Array<Record<string, unknown>>).map((w) => ({
-        kind: "workOrder" as const,
-        id: w.id as number,
-        userId: w.userId as number,
-        createdAt: w.createdAt,
-      })),
-    ];
+    const candidates: ShowcaseResetCandidate[] = await resetCandidates();
 
     const targets = selectShowcaseResetTargets(candidates, {
       residentUserId: resident?.id,
       sessionStartedAt: startedAt,
+      scope,
     });
 
     let removedBookings = 0;
@@ -177,13 +199,17 @@ export const showcaseRouter = router({
       }
     }
 
+    // 語音稽核是記憶體 ring buffer。深層重置要連先前場次的也清掉,所以把邊界
+    // 推到 epoch;一般重置只清本場次。
+    const voiceBoundary = scope === "all" ? new Date(0).toISOString() : startedAt;
     const voiceEvents = resident
-      ? voiceAuditService.clearSince(startedAt, { targetUserId: resident.id })
+      ? voiceAuditService.clearSince(voiceBoundary, { targetUserId: resident.id })
       : 0;
 
     const newStartedAt = showcaseSessionService.restart();
 
     return {
+      scope,
       removed: { bookings: removedBookings, workOrders: removedWorkOrders, voiceEvents },
       startedAt: newStartedAt,
     };

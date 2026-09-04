@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { selectShowcaseResetTargets } from "../../src/server/services/showcaseReset";
+import { countShowcaseResidue, selectShowcaseResetTargets } from "../../src/server/services/showcaseReset";
 
 const SESSION = "2026-09-05T10:00:00.000Z";
 const POLICY = { residentUserId: 7, sessionStartedAt: SESSION };
@@ -78,5 +78,94 @@ describe("selectShowcaseResetTargets", () => {
   it("場次起始時間無效時什麼都不刪", () => {
     const targets = selectShowcaseResetTargets([row()], { residentUserId: 7, sessionStartedAt: "nonsense" });
     expect(targets).toEqual([]);
+  });
+});
+
+
+describe("深層重置 scope: \"all\"", () => {
+  it("連場次之前的紀錄一併清掉", () => {
+    const targets = selectShowcaseResetTargets(
+      [row({ id: 1 }), row({ id: 2, createdAt: "2020-01-01T00:00:00.000Z" })],
+      { ...POLICY, scope: "all" },
+    );
+    expect(targets.map((t) => t.id).sort()).toEqual([1, 2]);
+  });
+
+  it("但仍然只碰示範住戶 —— 這道護欄不因 scope 而鬆開", () => {
+    const targets = selectShowcaseResetTargets(
+      [row({ id: 1, userId: 99 }), row({ id: 2, userId: 7 })],
+      { ...POLICY, scope: "all" },
+    );
+    expect(targets).toEqual([{ kind: "booking", id: 2 }]);
+  });
+
+  it("示範住戶解析不到時,深層重置一樣什麼都不刪", () => {
+    const targets = selectShowcaseResetTargets([row()], {
+      residentUserId: undefined,
+      sessionStartedAt: SESSION,
+      scope: "all",
+    });
+    expect(targets).toEqual([]);
+  });
+
+  it("深層重置不需要有效的場次時間 —— 它本來就不看時間", () => {
+    const targets = selectShowcaseResetTargets([row()], {
+      residentUserId: 7,
+      sessionStartedAt: "nonsense",
+      scope: "all",
+    });
+    expect(targets).toHaveLength(1);
+  });
+
+  it("時間戳壞掉的紀錄在深層重置時也清得掉 —— 否則永遠卡在那裡", () => {
+    const targets = selectShowcaseResetTargets([row({ createdAt: "not-a-date" })], {
+      ...POLICY,
+      scope: "all",
+    });
+    expect(targets).toHaveLength(1);
+  });
+
+  it("不指定 scope 時維持只清本場次的保守預設", () => {
+    const targets = selectShowcaseResetTargets(
+      [row({ id: 1 }), row({ id: 2, createdAt: "2020-01-01T00:00:00.000Z" })],
+      POLICY,
+    );
+    expect(targets).toEqual([{ kind: "booking", id: 1 }]);
+  });
+});
+
+describe("countShowcaseResidue", () => {
+  it("數出示範住戶在本場次之前留下的筆數", () => {
+    const residue = countShowcaseResidue(
+      [
+        row({ id: 1 }),
+        row({ id: 2, createdAt: "2020-01-01T00:00:00.000Z" }),
+        row({ kind: "workOrder", id: 3, createdAt: "2020-01-01T00:00:00.000Z" }),
+        row({ id: 4, userId: 99, createdAt: "2020-01-01T00:00:00.000Z" }),
+      ],
+      POLICY,
+    );
+    expect(residue).toEqual({ bookings: 1, workOrders: 1, total: 2 });
+  });
+
+  it("沒有殘留時回零", () => {
+    expect(countShowcaseResidue([row({ id: 1 })], POLICY)).toEqual({
+      bookings: 0,
+      workOrders: 0,
+      total: 0,
+    });
+  });
+
+  it("時間戳壞掉的紀錄算殘留 —— 本場次認不出它,深層重置才清得掉", () => {
+    const residue = countShowcaseResidue([row({ createdAt: null })], POLICY);
+    expect(residue.total).toBe(1);
+  });
+
+  it("示範住戶解析不到時回零,不亂數別人的資料", () => {
+    const residue = countShowcaseResidue([row()], {
+      residentUserId: undefined,
+      sessionStartedAt: SESSION,
+    });
+    expect(residue.total).toBe(0);
   });
 });

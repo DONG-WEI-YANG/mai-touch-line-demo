@@ -3,30 +3,25 @@ import { View, ActivityIndicator, Text } from "react-native";
 import { Tabs, usePathname, useRouter, useRootNavigationState } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { trpc, createTRPCClient, trpcProxy } from "@/lib/trpc";
+import { trpc, createTRPCClient, trpcProxy, hasStoredToken } from "@/lib/trpc";
 import { AppProvider, useApp } from "@/lib/app-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { offlineService, type OfflineOperation } from "@/lib/offline";
 import { DemoRoleSwitcher } from "@/components/demo-role-switcher";
-import { redirectTarget, type AppRole } from "@/lib/route-access";
+import { authGate, shouldBlockOnAuthLoading, shouldRetryAuth } from "@/lib/auth-gate";
+import { shouldRetryQuery } from "@/lib/query-retry";
+import { recoveryRefetchInterval } from "@/lib/recovery-interval";
 
 // Create query client.
-// Retry policy: never retry on 4xx (auth/permission/validation errors won't
-// fix themselves); allow one retry on 5xx or network errors. This stops the
-// console from being flooded by repeated 403 retries when a procedure rejects
-// the current role (e.g. admin token hitting a residentProcedure during the
-// brief layout mount before role-based redirect kicks in).
+// 重試政策住在 src/lib/query-retry.ts(純函式,有測試):403/401/400 這類不重試
+// (權限與驗證錯誤不會自己好),429 會退避重試(限流是暫時的),5xx 與網路錯誤
+// 給一次機會。
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,
-      retry: (failureCount, error: unknown) => {
-        const e = error as { data?: { httpStatus?: number }; status?: number } | null;
-        const status = e?.data?.httpStatus ?? e?.status ?? 0;
-        if (status >= 400 && status < 500) return false;
-        return failureCount < 1;
-      },
+      retry: shouldRetryQuery,
       // Window focus shouldn't refire failed-permission queries — that produced
       // a continuous 403 loop in the console when the admin landed on resident-
       // only pages briefly during role-based redirect.
@@ -82,9 +77,14 @@ offlineService.setOperationHandler(async (op: OfflineOperation) => {
 offlineService.startAutoSync(30_000);
 
 function Root() {
-  const { data: user, isLoading } = trpc.auth.me.useQuery(undefined, {
-    retry: false,
+  // retry 不是 false:429 / 5xx / 網路抖動只代表「暫時查不出你是誰」,
+  // 直接放棄會讓 user 變成 null,守衛就把人踢回登入頁。見 src/lib/auth-gate.ts。
+  const { data: user, isLoading, error: authError } = trpc.auth.me.useQuery(undefined, {
+    retry: shouldRetryAuth,
     refetchOnWindowFocus: false,
+    // 重試用完後停在 error 就再也不會自己好。開慢速輪詢,伺服器恢復時畫面
+    // 自己接回來,不必當著客戶的面重新整理。
+    refetchInterval: (_data, query) => recoveryRefetchInterval(query.state.status),
   });
   const router = useRouter();
   const pathname = usePathname();
@@ -102,22 +102,29 @@ function Root() {
     if (!navState?.key) return;
     if (isLoading) return;
 
-    // 策略本身住在 src/lib/route-access.ts(純函式,被單測窮舉過);
-    // 這裡只負責把結論套用到 router。
-    const target = redirectTarget({
-      role: user?.role as AppRole,
+    // 決策住在 src/lib/auth-gate.ts(純函式,被單測窮舉過);這裡只套用結論。
+    // "stay" 代表暫時查不出身分 —— 什麼都不做,留在原畫面等重試。
+    const decision = authGate({
+      isLoading,
+      user,
+      error: authError,
+      hasToken: hasStoredToken(),
       pathname,
     });
-    if (target && target !== pathname) {
-      router.replace(target as any);
+    if (decision.action === "redirect") {
+      router.replace(decision.target as any);
     }
-  }, [navState?.key, user, isLoading, pathname, router]);
+  }, [navState?.key, user, isLoading, authError, pathname, router]);
 
-  // Loading screen ONLY while auth.me is in flight. We DON'T gate on
-  // navState.key because useRootNavigationState() only becomes truthy AFTER
-  // a navigator is rendered — gating render on it would create a deadlock
-  // (Loading shows → no navigator → navState never ready → Loading forever).
-  if (isLoading) {
+  // 整頁載入畫面只留給「完全沒有 token 的冷啟動」。
+  //
+  // 有 token 時一律直接渲染 navigator:auth.me 會對 429/5xx 退避重試,isLoading
+  // 可能持續十幾秒,擋在這裡等同讓使用者盯著一片灰色 —— 而且 navigator 沒掛載
+  // 期間深連結會遺失,直接開 /showcase 會掉回首頁。判斷見 src/lib/auth-gate.ts。
+  //
+  // (不 gate 在 navState.key 上的原因不變:那會造成死結 —— 顯示 Loading → 沒有
+  // navigator → navState 永遠不 ready → Loading 永遠不消失。)
+  if (shouldBlockOnAuthLoading({ isLoading, hasToken: hasStoredToken() })) {
     return (
       <View style={{ flex: 1, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator color="#C9A96E" />
@@ -138,8 +145,10 @@ function ResidentLayout() {
   // mounts (so admin/logistics screens render inside the same shell), but the
   // 4-tab bar would just be dead buttons for them — Concierge/Timeline/etc.
   // bounce back to their dashboard via the role guard in Root().
+  // 與 Root() 同一個 query key,重試政策也要一致 —— 否則哪一邊先掛載就用哪邊的
+  // 設定,行為會隨渲染順序飄移。
   const { data: user } = trpc.auth.me.useQuery(undefined, {
-    retry: false,
+    retry: shouldRetryAuth,
     refetchOnWindowFocus: false,
   });
   const isResident = (user as { role?: string } | undefined)?.role === 'resident';
