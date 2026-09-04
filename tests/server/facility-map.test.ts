@@ -64,6 +64,24 @@ describe("buildFacilityMap", () => {
     expect(map.size).toBe(0);
   });
 
+  it("停用的公設不列入 —— 管理員關掉的設施不該還能用語音訂到", () => {
+    const map = buildFacilityMap([
+      { id: 1, name: "舊健身房", isActive: false },
+      { id: 2, name: "私人健身房", isActive: true },
+    ]);
+    expect(map.get("gym")).toBe(2);
+  });
+
+  it("全部停用時該關鍵字就解析不到,而不是退而求其次訂到停用的", () => {
+    const map = buildFacilityMap([{ id: 1, name: "健身房", isActive: false }]);
+    expect(map.has("gym")).toBe(false);
+  });
+
+  it("沒有 isActive 欄位時視為啟用(向後相容既有呼叫端與測試資料)", () => {
+    const map = buildFacilityMap([{ id: 1, name: "健身房" }]);
+    expect(map.get("gym")).toBe(1);
+  });
+
   it("名稱缺漏不會炸掉", () => {
     const map = buildFacilityMap([{ id: 50, name: null }, { id: 51 }]);
     expect(map.size).toBe(0);

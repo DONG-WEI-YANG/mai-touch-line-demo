@@ -268,9 +268,14 @@ const FACILITY_ALIASES: Record<string, string[]> = {
 /** Build facility-key → amenityId map from the amenities table, matching the
  *  same keys the NLP `facility` slot emits. Mirrors the boot-time map in
  *  src/server/index.ts so voice bookings target the same amenities as LINE. */
-export function buildFacilityMap(amenities: Array<{ id: number; name?: string | null }>): Map<string, number> {
+export function buildFacilityMap(
+  amenities: Array<{ id: number; name?: string | null; isActive?: boolean | number | null }>,
+): Map<string, number> {
   const map = new Map<string, number>();
   for (const a of amenities) {
+    // 停用的設施不該還能用語音訂到 —— 管理員關掉它就是不希望有人再預約。
+    // 欄位缺漏時視為啟用,保持與既有呼叫端相容。
+    if (a.isActive === false || a.isActive === 0) continue;
     const n = (a.name ?? "").toLowerCase();
     if (!n) continue;
     for (const [key, aliases] of Object.entries(FACILITY_ALIASES)) {
