@@ -23,6 +23,7 @@ import { makeRuntimeConfig } from './line/runtime-config';
 import { handleCommand } from './line/handlers/command';
 import { startDemo, stopDemo } from './line/handlers/demo';
 import { listScripts } from './line/demo-scripts';
+import { buildFacilityMap } from './_core/voiceCommand';
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -111,23 +112,15 @@ async function startServer() {
       const eventDedupe = makeEventDedupe(1000);
       const channelId = process.env.LINE_CHANNEL_ID ?? 'default';
 
-      // Build facility-name → amenityId map at boot (run AFTER seedSystemIfEmpty)
-      const amenities = await db.getAllAmenities();
-      const facilityToAmenityId = new Map<string, number>();
-      for (const a of amenities) {
-        const n = (a.name ?? '').toLowerCase();
-        // Fuzzy match: last-write-wins per facility key. Safe for current demo seed data
-        // (one amenity per facility type). If multi-amenity-per-type is added later, replace
-        // with explicit name → facility key map.
-        for (const k of ['gym', 'pool', 'meeting_room', 'meeting', 'lounge', 'bbq', 'sauna']) {
-          if (n.includes(k)) facilityToAmenityId.set(k, a.id);
-        }
-      }
-      // 'meeting_room' token: also match plain 'meeting' key so both map correctly
-      if (facilityToAmenityId.has('meeting') && !facilityToAmenityId.has('meeting_room')) {
-        facilityToAmenityId.set('meeting_room', facilityToAmenityId.get('meeting')!);
-      }
-      console.log('[LINE] facility map:', Object.fromEntries(facilityToAmenityId));
+      // 設施對照表:改用 buildFacilityMap(src/server/_core/voiceCommand.ts),與語音
+      // 路徑共用同一份實作。
+      //
+      // 這裡原本有一份「開機時建一次」的重複實作,已經和 buildFacilityMap 分岔:
+      // 它不認中文公設名、不看 isActive(停用的設施照樣訂得進去)、優先規則相反
+      // (後到覆蓋 vs 先到先贏),而且開機後永遠不更新 —— 新增或停用公設都要重啟
+      // 才生效。改成每次呼叫時即時建,順手解掉這三件事。
+      const resolveAmenityId = async (facility: string): Promise<number | undefined> =>
+        buildFacilityMap(await db.getAllAmenities()).get(facility);
 
       const SEED_USER_ID = 1;
 
@@ -204,7 +197,7 @@ async function startServer() {
 
       // Real bookFn — calls db.createBooking directly (skip tRPC ctx auth for demo)
       const bookFn = async (input: { facility: string; date: string; time: string }, lineUserId?: string): Promise<{ id: string }> => {
-        const amenityId = facilityToAmenityId.get(input.facility);
+        const amenityId = await resolveAmenityId(input.facility);
         // Audit finding: don't silently book amenity #1 when the facility isn't
         // mapped — that told the user their sauna/pool booking succeeded while a
         // booking against a different room was created. Fail loudly instead; the
@@ -365,9 +358,12 @@ async function startServer() {
       };
 
       // workorder.status intent → the resident's work orders + facility bookings.
-      const amenityNameById = new Map<number, string>(
-        [...facilityToAmenityId.entries()].map(([name, id]) => [id, name]),
-      );
+      // 顯示公設的**真實名稱**(「私人健身房」)而不是內部代號('gym');即時查,
+      // 新增公設不必重啟。
+      const amenityNames = async (): Promise<Map<number, string>> => {
+        const rows = (await db.getAllAmenities()) as Array<{ id: number; name?: string | null }>;
+        return new Map(rows.map((a) => [a.id, a.name ?? `#${a.id}`]));
+      };
       const WO_CAT_LABEL: Record<string, string> = {
         maintenance: '報修', security: '保全', concierge: '禮賓',
         housekeeping: '清潔', laundry: '送洗', vehicle: '車輛', other: '其他',
@@ -380,7 +376,11 @@ async function startServer() {
       };
       const listMyOrders = async (lineUserId: string) => {
         const uid = resolveAppUserId(lineUserId);
-        const [wos, bks] = await Promise.all([db.getUserWorkOrders(uid), db.getUserBookings(uid)]);
+        const [wos, bks, names] = await Promise.all([
+          db.getUserWorkOrders(uid),
+          db.getUserBookings(uid),
+          amenityNames(),
+        ]);
         const woItems = wos.map((w: any) => ({
           ref: `WO-${w.id}`,
           label: WO_CAT_LABEL[w.category] ?? '工單',
@@ -390,7 +390,7 @@ async function startServer() {
         const bkItems = bks.map((b: any) => ({
           ref: `BK-${b.id}`,
           label: '設施預約',
-          detail: `${amenityNameById.get(b.amenityId) ?? `#${b.amenityId}`} ${b.date} ${b.startTime}`,
+          detail: `${names.get(b.amenityId) ?? `#${b.amenityId}`} ${b.date} ${b.startTime}`,
           status: BK_STATUS_LABEL[b.status] ?? String(b.status),
         }));
         return [...woItems, ...bkItems];
@@ -403,7 +403,13 @@ async function startServer() {
         try {
           if (call.router === 'amenities' && call.procedure === 'book') {
             const { facility, date, time, userId: uid } = call.input;
-            const amenityId = facilityToAmenityId.get(facility) ?? 1;
+            // 不要 `?? 1`:解析不到就默默訂到 1 號公設,使用者會被告知「已預約」
+            // 而實際上訂到了別的地方。這與 bookFn 裡已修掉的稽核問題是同一個,
+            // 當時漏了這條 demo 腳本路徑。
+            const amenityId = await resolveAmenityId(facility);
+            if (!amenityId) {
+              throw new Error(`Unknown facility "${facility}" — no matching amenity`);
+            }
             const [h, m] = String(time).split(':').map(Number);
             const endH = (h + 1) % 24;
             await db.createBooking({
