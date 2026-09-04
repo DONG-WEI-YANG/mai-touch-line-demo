@@ -31,7 +31,8 @@
     "clean": "rm -rf node_modules dist .expo",
     "assets:icons": "node scripts/generate-app-icons.cjs",
     "web:build": "expo export -p web --output-dir dist",
-    "web:serve": "npx serve dist -l 5173"
+    "web:serve": "npx serve dist -l 5173",
+    "seed:showcase": "tsx scripts/seed-showcase.ts"
   },
   "dependencies": {
     "@line/bot-sdk": "^9.9.0",
@@ -75,6 +76,7 @@
     "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.0",
     "superjson": "^2.2.1",
+    "toqr": "^0.1.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.13",
     "twilio": "^4.19.3",

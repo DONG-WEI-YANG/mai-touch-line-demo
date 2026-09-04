@@ -952,6 +952,12 @@ export async function deleteUser(id: number) {
   await db.delete(users).where(eq(users.id, id));
 }
 
+export async function deleteBooking(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(bookings).where(eq(bookings.id, id));
+}
+
 export async function deleteWorkOrder(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

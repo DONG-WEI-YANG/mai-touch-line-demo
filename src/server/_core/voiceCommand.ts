@@ -251,6 +251,20 @@ export function urgencyToPriority(urgency: string | undefined): WoPriority {
   return "medium";
 }
 
+/** Facility key → the name fragments that identify it, in the languages the
+ *  amenities table is actually written in. Chinese entries matter because a
+ *  Taiwanese property names its amenities 「私人健身房」, not "Gym" — an
+ *  English-only match returns an empty map and every voice booking fails to
+ *  resolve its facility. Order within a key is irrelevant; first hit wins. */
+const FACILITY_ALIASES: Record<string, string[]> = {
+  gym: ["gym", "fitness", "健身"],
+  pool: ["pool", "swim", "泳池", "游泳"],
+  meeting_room: ["meeting_room", "meeting", "conference", "會議"],
+  lounge: ["lounge", "salon", "交誼", "會客", "接待廳"],
+  bbq: ["bbq", "barbecue", "grill", "燒烤", "烤肉"],
+  sauna: ["sauna", "steam", "三溫暖", "蒸氣", "烤箱"],
+};
+
 /** Build facility-key → amenityId map from the amenities table, matching the
  *  same keys the NLP `facility` slot emits. Mirrors the boot-time map in
  *  src/server/index.ts so voice bookings target the same amenities as LINE. */
@@ -258,12 +272,11 @@ export function buildFacilityMap(amenities: Array<{ id: number; name?: string | 
   const map = new Map<string, number>();
   for (const a of amenities) {
     const n = (a.name ?? "").toLowerCase();
-    for (const k of ["gym", "pool", "meeting_room", "meeting", "lounge", "bbq", "sauna"]) {
-      if (n.includes(k)) map.set(k, a.id);
+    if (!n) continue;
+    for (const [key, aliases] of Object.entries(FACILITY_ALIASES)) {
+      if (map.has(key)) continue;
+      if (aliases.some((alias) => n.includes(alias))) map.set(key, a.id);
     }
-  }
-  if (map.has("meeting") && !map.has("meeting_room")) {
-    map.set("meeting_room", map.get("meeting")!);
   }
   return map;
 }

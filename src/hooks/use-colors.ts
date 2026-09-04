@@ -1,47 +1,15 @@
 /**
- * useColors Hook - Refined for High Contrast Luxury
- * Provides a more vibrant gold and distinct surface levels.
+ * useColors — 依系統的淺色/深色偏好回傳色票。
+ *
+ * 色票本身住在 color-palettes.ts(純資料,不 import react-native),對比度與
+ * 品牌一致性由 tests/showcase-theme.test.ts 驗證。
  */
 import { useColorScheme } from "react-native";
 
-export type ColorScheme = {
-  primary: string;      // The "Gold"
-  background: string;   // Deep background
-  surface: string;      // Card/Element background
-  foreground: string;   // Main text
-  muted: string;        // Secondary text
-  border: string;       // Distinct borders
-  success: string;
-  warning: string;
-  error: string;
-  cardShadow: string;
-};
+import { darkColors, lightColors, type ColorScheme } from "./color-palettes";
 
-const lightColors: ColorScheme = {
-  primary: "#996515",    // Golden Brown
-  background: "#FFFFFF",
-  surface: "#F8F5F0",
-  foreground: "#1A1A1A",
-  muted: "#666666",
-  border: "#D1C7BD",
-  success: "#2E7D32",
-  warning: "#ED6C02",
-  error: "#D32F2F",
-  cardShadow: "rgba(0,0,0,0.1)",
-};
-
-const darkColors: ColorScheme = {
-  primary: "#FFD700",    // Vibrant Gold (Classic Metallic)
-  background: "#0F0F0F", // Deeper black for more contrast
-  surface: "#1E1E1E",    // Lighter surface to pop against background
-  foreground: "#FFFFFF", // Pure white for crisp reading
-  muted: "#B0B0B0",      // Lighter muted text
-  border: "#444444",     // Stronger border definition
-  success: "#81C784",
-  warning: "#FFB74D",
-  error: "#E57373",
-  cardShadow: "rgba(0,0,0,0.5)",
-};
+export type { ColorScheme };
+export { darkColors, lightColors };
 
 export function useColors(): ColorScheme {
   const colorScheme = useColorScheme();

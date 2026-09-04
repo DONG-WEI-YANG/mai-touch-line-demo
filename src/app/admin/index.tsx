@@ -7,6 +7,13 @@ import { AdminHeader } from '@/components/admin/admin-ui';
 
 const MENU_ITEMS = [
   {
+    title: '樣品屋展示模式',
+    subtitle: '接待中心一頁演完階段 1 的四個情境',
+    icon: 'sparkles',
+    route: '/showcase',
+    color: '#c9a961'
+  },
+  {
     title: '系統完整性',
     subtitle: '檢查資料庫、OpenAI、NLP 與執行環境',
     icon: 'shield.fill',

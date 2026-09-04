@@ -11,6 +11,7 @@ import { amenitiesRouter } from "./amenities";
 import { bookingsRouter } from "./bookings";
 import { workOrdersRouter } from "./workOrders";
 import { iotRouter } from "./iot";
+import { showcaseRouter } from "./showcase";
 import { financeRouter } from "./finance";
 import { accessRouter } from "./access";
 import { adminDashboardRouter } from "./adminRouter";
@@ -77,6 +78,7 @@ export const appRouter = router({
   bookings: bookingsRouter,
   workOrders: workOrdersRouter,
   iot: iotRouter,
+  showcase: showcaseRouter,
   finance: financeRouter,
   access: accessRouter,
   admin: adminDashboardRouter,

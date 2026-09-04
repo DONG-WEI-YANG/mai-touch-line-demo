@@ -9,6 +9,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useColors } from "@/hooks/use-colors";
+import type { ColorScheme } from "@/hooks/color-palettes";
 import { useWebVoiceRecorder } from "@/hooks/use-web-voice-recorder";
 
 export type VoiceSlots = {
@@ -39,6 +40,11 @@ type Props = {
   /** Optional gate — e.g. property desk must pick a resident before recording. */
   disabled?: boolean;
   disabledHint?: string;
+  /**
+   * 色票覆寫。給固定主題的宿主頁面用(樣品屋展示模式固定深藍×金,不跟隨系統
+   * 淺色/深色)。沒給就沿用 useColors() —— 住戶端與櫃檯維持原本行為。
+   */
+  palette?: ColorScheme;
 };
 
 const FACILITY_LABEL: Record<string, string> = {
@@ -49,8 +55,9 @@ const REQUIRED: Record<string, string[]> = {
   work_order: ["issue", "location", "urgency"],
 };
 
-export function VoiceBookingPanel({ command, commit, disabled, disabledHint }: Props) {
-  const colors = useColors();
+export function VoiceBookingPanel({ command, commit, disabled, disabledHint, palette }: Props) {
+  const systemColors = useColors();
+  const colors = palette ?? systemColors;
   const voice = useWebVoiceRecorder();
   const [phase, setPhase] = useState<"idle" | "thinking" | "review" | "committing" | "done">("idle");
   const [proposal, setProposal] = useState<VoiceProposal | null>(null);

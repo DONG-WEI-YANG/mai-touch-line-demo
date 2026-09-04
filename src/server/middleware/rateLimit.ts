@@ -6,12 +6,27 @@
 import rateLimit from 'express-rate-limit';
 import { Request, Response, NextFunction } from 'express';
 
+/**
+ * 一般 API 的請求上限。
+ *
+ * 原本是 express-rate-limit 樣板值 100 req / 15 min —— 那對「無登入態、只打幾支
+ * REST」的服務合理,但本專案是 tRPC + React Query 的 SPA:開一頁就批次打好幾支,
+ * 樣品屋展示模式還要輪詢管理中心事件流,實測約 3.3 分鐘就會撞牆並回 429。
+ *
+ * 預設 600 / 15 min(≈ 每分鐘 40 次)足以支撐真實 UI,同時仍是有意義的濫用防線。
+ * 部署端可用 API_RATE_LIMIT_MAX 調整;值不合法時退回預設,不讓一個手誤的環境
+ * 變數把整個 API 鎖死。
+ */
+const DEFAULT_API_MAX = 600;
+const parsedApiMax = Number.parseInt(process.env.API_RATE_LIMIT_MAX ?? '', 10);
+const API_MAX = Number.isFinite(parsedApiMax) && parsedApiMax > 0 ? parsedApiMax : DEFAULT_API_MAX;
+
 // Rate limit configuration
-const RATE_LIMIT_CONFIG = {
+export const RATE_LIMIT_CONFIG = {
   // General API rate limit
   api: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    max: API_MAX,
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     message: 'Too many requests from this IP, please try again later.',

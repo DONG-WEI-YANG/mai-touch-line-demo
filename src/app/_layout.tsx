@@ -9,6 +9,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { offlineService, type OfflineOperation } from "@/lib/offline";
 import { DemoRoleSwitcher } from "@/components/demo-role-switcher";
+import { redirectTarget, type AppRole } from "@/lib/route-access";
 
 // Create query client.
 // Retry policy: never retry on 4xx (auth/permission/validation errors won't
@@ -101,28 +102,14 @@ function Root() {
     if (!navState?.key) return;
     if (isLoading) return;
 
-    const expectedForRole = (role: string | undefined) =>
-      role === 'admin' ? '/admin-dashboard' :
-      role === 'logistics' ? '/logistics-dashboard' :
-      '/';
-
-    const onLogin = pathname === '/login';
-    if (!user) {
-      if (!onLogin) router.replace('/login');
-      return;
-    }
-    // Logged in: bounce away from /login + non-resident roles to their landing
-    if (onLogin) {
-      router.replace(expectedForRole(user.role) as any);
-      return;
-    }
-    if (user.role === 'admin' && pathname !== '/admin-dashboard' && !pathname.startsWith('/admin')) {
-      router.replace('/admin-dashboard');
-      return;
-    }
-    if (user.role === 'logistics' && pathname !== '/logistics-dashboard' && !pathname.startsWith('/logistics')) {
-      router.replace('/logistics-dashboard');
-      return;
+    // 策略本身住在 src/lib/route-access.ts(純函式,被單測窮舉過);
+    // 這裡只負責把結論套用到 router。
+    const target = redirectTarget({
+      role: user?.role as AppRole,
+      pathname,
+    });
+    if (target && target !== pathname) {
+      router.replace(target as any);
     }
   }, [navState?.key, user, isLoading, pathname, router]);
 
@@ -225,6 +212,7 @@ function ResidentLayout() {
       <Tabs.Screen name="admin/line" options={{ href: null }} />
       <Tabs.Screen name="admin/amenity-iot" options={{ href: null }} />
       <Tabs.Screen name="admin/system-integrity" options={{ href: null }} />
+      <Tabs.Screen name="showcase" options={{ href: null }} />
       <Tabs.Screen name="admin/bookings" options={{ href: null }} />
       <Tabs.Screen name="admin/work-orders" options={{ href: null }} />
       <Tabs.Screen name="admin/amenities" options={{ href: null }} />

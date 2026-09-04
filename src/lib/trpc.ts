@@ -1,7 +1,12 @@
 import { createTRPCReact } from "@trpc/react-query";
 import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
+import type { inferRouterOutputs } from "@trpc/server";
+
 import type { AppRouter } from "../server/routers/index";
+
+/** 每支 query/mutation 的回傳型別,例如 RouterOutputs["showcase"]["session"]。 */
+export type RouterOutputs = inferRouterOutputs<AppRouter>;
 
 /** API base URL — reads from env or defaults to localhost */
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";

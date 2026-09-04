@@ -6,6 +6,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useApp } from "@/lib/app-context";
 import { trpc } from "@/lib/trpc";
 import { useRouter } from "expo-router";
+import { summarizeDevices } from "@/lib/device-summary";
 
 export default function SmartHomeScreen() {
   const colors = useColors();
@@ -15,6 +16,8 @@ export default function SmartHomeScreen() {
   // Real-time IoT data
   const { data: devices = [], isLoading, refetch } = trpc.iot.myDevices.useQuery();
   const updateDeviceMutation = trpc.iot.updateDevice.useMutation();
+
+  const summary = summarizeDevices(devices as Parameters<typeof summarizeDevices>[0]);
 
   const handleToggle = async (deviceId: number, currentStatus: string) => {
     const nextStatus = currentStatus === "on" ? "off" : "on";
@@ -93,14 +96,22 @@ export default function SmartHomeScreen() {
           </View>
         )}
 
-        {/* Climate Summary */}
-        <View style={[styles.climateBox, { backgroundColor: colors.primary + "10", borderColor: colors.primary }]}>
-          <IconSymbol name="thermometer.sun.fill" size={32} color={colors.primary} />
-          <View style={{ flex: 1, marginLeft: 16 }}>
-            <Text style={[styles.climateLabel, { color: colors.foreground }]}>{t("smarthome.climate")}</Text>
-            <Text style={[styles.climateValue, { color: colors.primary }]}>22.5°C • Perfect Ambiance</Text>
+        {/* 摘要 — 由真實設備狀態推導。沒有空調就不畫這張卡,不編一個溫度。 */}
+        {summary.climate ? (
+          <View style={[styles.climateBox, { backgroundColor: colors.primary + "10", borderColor: colors.primary }]}>
+            <IconSymbol name="thermometer.sun.fill" size={32} color={colors.primary} />
+            <View style={{ flex: 1, marginLeft: 16 }}>
+              <Text style={[styles.climateLabel, { color: colors.foreground }]}>{summary.climate.name}</Text>
+              <Text style={[styles.climateValue, { color: colors.primary }]}>{summary.climate.status}</Text>
+            </View>
           </View>
-        </View>
+        ) : null}
+
+        {summary.total > 0 ? (
+          <Text style={[styles.summaryLine, { color: colors.muted }]}>
+            {summary.activeCount} / {summary.total} 項設備運轉中
+          </Text>
+        ) : null}
       </ScrollView>
     </ScreenContainer>
   );
@@ -136,4 +147,5 @@ const styles = StyleSheet.create({
   climateLabel: { fontSize: 14, fontWeight: "600" },
   climateValue: { fontSize: 18, fontWeight: "800", marginTop: 4 },
   emptyBox: { alignItems: 'center', marginTop: 60, opacity: 0.5 },
+  summaryLine: { fontSize: 12.5, fontWeight: "600", textAlign: "center", marginTop: 16 },
 });
