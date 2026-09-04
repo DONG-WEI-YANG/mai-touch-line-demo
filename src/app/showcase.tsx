@@ -104,6 +104,25 @@ export default function ShowcaseScreen() {
   // 所以需要按第二次確認,而且按鈕上直接寫出會刪幾筆。
   const [confirmDeep, setConfirmDeep] = useState(false);
 
+  // 未就緒時的補救動作。Render Free 重啟就會清空資料庫,所以這顆按鈕得放在
+  // 業務找得到的地方,而不是要人回去開 one-off job。
+  const seedMutation = trpc.showcase.seed.useMutation({
+    onSuccess: async (result) => {
+      const shadow = result.shadowed.length
+        ? `;注意:${result.shadowed.map((x) => `${x.key}→${x.byName}`).join("、")} 會訂到舊公設`
+        : "";
+      setNotice(
+        `示範資料已就緒:公設新增 ${result.amenities.created}、設備新增 ${result.devices.created}${shadow}`,
+      );
+      await Promise.all([
+        utils.showcase.session.invalidate(),
+        utils.showcase.devices.invalidate(),
+        utils.showcase.timeline.invalidate(),
+      ]);
+    },
+    onError: (error) => setNotice(`建立示範資料失敗:${error.message}`),
+  });
+
   const resetMutation = trpc.showcase.reset.useMutation({
     onSuccess: async (result) => {
       const { bookings, workOrders, voiceEvents } = result.removed;
@@ -161,6 +180,15 @@ export default function ShowcaseScreen() {
               <View style={styles.blockedBox}>
                 <Text style={styles.blockedTitle}>此情境目前無法展示</Text>
                 <Text style={styles.blockedBody}>{availability.blockedReason}</Text>
+                {/* 缺示範資料是唯一能當場自己補救的原因,直接給按鈕。 */}
+                {session && !session.ready && !sessionQuery.isError ? (
+                  <ShowcaseButton
+                    label={seedMutation.isLoading ? "建立中…" : "建立示範資料"}
+                    onPress={() => seedMutation.mutate({ deactivateShadowing: false })}
+                    disabled={seedMutation.isLoading}
+                    style={styles.blockedAction}
+                  />
+                ) : null}
               </View>
             ) : (
               <>
@@ -621,6 +649,7 @@ const styles = StyleSheet.create({
   },
   blockedTitle: { color: C.warn, fontSize: 13, fontWeight: "800", marginBottom: 5 },
   blockedBody: { color: C.muted, fontSize: 12.5, lineHeight: 19 },
+  blockedAction: { marginTop: 14, alignSelf: "flex-start" },
 
   degradedBox: {
     marginTop: 16,

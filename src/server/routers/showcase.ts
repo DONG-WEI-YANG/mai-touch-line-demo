@@ -27,6 +27,7 @@ import {
   describeShowcaseHardware,
   showcaseSessionService,
 } from "../services/showcaseSession";
+import { seedShowcase } from "../services/showcaseSeed";
 import { buildShowcaseTimeline } from "../services/showcaseTimeline";
 import { voiceAuditService } from "../services/voiceAuditService";
 
@@ -182,6 +183,29 @@ export const showcaseRouter = router({
     const devices = await db.getDevicesByUnit(resident.unitId);
     return { devices, hardware };
   }),
+
+  /**
+   * 建立(或補齊)示範資料 —— 「上台前一鍵重建」。
+   *
+   * Render Free 每次重啟或部署都會清空 SQLite,示範資料撐不過下一次部署,所以
+   * 這件事必須能從展示頁直接做,而不是回頭開一次性的 one-off job。冪等,重跑
+   * 不會產生重複。
+   *
+   * `deactivateShadowing` 會停用「擋住示範公設的舊公設」—— 舊資料庫可能已有同義
+   * 的英文公設(例如 "Fitness Center"),而語音解析是先到先贏,不處理的話客戶
+   * 會看到英文設施名。預設 false:只回報不動手,且只停用真的擋路的那幾筆
+   * (可逆,把 isActive 改回 true 即可)。
+   */
+  seed: staffProcedure
+    .input(z.object({ deactivateShadowing: z.boolean().default(false) }).optional())
+    .mutation(async ({ input }) => {
+      const result = await seedShowcase({
+        deactivateShadowing: input?.deactivateShadowing ?? false,
+      });
+      // 資料變了,場次邊界也重新開始,免得把剛建好的資料算成「先前場次殘留」。
+      showcaseSessionService.restart();
+      return result;
+    }),
 
   /**
    * 情境 4 需要的東西:加好友連結、可推送的好友名單、示範腳本。

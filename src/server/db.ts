@@ -978,6 +978,77 @@ export async function getDevicesByUnit(unitId: number) {
   }
 }
 
+/**
+ * 建立住戶端設備。展示模式的示範資料需要它 —— 既有的設備 insert 都埋在
+ * seedSystemIfEmpty 裡,沒有可重用的入口。
+ *
+ * lastSeen 明確給 Date:schema 是 MySQL 型的 defaultNow(),會發出 SQLite 沒有的
+ * now();與 createUser 同一個方言陷阱。
+ */
+export async function createDevice(data: {
+  unitId?: number | null;
+  amenityId?: number | null;
+  name: string;
+  type: "light" | "climate" | "curtain" | "security" | "media" | "power";
+  status?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(devices).values({
+    unitId: data.unitId ?? null,
+    amenityId: data.amenityId ?? null,
+    name: data.name,
+    type: data.type,
+    status: data.status ?? "off",
+    lastSeen: new Date(),
+  });
+  return insertedId(result);
+}
+
+export async function getAllUnits() {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db.select().from(units);
+  } catch (error) {
+    if (!isMissingUnitsTable(error)) throw error;
+    await ensureUnitsTable();
+    return [];
+  }
+}
+
+/** 建立單位。createdAt 明確給 Date,理由同 createDevice。 */
+export async function createUnit(data: {
+  unitNumber: string;
+  floor: number;
+  wing?: string | null;
+  squareFootage?: number | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  try {
+    const result = await db.insert(units).values({
+      unitNumber: data.unitNumber,
+      floor: data.floor,
+      wing: data.wing ?? null,
+      squareFootage: data.squareFootage ?? null,
+      createdAt: new Date(),
+    });
+    return insertedId(result);
+  } catch (error) {
+    if (!isMissingUnitsTable(error)) throw error;
+    await ensureUnitsTable();
+    const result = await db.insert(units).values({
+      unitNumber: data.unitNumber,
+      floor: data.floor,
+      wing: data.wing ?? null,
+      squareFootage: data.squareFootage ?? null,
+      createdAt: new Date(),
+    });
+    return insertedId(result);
+  }
+}
+
 export async function getDevicesByAmenity(amenityId?: number) {
   const db = await getDb();
   if (!db) return [];
