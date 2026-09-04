@@ -115,11 +115,38 @@ describe("showcase.lineAudience", () => {
     expect(audience.recipients).toEqual([]);
   });
 
-  it("基本 ID 沒設定時不給連結 —— 拼不出來就別給客戶掃一個壞的碼", async () => {
+  it("環境變數與 LINE API 都問不到基本 ID 時不給連結,不讓客戶掃一個壞的碼", async () => {
     delete process.env.LINE_BOT_BASIC_ID;
+    delete process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const c = await caller(STAFF);
     const audience = await c.lineAudience();
     expect(audience.addFriendUrl).toBeNull();
+  });
+
+  it("環境變數沒設但有 channel token 時,基本 ID 由 LINE API 補上", async () => {
+    delete process.env.LINE_BOT_BASIC_ID;
+    process.env.LINE_CHANNEL_ACCESS_TOKEN = "fake-token";
+    const { resetLineBotIdentityCache } = await import(
+      "../../../src/server/services/lineBotIdentity"
+    );
+    resetLineBotIdentityCache();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ basicId: "@679ntrul" }),
+    } as Response);
+    try {
+      const c = await caller(STAFF);
+      const audience = await c.lineAudience();
+      expect(audience.addFriendUrl).toBe("https://line.me/R/ti/p/%40679ntrul");
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "https://api.line.me/v2/bot/info",
+        expect.objectContaining({ headers: { Authorization: "Bearer fake-token" } }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+      delete process.env.LINE_CHANNEL_ACCESS_TOKEN;
+      resetLineBotIdentityCache();
+    }
   });
 });
 

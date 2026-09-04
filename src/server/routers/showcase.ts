@@ -27,6 +27,10 @@ import {
   describeShowcaseHardware,
   showcaseSessionService,
 } from "../services/showcaseSession";
+import {
+  makeBotInfoFetcher,
+  resolveAddFriendUrl,
+} from "../services/lineBotIdentity";
 import { seedShowcase } from "../services/showcaseSeed";
 import { buildShowcaseTimeline } from "../services/showcaseTimeline";
 import { voiceAuditService } from "../services/voiceAuditService";
@@ -87,16 +91,6 @@ async function amenityNames(): Promise<Map<number, string>> {
 
 /** LINE user id 的格式 —— 直接在 schema 擋掉亂填的字串。 */
 const lineUserIdSchema = z.string().regex(/^U[0-9a-fA-F]{32}$/);
-
-/**
- * 加好友連結。基本 ID 沒設定就回 null —— 拼不出正確連結時,寧可不給,
- * 也不要讓客戶掃到一個開不起來的碼。
- */
-function addFriendUrl(): string | null {
-  const basicId = (process.env.LINE_BOT_BASIC_ID ?? "").trim();
-  if (!basicId) return null;
-  return `https://line.me/R/ti/p/${encodeURIComponent(basicId)}`;
-}
 
 export const showcaseRouter = router({
   /** 場次概況:何時開場、代哪一戶、現場設備是真是假、LINE 推得出去嗎。 */
@@ -212,11 +206,18 @@ export const showcaseRouter = router({
    *
    * 名單按加入時間新到舊 —— 客戶剛掃碼加好友,就會排在第一個,業務不必找。
    */
-  lineAudience: staffProcedure.query(({ ctx }) => {
+  lineAudience: staffProcedure.query(async ({ ctx }) => {
     const lineAdmin = ctx.lineAdmin;
     if (!lineAdmin) {
       return { configured: false, addFriendUrl: null, recipients: [], scripts: [] };
     }
+
+    // 加好友連結:環境變數優先,沒設就問 LINE API(伺服器已有 channel access
+    // token)。少一個要人記得設的環境變數,就少一個到現場才發現的問題。
+    const addFriendUrl = await resolveAddFriendUrl({
+      envBasicId: process.env.LINE_BOT_BASIC_ID,
+      fetchBotInfo: makeBotInfoFetcher(process.env.LINE_CHANNEL_ACCESS_TOKEN),
+    });
 
     const rows = lineAdmin.db
       .prepare(
@@ -236,7 +237,7 @@ export const showcaseRouter = router({
 
     return {
       configured: true,
-      addFriendUrl: addFriendUrl(),
+      addFriendUrl,
       recipients: rows.map((r) => ({
         lineUserId: r.lineUserId,
         displayName: r.displayName ?? "(未命名好友)",
