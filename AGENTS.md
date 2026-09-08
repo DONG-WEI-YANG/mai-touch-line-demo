@@ -85,3 +85,13 @@
 - 訊息「服務首頁」可開首頁；住戶與物業皆可用查空檔流程，queryOnly 不可建立預約。工單 WO 亦可與 BK/V/P 同住戶紀錄關聯；訪客單統一 V 編號。
 - 新增 12 組 public/line-icons SVG 原稿與 PNG，scripts/generate-line-icons.cjs 可重建。LINE Flex 官方只支援 JPEG/PNG，因此使用 SVG 轉圖；前端靜態部署提供 /line-icons/。
 - 新版住戶／物業首頁、公設卡、成功卡、紀錄卡及時段訊息共 6 組已通過 LINE validate/reply（未發送用戶訊息）。716 項測試、型別、lint、Web 建置與隔離 smoke 通過；未完成真實 LINE 點擊及瀏覽器驗收。
+
+## 持久化準備（2026-09-08，尚未套用線上）
+
+- 使用者要求長期歷史保存。實查現行 mai-touch-line-us 為 free、無 disk，build npm ci && npm run db:init:demo、start npm run server。
+- 已準備 render.persistent.yaml：既有 Oregon 服務改付費與 1 GB /var/data，build 僅 npm ci，start server:persistent；保留現有憑證。官方價格估算 US$7.25/月（另計其他用量），付費升級尚待使用者確認。
+- persistent startup 要求已掛載目錄與既有／可還原的驗證快照，拒絕遺失資料庫時默默建立空白歷史；持久模式 migration 失敗即停止。
+- SQLite Online Backup、完整性／外鍵檢查、每日備份保留14份、只還原到新檔、不覆写既有目的檔已實作。管理 token 保護 /admin/database/backup 下載，no-store；同磁碟備份不等於異地備份。
+- 切換前 API 匯出保存在忽略的 _local/pre-persistence-*：3預約、9工單、6設施、3帳戶、0 LINE 綁定、0停車紀錄。這是部分 API 匯出，不是完整 SQLite 快照；尚未取得完整線上快照，不得宣稱無損遷移。
+- 切換與還原程序見 docs/PERSISTENT_HISTORY.md。暫不 push，以免自動部署重建 ephemeral DB；線上磁碟、長期保存與跨部署驗收尚未完成。
+- 驗證：107 檔／722 項測試、type-check、lint、隔離 smoke 通過；包含快照下载權限、WAL 還原與不覆寫測試。

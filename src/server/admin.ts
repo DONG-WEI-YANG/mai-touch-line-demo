@@ -9,6 +9,11 @@ import { getAuditLog } from "./audit-log";
 import { logError } from "./_core/logError";
 import { ErrorIds } from "./constants/errorIds";
 import type { User } from "./schema";
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { dbManager } from './database/adapter';
+import { backupDatabase } from './database/persistence';
 
 export const adminRouter = Router();
 
@@ -41,6 +46,21 @@ adminRouter.use((req, res, next) => {
 });
 
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+// Full snapshots contain personal data and tokens: retain the admin header gate.
+adminRouter.get('/database/backup', async (_req,res) => {
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'mai-touch-export-'));
+  try {
+    const snapshot=await backupDatabase(dbManager.getRawSqlite(),directory);
+    res.setHeader('Cache-Control','no-store');
+    res.download(snapshot,'mai-touch-backup.db',err=>{
+      fs.rmSync(directory,{recursive:true,force:true});
+      if (err && !res.headersSent) res.status(500).end();
+    });
+  } catch {
+    fs.rmSync(directory,{recursive:true,force:true});
+    res.status(503).send('Database snapshot unavailable');
+  }
+});
 const displayDateFormatter = new Intl.DateTimeFormat("zh-TW", {
   dateStyle: "medium",
   timeStyle: "medium",

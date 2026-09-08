@@ -11,6 +11,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "server": "tsx src/server/index.ts",
+    "server:persistent": "tsx scripts/start-persistent.ts",
+    "db:snapshot": "tsx scripts/database-snapshot.ts",
     "dev:server": "nodemon src/server/index.ts",
     "local:server": "node scripts/run-local-dev.cjs server",
     "local:web": "node scripts/run-local-dev.cjs web",

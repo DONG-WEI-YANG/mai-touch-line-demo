@@ -27,6 +27,8 @@ import { buildFacilityMap } from './_core/voiceCommand';
 import { createCheckedBooking } from './services/bookingService';
 import { availableSlots, makeRecordQuery } from './line/record-query';
 import { makeRecordLinks } from './line/record-links';
+import { startBackupScheduler } from './database/persistence';
+import path from 'node:path';
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -54,6 +56,10 @@ async function startServer() {
     await runMigrations();
   } catch (err) {
     logError(ErrorIds.BOOT_MIGRATION_FAILED, 'runMigrations failed — continuing on existing (possibly drifted) schema', { cause: err });
+    if (process.env.REQUIRE_PERSISTENT_STORAGE === '1') throw err;
+  }
+  if (process.env.REQUIRE_PERSISTENT_STORAGE === '1') {
+    startBackupScheduler(dbManager.getRawSqlite(),path.join(process.env.PERSISTENT_DATA_DIR!,'backups'));
   }
 
   // seedSystemIfEmpty uses now() SQL function which is MySQL-specific and crashes on
@@ -556,4 +562,4 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+startServer().catch(err=>{console.error(err);process.exitCode=1;});

@@ -10,6 +10,7 @@ import mysql from 'mysql2/promise';
 import Database from 'better-sqlite3';
 import postgres from 'postgres';
 import * as schema from '../schema';
+import { assertPersistentStorage, persistentMountInfo } from './persistence';
 
 export type DatabaseType = 'mysql' | 'sqlite' | 'postgres';
 
@@ -128,6 +129,11 @@ async function createMysqlAdapter(config: DatabaseConfig): Promise<DatabaseAdapt
  */
 function createSqliteAdapter(config: DatabaseConfig): DatabaseAdapter {
   const filename = config.filename || './data/mai-touch.db';
+  if (process.env.REQUIRE_PERSISTENT_STORAGE === '1') {
+    const root = process.env.PERSISTENT_DATA_DIR;
+    if (!root) throw new Error('PERSISTENT_DATA_DIR is required');
+    assertPersistentStorage(filename, root, persistentMountInfo());
+  }
   
   // 確保目錄存在
   const fs = require('fs');

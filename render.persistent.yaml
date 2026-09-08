@@ -1,0 +1,29 @@
+# Review-only template for the existing Oregon service. Applying it adds paid resources.
+# Restore a verified snapshot onto /var/data BEFORE switching the start command.
+services:
+  - type: web
+    name: mai-touch-line-us
+    runtime: node
+    region: oregon
+    plan: starter
+    branch: main
+    buildCommand: npm ci
+    startCommand: npm run server:persistent
+    healthCheckPath: /health
+    disk:
+      name: mai-touch-history
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DB_TYPE
+        value: sqlite
+      - key: SQLITE_FILENAME
+        value: /var/data/mai-touch.db
+      - key: PERSISTENT_DATA_DIR
+        value: /var/data
+      - key: REQUIRE_PERSISTENT_STORAGE
+        value: '1'
+      - key: SESSION_SECRET
+        sync: false
+      # Preserve the existing service's LINE / Gemini / web credentials and URLs.
+      # Do not apply this template by creating a second service.
