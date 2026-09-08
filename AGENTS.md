@@ -95,3 +95,9 @@
 - 切換前 API 匯出保存在忽略的 _local/pre-persistence-*：3預約、9工單、6設施、3帳戶、0 LINE 綁定、0停車紀錄。這是部分 API 匯出，不是完整 SQLite 快照；尚未取得完整線上快照，不得宣稱無損遷移。
 - 切換與還原程序見 docs/PERSISTENT_HISTORY.md。暫不 push，以免自動部署重建 ephemeral DB；線上磁碟、長期保存與跨部署驗收尚未完成。
 - 驗證：107 檔／722 項測試、type-check、lint、隔離 smoke 通過；包含快照下载權限、WAL 還原與不覆寫測試。
+
+## GCP 專用專案（2026-09-08）
+
+- 使用者選擇為本系統新建 GCP 專案，已建立 mai-touch-history-20260908（project number 331315864522），ACTIVE。不改動 gcloud 原預設專案。
+- 尚未綁定 billing 或建立 VM／磁碟／bucket。待核准方案為 Oregon e2-small 2GiB + 20GB boot + 10GB data + static IPv4 + Cloud Storage 備份，初估 US$18–22/月，另計流量等；詳見 docs/GCP_DEPLOYMENT.md。
+- 後端 HTTPS 自有網域尚待指定；來源仍只有 API 匯出，未取得完整 SQLite 快照。Render 持久磁碟方案尚未套用；GCP 路線接續資料保存目標。
