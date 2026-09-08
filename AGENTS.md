@@ -48,3 +48,10 @@
 - origin 為 DONG-WEI-YANG/mai-touch-line-demo；前端 .vercel/project.json 對應 mai-touch-web；render.yaml 指出現行後端為 mai-touch-line-us（Oregon），舊 blueprint mai-touch-demo 不是現行目標。
 - 2026-09-08 實查 Vercel CLI 59.11.2 已安裝；名為 render 的本機命令是模板工具，不是 Render 雲端 CLI。
 - 發布完成狀態須另以遠端部署結果確認，此記錄不代表部署已完成。
+
+## LINE 無回覆修正與模型切換（2026-09-08）
+
+- 線上 webhook active 且指向 mai-touch-line-us；日誌確認供應商 503，原 8 次重試加 SDK 內建重試造成長時間無回覆。
+- 使用者指定 LINE 回應／預約解析改用 gemini-3.5-flash-lite，並提供主用及備援憑證。兩組皆已實際呼叫成功；僅寫入 Render 環境，不保存憑證於 Git。
+- 現行 Render 服務 OPENAI_MODEL 已設定 gemini-3.5-flash-lite；OPENAI_API_KEY 依主用、備援順序逗號分隔。部署後 getAi() 載入，首組失敗才切換下一組。
+- OpenAIIntent 預設最多 2 次，每次 timeout 8000ms，停用 SDK 重試，避免 LINE 長時間沒有錯誤回覆。679 項測試、型別及 lint 通過。

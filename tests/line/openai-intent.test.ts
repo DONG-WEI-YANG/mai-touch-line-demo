@@ -17,6 +17,13 @@ beforeEach(() => create.mockReset());
 const ok = (body: any) => ({ choices: [{ message: { content: JSON.stringify(body) } }] });
 
 describe('OpenAIIntent', () => {
+  it('bounds default retries so LINE can return an error promptly', async () => {
+    for (let i = 0; i < 2; i++) create.mockRejectedValueOnce(Object.assign(new Error('unavailable'), { status: 503 }));
+    const ai = new OpenAIIntent({ apiKey: 'k', model: 'test', retryBaseDelayMs: 0 });
+    await expect(ai.classify('你好', { userId: 'test' })).rejects.toBeInstanceOf(AiUnavailableError);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[0][1]).toMatchObject({ timeout: 8000, maxRetries: 0 });
+  });
   it('parses facility.book intent + slots', async () => {
     create.mockResolvedValueOnce(ok({
       intent: 'facility.book', confidence: 0.92,

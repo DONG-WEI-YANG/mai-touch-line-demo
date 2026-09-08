@@ -105,10 +105,9 @@ export class OpenAIIntent implements IntentClassifier {
     ];
 
     let lastErr: unknown;
-    // Walk through all keys at least twice, with exponential backoff between
-    // attempts — covers both per-key 429s and transient upstream 5xx/connection
-    // blips (Gemini's free tier + Render egress can be flaky).
-    const totalAttempts = this.opts.maxAttempts ?? Math.max(8, this.clients.length * 2);
+    // Keep interactive LINE replies within the reply-token window. Disable SDK
+    // retries below: nesting them inside our retries can otherwise take minutes.
+    const totalAttempts = this.opts.maxAttempts ?? 2;
     const retryBaseDelayMs = this.opts.retryBaseDelayMs ?? 250;
     for (let attempt = 0; attempt < totalAttempts; attempt++) {
       const keyIdx = attempt % this.clients.length;
@@ -118,7 +117,7 @@ export class OpenAIIntent implements IntentClassifier {
           messages,
           response_format: { type: 'json_object' },
           temperature: this.opts.temperature ?? 0.1,
-        });
+        }, { timeout: 8000, maxRetries: 0 });
         const raw = resp.choices[0]?.message?.content ?? '{}';
         // Strip markdown code fences if model wrapped JSON in them (Gemini does this sometimes)
         const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
