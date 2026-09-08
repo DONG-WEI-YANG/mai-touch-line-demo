@@ -12,9 +12,10 @@ export function bookingDone(input: { orderId: string }, lang: Lang) {
       body: { type:'box', layout:'vertical', spacing:'sm', contents: [
         { type:'text', text:`${t('booking.done.orderNo', lang)}: ${input.orderId}`, weight:'bold' },
       ] },
-      footer: { type:'box', layout:'horizontal', contents: [
+      footer: { type:'box', layout:'vertical', contents: [
+        { type:'button', style:'primary', color:'#8B6C35', action:{type:'postback',label:'查看預約與關聯',data:`query=${encodeURIComponent('查詢 '+input.orderId)}`} },
         { type:'button', style:'secondary',
-          action:{ type:'message', label: t('booking.done.again', lang), text: t('ask.facility', lang) } },
+          action:{ type:'postback', label: t('booking.done.again', lang), data:'nav=facilities' } },
       ] },
     },
   } as const;

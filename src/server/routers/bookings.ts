@@ -1,11 +1,24 @@
-import { residentProcedure, staffProcedure, router } from "../_core/trpc";
+import { residentProcedure, staffProcedure, protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 import { createCheckedBooking, updateCheckedBookingStatus } from "../services/bookingService";
+import { makeRecordLinks } from '../line/record-links';
+import { dbManager } from '../database/adapter';
 
 
 export const bookingsRouter = router({
+  relatedRecords: protectedProcedure.input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const booking = await db.getBookingById(input.id);
+      const staff = ctx.user.role === 'admin' || ctx.user.role === 'logistics';
+      if (!booking || (!staff && (ctx.user.role !== 'resident' || booking.userId !== ctx.user.id))) {
+        throw new TRPCError({ code:'NOT_FOUND', message:'找不到紀錄或無查詢權限' });
+      }
+      return makeRecordLinks(dbManager.getRawSqlite()).related(`BK-${input.id}`, {
+        userId:ctx.user.id, staff, lineUserId:`web:${ctx.user.id}`,
+      }).filter(r=>r.ref!==`BK-${input.id}`);
+    }),
   myBookings: residentProcedure.query(async ({ ctx }) => db.getUserBookings(ctx.user.id)),
 
   create: residentProcedure

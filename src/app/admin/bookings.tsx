@@ -6,6 +6,8 @@ import { ScreenContainer } from '@/components/screen-container';
 import { AdminHeader, AdminCard } from '@/components/admin/admin-ui';
 import { parseError } from '@/lib/error-utils';
 import { invalidateDomainCaches } from '@/lib/mutation-cache';
+import { BookingCalendar } from '@/components/booking-calendar';
+import { BookingRelatedRecords } from '@/components/booking-related-records';
 
 type BookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed';
 const STATUS_OPTIONS: BookingStatus[] = ['confirmed', 'pending', 'cancelled', 'completed'];
@@ -17,6 +19,7 @@ export default function AdminBookingsPage() {
   const colors = useColors();
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [notice, setNotice] = useState('');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const utils = trpc.useUtils();
   const q = trpc.bookings.listAll.useQuery();
 
@@ -27,9 +30,9 @@ export default function AdminBookingsPage() {
 
   const rows = useMemo(() => {
     if (!q.data) return [];
-    if (filter === 'all') return q.data;
-    return q.data.filter((r: any) => r.booking.status === filter);
-  }, [q.data, filter]);
+    return q.data.filter((r: any) => (filter === 'all' || r.booking.status === filter) && (!selectedDate || r.booking.date === selectedDate))
+      .sort((a: any,b: any)=>`${a.booking.date} ${a.booking.startTime}`.localeCompare(`${b.booking.date} ${b.booking.startTime}`));
+  }, [q.data, filter, selectedDate]);
 
   const counts = useMemo(() => {
     const c: Record<StatusFilter, number> = { all: 0, confirmed: 0, pending: 0, cancelled: 0, completed: 0 };
@@ -82,6 +85,7 @@ export default function AdminBookingsPage() {
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
       >
+        <BookingCalendar dates={(q.data ?? []).map((r: any)=>r.booking.date)} selected={selectedDate} onSelect={setSelectedDate} />
         {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
         {!!notice && <Text accessibilityRole="alert" style={{ color: colors.foreground, marginBottom: 12 }}>{notice}</Text>}
         {q.error && <Text style={[styles.errorText, { color: colors.error }]}>Error: {q.error.message}</Text>}
@@ -156,6 +160,7 @@ export default function AdminBookingsPage() {
                   ))}
                 </View>
               </View>
+              <BookingRelatedRecords id={b.id} />
             </AdminCard>
           );
         })}

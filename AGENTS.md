@@ -62,3 +62,26 @@
 - 日期快捷鍵改為本地化標籤及台北日期 YYYY-MM-DD，補接 LINE 原生日期／時間選擇器 params。
 - 99 檔／682 項測試、型別及 lint 通過。尚需真實 LINE 點擊驗收。
 - 使用者詢問常用語料／RAG；建議常用意圖先規則辨識，RAG 查社區文件，即時空位與預約仍由資料庫處理；本次尚未實作 RAG。
+
+## LINE 公設、空檔與紀錄串聯（2026-09-08）
+
+- 使用者要求擴充公設常用辨識、列出空時段供物業查詢，並串聯空間預約、訪客與車號紀錄。
+- facility-phrases.ts 以完整短句／別名辨識既有六類設施；複雜日期、否定、報修、取消不以片段關鍵字誤判。Gemini 保留為複雜語句解析。
+- LINE 選擇日期後從 amenities.getSlots 讀可用名額、排除台北過去時間，分頁提供選項；寫入改為 createCheckedBooking 並依設施實際 slotDuration 取得結束時間。
+- 查詢指令：查空檔 泳池 YYYY-MM-DD、查詢空間預約單、查詢訪客、查詢車號 ABC-1234、查詢 BK-1。住戶依 appUserId 限制，LINE housekeeper/admin 可查物業紀錄。
+- 關聯 BK-1 V-2 P-3：SQLite migration 0016 保存雙向關聯與建立者／時間；交易驗證單號存在及同一住戶所有權，不依姓名或車號自動猜測關聯。V 對應既有 [visitor] 工單，P 對應 parking_assignments；查單號／車號展開關聯。
+- 此功能沿用目前 SQLite demo 儲存；Render 免費服務部署重建資料的既有限制仍在，正式歷史保存須持久化資料庫。RAG 尚未實作。
+
+## 預約歷史行事曆（2026-09-08）
+
+- 使用者追加要求以行事曆顯示歷史；住戶 my-bookings 與物業 admin/bookings 加入月曆、日期筆數、前後月份、今天與全部紀錄，點日期依時間列出當日預約，保留取消／完成紀錄。
+- 預約卡可展開關聯訪客／車號，bookings.relatedRecords 依 web 登入者再次檢查所有權；住戶限本人，admin/logistics 可查管理紀錄。
+- 104 檔／713 項測試通過，型別、lint、Web 建置通過；涵蓋閏年／跨年、台北日期、關聯越權、物業查詢與空檔分頁。瀏覽器初始化依然失敗，未完成點擊驗收。
+
+## LINE 角色服務首頁與 SVG 圖示（2026-09-08）
+
+- 使用者要求 LINE UI/UX 更豐富、擴展角色服務、直覺操作減少 token，並以 SVG 美編減少 emoji。
+- 服務首頁依住戶／物業角色顯示入口；首頁、公設選擇、空檔、紀錄卡片、訪客／報修流程入口均使用 postback／固定辨識，不呼叫模型。自由描述仍使用 Gemini。
+- 訊息「服務首頁」可開首頁；住戶與物業皆可用查空檔流程，queryOnly 不可建立預約。工單 WO 亦可與 BK/V/P 同住戶紀錄關聯；訪客單統一 V 編號。
+- 新增 12 組 public/line-icons SVG 原稿與 PNG，scripts/generate-line-icons.cjs 可重建。LINE Flex 官方只支援 JPEG/PNG，因此使用 SVG 轉圖；前端靜態部署提供 /line-icons/。
+- 新版住戶／物業首頁、公設卡、成功卡、紀錄卡及時段訊息共 6 組已通過 LINE validate/reply（未發送用戶訊息）。716 項測試、型別、lint、Web 建置與隔離 smoke 通過；未完成真實 LINE 點擊及瀏覽器驗收。

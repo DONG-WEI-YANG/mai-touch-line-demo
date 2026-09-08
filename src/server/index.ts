@@ -24,6 +24,9 @@ import { handleCommand } from './line/handlers/command';
 import { startDemo, stopDemo } from './line/handlers/demo';
 import { listScripts } from './line/demo-scripts';
 import { buildFacilityMap } from './_core/voiceCommand';
+import { createCheckedBooking } from './services/bookingService';
+import { availableSlots, makeRecordQuery } from './line/record-query';
+import { makeRecordLinks } from './line/record-links';
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -206,11 +209,10 @@ async function startServer() {
           console.error('[LINE] no amenity mapped for facility', input.facility);
           throw new Error(`Unknown facility "${input.facility}" — no matching amenity`);
         }
-        // Derive endTime = startTime + 1 hour
-        const [h, m] = input.time.split(':').map(Number);
-        const endH = (h + 1) % 24;
-        const endTime = `${String(endH).padStart(2, '0')}:${String(m ?? 0).padStart(2, '0')}`;
-        const bookingId = await db.createBooking({
+        const slot = (await availableSlots(amenityId, input.date)).find(s => s.startTime === input.time);
+        if (!slot) throw new Error('此時段無法預約，請重新選擇日期與時段');
+        const endTime = slot.endTime;
+        const bookingId = await createCheckedBooking({
           userId: resolveAppUserId(lineUserId),
           amenityId,
           date: input.date,
@@ -382,7 +384,7 @@ async function startServer() {
           amenityNames(),
         ]);
         const woItems = wos.map((w: any) => ({
-          ref: `WO-${w.id}`,
+          ref: `${String(w.title).startsWith('[visitor] ') ? 'V' : 'WO'}-${w.id}`,
           label: WO_CAT_LABEL[w.category] ?? '工單',
           detail: String(w.title ?? '').slice(0, 40),
           status: WO_STATUS_LABEL[w.status] ?? String(w.status),
@@ -394,6 +396,19 @@ async function startServer() {
           status: BK_STATUS_LABEL[b.status] ?? String(b.status),
         }));
         return [...woItems, ...bkItems];
+      };
+      const records = makeRecordLinks(rawSqlite);
+      const queryRecords = makeRecordQuery({
+        records, resolveAmenityId,
+        actor: (lineUserId) => {
+          const row = lineUserRepo.byLineId(channelId, lineUserId);
+          return { userId: resolveAppUserId(lineUserId), lineUserId,
+            staff: row?.role === 'housekeeper' || row?.role === 'admin' };
+        },
+      });
+      const getAvailableSlots = async (facility: string, date: string) => {
+        const id = await resolveAmenityId(facility);
+        return id ? availableSlots(id, date) : [];
       };
 
       // Demo side-effect dispatcher — resolves (router, procedure) → direct db call
@@ -498,6 +513,8 @@ async function startServer() {
         reportFn,
         pushHousekeepers,
         listMyOrders,
+        queryRecords,
+        getAvailableSlots,
         updateOrder,
         runSideEffect,
         commandHandler,

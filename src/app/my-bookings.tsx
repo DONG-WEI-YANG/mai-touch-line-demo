@@ -14,6 +14,8 @@ import { invalidateDomainCaches } from "@/lib/mutation-cache";
 import { cancelBooking } from "@/lib/booking-cancellation";
 import { parseError } from "@/lib/error-utils";
 import { useOfflineStatus } from "@/hooks/use-offline-status";
+import { BookingCalendar } from '@/components/booking-calendar';
+import { BookingRelatedRecords } from '@/components/booking-related-records';
 
 type Booking = {
   id: number;
@@ -34,6 +36,7 @@ export default function MyBookingsScreen() {
   const [cancelTarget, setCancelTarget] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const cancelling = useRef(false);
   const offline = useOfflineStatus();
   const queuedIds = new Set(offlineService.getOperations()
@@ -115,6 +118,7 @@ export default function MyBookingsScreen() {
           )}
         </View>
 
+        <BookingRelatedRecords id={item.id} />
         {/* Actions */}
         {(item.status === "confirmed" || item.status === "pending") && (
           <TouchableOpacity
@@ -170,7 +174,8 @@ export default function MyBookingsScreen() {
         </TouchableOpacity>
       </View>}
       <FlatList
-        data={bookings}
+        data={bookings.filter(b=>!selectedDate || b.date===selectedDate).sort((a,b)=>`${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`))}
+        ListHeaderComponent={<BookingCalendar dates={bookings.map(b=>b.date)} selected={selectedDate} onSelect={setSelectedDate} />}
         renderItem={renderBooking}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.list}

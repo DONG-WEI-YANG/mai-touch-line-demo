@@ -1,6 +1,8 @@
 import type { SessionStore, SessionState } from '../session-store';
 import type { IntentClassifier, Lang, IntentName } from '../ai/types';
 import { AiUnavailableError } from '../ai/types';
+import { recognizeFacilityPhrase } from '../ai/facility-phrases';
+import { slotMessage, type AvailableSlot } from '../record-query';
 import type { LineClient } from '../line-client';
 import { parsePostback } from '../postback';
 import { facilityCarousel } from '../flex/facilityCarousel';
@@ -19,6 +21,7 @@ const REQUIRED_SLOTS: Partial<Record<IntentName, string[]>> = {
 };
 
 export type ResidentDeps = {
+  getAvailableSlots?: (facility: string, date: string) => Promise<AvailableSlot[]>;
   ai: IntentClassifier;
   client: LineClient;
   store: SessionStore;
@@ -41,6 +44,20 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
   // ──── Postback branch ────
   if (ev.type === 'postback') {
     const params = parsePostback(ev.postback?.data ?? '');
+    if (params.act === 'changeDate' || params.act === 'edit') {
+      delete session.slots.date;
+      delete session.slots.time;
+    }
+    if (params.slotsOffset && session.slots.facility && session.slots.date && deps.getAvailableSlots) {
+      const offset = Number(params.slotsOffset);
+      if (Number.isInteger(offset) && offset >= 0) {
+        const slots = await deps.getAvailableSlots(String(session.slots.facility), String(session.slots.date));
+        const msg=slotMessage(slots, String(session.slots.date), offset);
+        if (session.slots.queryOnly) msg.quickReply.items=msg.quickReply.items.filter(i=>!i.action.data.startsWith('slot=time'));
+        await deps.client.replyOrPush(ev.replyToken, userId, msg);
+        return;
+      }
+    }
     if (params.picker === '1' && (params.slot === 'date' || params.slot === 'time')) {
       const value = ev.postback?.params?.[params.slot];
       if (typeof value === 'string' && (params.slot === 'date'
@@ -54,14 +71,15 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
       return;
     }
 
-    if (params.act === 'book' && params.fac) {
+    if ((params.act === 'book' || params.act === 'availability') && params.fac) {
       session = {
         ...session, intent: 'facility.book', step: 'SLOT_FILLING',
-        slots: { ...session.slots, facility: params.fac },
+        slots: { facility: params.fac, ...(params.act === 'availability' ? { queryOnly:true } : {}) },
       };
     }
 
     if (params.slot && params.val) {
+      if (params.slot === 'date') delete session.slots.time;
       session = {
         ...session,
         slots: { ...session.slots, [params.slot]: params.val },
@@ -69,7 +87,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
       };
     }
 
-    if (params.act === 'confirm' && session.step === 'CONFIRMING' && session.intent === 'facility.book') {
+    if (params.act === 'confirm' && !session.slots.queryOnly && session.step === 'CONFIRMING' && session.intent === 'facility.book') {
       session = { ...session, step: 'EXECUTING' };
       deps.store.set(userId, session);
       try {
@@ -112,6 +130,13 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
   ) {
     const required = REQUIRED_SLOTS[session.intent] ?? [];
     const nextMissing = required.find(k => !(k in session.slots));
+    const value = String(ev.message.text).trim();
+    if (nextMissing === 'facility') {
+      const recognized = recognizeFacilityPhrase(value, lang);
+      if (recognized?.slots.facility) session.slots.facility = recognized.slots.facility;
+    }
+    if (nextMissing === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(value)) session.slots.date = value;
+    if (nextMissing === 'time' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) session.slots.time = value;
     const TEXT_SLOTS = new Set(['visitor_name', 'visitor_count', 'issue', 'location', 'urgency']);
     if (nextMissing && TEXT_SLOTS.has(nextMissing)) {
       const text = (ev.message.text as string).trim();
@@ -128,7 +153,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     const text = ev.message.text as string;
     let r;
     try {
-      r = await deps.ai.classify(text, { userId, history: session.history });
+      r = recognizeFacilityPhrase(text, lang) ?? await deps.ai.classify(text, { userId, history: session.history });
       if (deps.store.get(userId)?.intent) return;
     } catch (err) {
       if (!(err instanceof AiUnavailableError)) throw err;
@@ -190,6 +215,14 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
   }
 
   // ──── Slot accumulation + state advance ────
+  if (session.slots.queryOnly && session.slots.facility && session.slots.date && deps.getAvailableSlots) {
+    const slots = await deps.getAvailableSlots(String(session.slots.facility), String(session.slots.date));
+    const msg = slotMessage(slots, String(session.slots.date));
+    msg.quickReply.items = msg.quickReply.items.filter(i=>!i.action.data.startsWith('slot=time'));
+    deps.store.set(userId, session);
+    await deps.client.replyOrPush(ev.replyToken,userId,msg);
+    return;
+  }
   const required = REQUIRED_SLOTS[session.intent ?? 'unknown'] ?? [];
   const missing = required.filter(k => !(k in session.slots));
   session = { ...session, missingSlots: missing };
@@ -247,7 +280,10 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
   if (next === 'date' || next === 'time') {
     session = { ...session, step: 'SLOT_FILLING' };
     deps.store.set(userId, session);
-    await deps.client.replyOrPush(ev.replyToken, userId, dateTimePicker(next, lang));
+    if (next === 'time' && session.intent === 'facility.book' && deps.getAvailableSlots) {
+      const slots = await deps.getAvailableSlots(String(session.slots.facility), String(session.slots.date));
+      await deps.client.replyOrPush(ev.replyToken, userId, slotMessage(slots, String(session.slots.date)));
+    } else await deps.client.replyOrPush(ev.replyToken, userId, dateTimePicker(next, lang));
     return;
   }
   if (next) {

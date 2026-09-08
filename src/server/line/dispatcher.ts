@@ -8,8 +8,13 @@ import { handleHousekeeper } from './handlers/housekeeper';
 import { continueDemo } from './handlers/demo';
 import { isCommand } from './handlers/command';
 import { welcome } from './flex/welcome';
+import { serviceHome, recordResult, homeQuickReply } from './flex/serviceHome';
+import { facilityCarousel } from './flex/facilityCarousel';
+import { parsePostback } from './postback';
 
 export type DispatchDeps = {
+  queryRecords?: (text: string, lineUserId: string) => Promise<string | undefined>;
+  getAvailableSlots?: import('./handlers/resident').ResidentDeps['getAvailableSlots'];
   lineClient: LineClient;
   ai: IntentClassifier;
   store: SessionStore;
@@ -106,7 +111,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
           console.error('[LINE] bindWebUser on follow failed (continuing with plain welcome)', { userId, err });
         }
         try {
-          await deps.lineClient.replyOrPush(ev.replyToken, userId, welcome(lang));
+          await deps.lineClient.replyOrPush(ev.replyToken, userId, [welcome(lang), serviceHome((lineUser.role ?? 'resident') as any,lang)]);
           if (portalUrl) {
             const portalMsg = lang === 'en'
               ? `Your private resident portal:\n${portalUrl}`
@@ -132,6 +137,50 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
         // If false, fall through to demo / role routing
       }
 
+      // Explicit navigation is deterministic and never consumes model tokens.
+      const p = ev.type === 'postback' ? parsePostback(ev.postback?.data ?? '') : {};
+      const menuText = ev.type === 'message' && ev.message?.type === 'text' ? ev.message.text.trim() : '';
+      if (['服務首頁','主選單','選單','開始使用'].includes(menuText)) p.nav='home';
+      const lang=(lineUser.language ?? 'zh-TW') as Lang;
+      const servicePhrases:Record<string,string>={'我要報修':'repair.report','我要登記訪客':'visitor.notify','我要反映問題':'complaint.file'};
+      if (servicePhrases[menuText]) p.flow=servicePhrases[menuText];
+      if (p.nav) {
+        deps.store.clear(userId);
+        let message: any;
+        if (p.nav==='home') message=serviceHome((lineUser.role ?? 'resident') as any,lang);
+        if (p.nav==='facilities' || p.nav==='availability') message=facilityCarousel(lang,p.nav==='availability' || lineUser.role!=='resident');
+        if (p.nav==='portal') {
+          const portal=deps.bindWebUser(userId,lineUser.displayName);
+          message={type:'text',text:'開啟您的後台，查看行事曆與服務紀錄。',quickReply:{items:[
+            {type:'action',action:{type:'uri',label:'開啟後台',uri:portal.url}},...homeQuickReply().items,
+          ]}};
+        }
+        if (p.nav==='visitors' || p.nav==='services') {
+          const actions=p.nav==='visitors'
+            ? [['訪客紀錄','查詢訪客'],['車號紀錄','查詢車號']]
+            : [['工單進度','查詢工單']];
+          const items:any[]=actions.map(([label,query])=>({type:'action',action:{type:'postback',label,data:`query=${encodeURIComponent(query)}`}}));
+          if (lineUser.role==='resident') {
+            const flows=p.nav==='visitors' ? [['登記訪客','visitor.notify']] : [['我要報修','repair.report'],['反映問題','complaint.file']];
+            for (const [label,flow] of flows) items.push({type:'action',action:{type:'postback',label,data:`flow=${flow}`,displayText:label}});
+          }
+          message={type:'text',text:p.nav==='visitors'?'請選擇訪客或車號服務':'請選擇需要的服務',quickReply:{items:[...items,...homeQuickReply().items]}};
+        }
+        const query=p.nav==='bookings'?'查詢空間預約單':p.nav==='workorders'?'查詢工單':undefined;
+        if (query && deps.queryRecords) message=recordResult(await deps.queryRecords(query,userId) ?? '查無紀錄');
+        if (message) {
+          await deps.lineClient.replyOrPush(ev.replyToken,userId,message);
+          continue;
+        }
+      }
+      if (p.query && deps.queryRecords) {
+        const response=await deps.queryRecords(p.query,userId);
+        await deps.lineClient.replyOrPush(ev.replyToken,userId,recordResult(response ?? '請從服務首頁選擇查詢項目'));
+        continue;
+      }
+      if (lineUser.role==='resident' && ['visitor.notify','repair.report','complaint.file'].includes(p.flow)) {
+        deps.store.set(userId,{userId,role:'resident',language:lang,updatedAt:Date.now(),step:'SLOT_FILLING',slots:{},missingSlots:[],intent:p.flow as any});
+      }
       // ── 6. Demo intercept — BEFORE role routing ────────────────────────────
       const session = deps.store.get(userId);
       if (session?.demoScriptId) {
@@ -145,7 +194,14 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       }
 
       // ── 7. Role routing ────────────────────────────────────────────────────
-      if (lineUser.role === 'resident') {
+      if (ev.type === 'message' && ev.message?.type === 'text' && deps.queryRecords) {
+        const response = await deps.queryRecords(ev.message.text, userId);
+        if (response !== undefined) {
+          await deps.lineClient.replyOrPush(ev.replyToken, userId, recordResult(response));
+          continue;
+        }
+      }
+      if (lineUser.role === 'resident' || p.act==='availability' || (session?.slots.queryOnly && p.act!=='book')) {
         await handleResident(ev, {
           ai: deps.ai,
           client: deps.lineClient,
@@ -160,6 +216,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
           reportFn: deps.reportFn,
           pushHousekeepers: deps.pushHousekeepers,
           listMyOrders: deps.listMyOrders,
+          getAvailableSlots: deps.getAvailableSlots,
         });
       }
       if (lineUser.role === 'housekeeper') {
@@ -180,9 +237,9 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       try {
         const lang = (lineUser.language ?? 'zh-TW') as 'zh-TW' | 'en' | 'ja';
         await deps.lineClient.replyOrPush(ev.replyToken, userId,
-          { type: 'text', text: lang === 'en' ? 'Sorry, something went wrong. Please try again.'
+          { type: 'text', quickReply:homeQuickReply(), text: lang === 'en' ? 'Sorry, something went wrong. Please try again.'
                               : lang === 'ja' ? '申し訳ありません、エラーが発生しました'
-                                              : '不好意思,系統剛剛出了點問題,請再試一次 🙏' });
+                                              : '目前無法完成操作，請回服務首頁重試。' });
       } catch (replyErr) {
         console.error('[LINE] failed to send error reply', { userId, replyErr });
       }

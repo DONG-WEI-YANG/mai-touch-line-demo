@@ -102,3 +102,23 @@ describe('dispatch() integration smoke', () => {
     );
   });
 });
+
+it('routes property record queries before the housekeeper action handler', async () => {
+  const queryRecords = vi.fn().mockResolvedValue('BK-1 泳池');
+  const deps = mkDeps({ queryRecords });
+  deps.lineUserRepo.byLineId.mockReturnValue({ role:'housekeeper', appUserId:3, language:'zh-TW' });
+  await dispatch([{ type:'message',replyToken:'rt',source:{userId:'U3'},message:{type:'text',text:'查詢空間預約單'} }],deps);
+  expect(queryRecords).toHaveBeenCalledWith('查詢空間預約單','U3');
+  expect(deps.lineClient.replyOrPush).toHaveBeenCalledWith('rt','U3',expect.objectContaining({type:'text',text:'BK-1 泳池'}));
+  expect(deps.ai.classify).not.toHaveBeenCalled();
+});
+
+it('opens role-aware home and visitor flow without calling AI', async()=>{
+  const deps=mkDeps();
+  deps.lineUserRepo.byLineId.mockReturnValue({role:'resident',appUserId:1,language:'zh-TW'});
+  await dispatch([{type:'postback',replyToken:'rt',source:{userId:'U1'},postback:{data:'nav=home'}}],deps);
+  expect(deps.lineClient.replyOrPush.mock.calls.at(-1)[2].type).toBe('flex');
+  await dispatch([{type:'postback',replyToken:'rt2',source:{userId:'U1'},postback:{data:'flow=visitor.notify'}}],deps);
+  expect(deps.store.get('U1')?.intent).toBe('visitor.notify');
+  expect(deps.ai.classify).not.toHaveBeenCalled();
+});

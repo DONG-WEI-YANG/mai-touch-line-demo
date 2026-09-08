@@ -243,7 +243,7 @@ describe('resident handler — facility.book happy path', () => {
 it('offers facility buttons when AI times out', async () => {
   const client = mkClient();
   const ai = { classify: vi.fn().mockRejectedValue(new AiUnavailableError('timeout')) };
-  await handleResident(baseEv('我想游泳'), { ai, client: client as any,
+  await handleResident(baseEv('我想找個地方活動一下'), { ai, client: client as any,
     store: new SessionStore({ ttlMs: 60000 }), channelId: 'C',
     lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' },
     bookFn: vi.fn(), reportFn: vi.fn(), pushHousekeepers: vi.fn(), listMyOrders: vi.fn(),
@@ -264,3 +264,31 @@ it('captures native date picker params', async () => {
   expect(store.get('U1')?.slots.date).toBe('2026-09-12');
 });
 
+
+
+it('bypasses AI for a common facility phrase', async () => {
+  const ai = mkAi({});
+  const store = new SessionStore({ ttlMs: 60000 });
+  await handleResident(baseEv('我想游泳'), { ai, client: mkClient() as any, store, channelId: 'C',
+    lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' },
+    bookFn: vi.fn(), reportFn: vi.fn(), pushHousekeepers: vi.fn(), listMyOrders: vi.fn(),
+  });
+  expect(ai.classify).not.toHaveBeenCalled();
+  expect(store.get('U1')?.slots.facility).toBe('pool');
+});
+
+it('asks with actual availability instead of fixed hours', async () => {
+  const store = new SessionStore({ ttlMs: 60000 });
+  store.set('U1', { userId: 'U1', role: 'resident', intent: 'facility.book', step: 'SLOT_FILLING',
+    slots: { facility: 'pool' }, missingSlots: ['date','time'], language: 'zh-TW', updatedAt: Date.now() });
+  const client = mkClient();
+  const getAvailableSlots = vi.fn().mockResolvedValue([{ startTime:'09:30', endTime:'10:00', remainingCapacity:2 }]);
+  await handleResident(baseEv('2026-09-12'), { ai: mkAi({}), client: client as any, store, channelId: 'C',
+    lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' },
+    bookFn: vi.fn(), reportFn: vi.fn(), pushHousekeepers: vi.fn(), listMyOrders: vi.fn(), getAvailableSlots,
+  });
+  expect(getAvailableSlots).toHaveBeenCalledWith('pool','2026-09-12');
+  const msg=client.replyOrPush.mock.calls.at(-1)?.[2];
+  expect(msg.text).toContain('09:30–10:00：2');
+  expect(msg.quickReply.items[0].action.data).toBe('slot=time&val=09:30');
+});
