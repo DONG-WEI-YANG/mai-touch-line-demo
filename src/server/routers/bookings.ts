@@ -2,8 +2,8 @@ import { residentProcedure, staffProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
-import { assertWithinCapacity } from "../_core/bookingCapacity";
-import { runExclusive } from "../_core/keyedLock";
+import { createCheckedBooking } from "../services/bookingService";
+
 
 export const bookingsRouter = router({
   myBookings: residentProcedure.query(async ({ ctx }) => db.getUserBookings(ctx.user.id)),
@@ -17,37 +17,15 @@ export const bookingsRouter = router({
       guestCount: z.number().int().min(1).default(1),
       notes: z.string().optional(),
     }))
-    .mutation(async ({ ctx, input }) => {
-      const amenity = await db.getAmenityById(input.amenityId);
-      if (!amenity) throw new TRPCError({ code: "NOT_FOUND", message: "Amenity not found" });
-
-      // Serialize the read→check→write for this exact slot so two concurrent
-      // requests can't both pass the capacity check and overbook (audit race).
-      return runExclusive(`booking:${input.amenityId}:${input.date}:${input.startTime}`, async () => {
-        const existingBookings = await db.getBookingsByAmenityAndDate(input.amenityId, input.date);
-        try {
-          assertWithinCapacity({
-            existing: existingBookings,
-            startTime: input.startTime,
-            endTime: input.endTime,
-            guestCount: input.guestCount,
-            capacity: amenity.capacity,
-          });
-        } catch (err) {
-          throw new TRPCError({ code: "CONFLICT", message: err instanceof Error ? err.message : "Capacity exceeded" });
-        }
-
-        return db.createBooking({
-          userId: ctx.user.id,
-          amenityId: input.amenityId,
-          date: input.date,
-          startTime: input.startTime,
-          endTime: input.endTime,
-          guestCount: input.guestCount,
-          notes: input.notes,
-        });
-      });
-    }),
+    .mutation(async ({ ctx, input }) => createCheckedBooking({
+      userId: ctx.user.id,
+      amenityId: input.amenityId,
+      date: input.date,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      guestCount: input.guestCount,
+      notes: input.notes,
+    })),
 
   cancel: residentProcedure
     .input(z.object({ id: z.number() }))

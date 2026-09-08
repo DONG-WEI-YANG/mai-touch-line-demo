@@ -16,10 +16,14 @@
 
 ## 下輪檢查線索（尚未修正）
 
-- src/server/routers/bookings.ts 的 create 只檢查設施存在，需核對停用設施是否仍可直接預約；鎖鍵包含 startTime，需驗證不同起始時間的重疊預約併發容量。
+- 2026-09-08 已修正一般 API 可預約停用設施，以及不同 startTime 的重疊請求超額問題。API 與語音寫入共用 src/server/services/bookingService.ts，按設施／日期鎖定檢查及寫入；僅保障同一程序，多實例仍需資料庫層併發保護。
 - src/server/routers/workOrders.ts 的 update/delete 與 bookings.ts 的 updateStatus，需驗證不存在 ID 是否仍回報成功。
 - 上述僅為程式閱讀線索，需先重現與測試，不視為已確認缺陷。
 
 ## 工作區注意
 
 - 本輪開始前 docs/slides 已有 PDF 刪除、V2 PDF 及精銳.pptx 新增；本輪完整性提交不包含這些使用者既有異動。
+
+## 預約修正驗證
+
+- 2026-09-08：97 個測試檔、649 項測試通過；行覆蓋率 53.54%；型別、lint、隔離 smoke 通過。新增停用設施、重疊併發、跨 API／語音寫入及相鄰時段回歸測試。

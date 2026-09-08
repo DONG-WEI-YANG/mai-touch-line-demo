@@ -15,6 +15,8 @@
 
 ## 本輪交付
 
+後續預約修正：一般 API 拒絕停用設施，API 與語音寫入共用按設施／日期的容量檢查及鎖。新增 5 項回歸測試後共 97 檔、649 項通過；覆蓋率 statements 52.68%、branches 46.90%、functions 50.83%、lines 53.54%，型別、lint 與隔離 smoke 通過。鎖僅保障單一後端程序，多實例仍需資料庫層併發保護。
+
 - PR 與手動驗證工作流程：`.github/workflows/verify.yml`。
 - GitHub Pages 部署前加入型別、lint、覆蓋率與隔離 smoke 檢查，任一步失敗即停止後續部署。
 - PR 驗證不需要正式環境 token；smoke 建立暫存 SQLite 及本機 HTTP AI 契約服務。

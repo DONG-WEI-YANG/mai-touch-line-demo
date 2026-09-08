@@ -1,3 +1,4 @@
+import { createCheckedBooking } from "../services/bookingService";
 import { publicProcedure, residentProcedure, staffProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -276,7 +277,7 @@ async function assertBookingCapacity(input: {
 // Shared commit deps (booking capacity guard + writers), reused by resident and
 // property-desk commit procedures.
 const commitDeps = {
-  createBooking: async (i: any) => Number(await db.createBooking(i)),
+  createBooking: async (i: Parameters<typeof createCheckedBooking>[0]) => Number(await createCheckedBooking(i)),
   createWorkOrder: async (i: any) => Number(await db.createWorkOrder(i)),
   assertBookingAllowed: assertBookingCapacity,
 };
