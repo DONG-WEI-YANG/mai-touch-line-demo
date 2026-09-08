@@ -1,5 +1,20 @@
 # GCP 專用環境
 
+## 最新決定：免費 Demo（2026-09-08）
+
+使用者指定「demo用先配置free 建立VM」，取代下方付費提案。目標為 `e2-micro`（1 GiB）、Debian 12、`us-west1-b`；20 GB 開機磁碟＋10 GB 資料磁碟均使用 `pd-standard`，資料磁碟禁止隨 VM 自動刪除。免費用量以帳務帳戶合計，建立前仍需核對其他專案當月使用量，不能保證新專案自動取得額外免費額度。
+
+初始 VM 不配置 external IPv4、Cloud NAT、負載平衡器或額外備份服務；透過 IAP SSH 管理。此配置尚不能直接提供公開 LINE webhook，亦無一般網際網路出口，套件安裝及 Gemini 呼叫的連線方式需另行處理，不能視為後端已可上線。
+
+實際執行 billing link 時，Google 回覆 `FAILED_PRECONDITION: Cloud billing quota exceeded`。唯一可見帳務帳戶的專案連結額度已滿；再次查詢新專案仍為 `billingEnabled: false`。Compute API 啟用亦因無 billing 失敗，因此 **VM／磁碟尚未建立**。沒有解除其他專案的帳務連結。
+
+接續條件：帳務帳戶額度調升，或提供另一個可用帳務帳戶。解除後核對帳戶共享免費額度，再建立上述 VM。現行 Render 保持運作，未切換 webhook；完整來源快照仍未取得，暫不 push 觸發舊服務重建。
+
+官方依據：
+- https://docs.cloud.google.com/free/docs/free-cloud-features
+- https://cloud.google.com/vpc/pricing
+- Google 錯誤提供的額度申請入口：https://support.google.com/code/contact/billing_quota_increase
+
 ## 已建立
 
 - Project ID: `mai-touch-history-20260908`
@@ -9,7 +24,7 @@
 - 不改變操作者的 gcloud 全域預設專案；所有後續指令明確帶 `--project=mai-touch-history-20260908`。
 - 目前僅建立 project；VM、磁碟、bucket、對外 IP 均尚未建立，計費綁定待確認。
 
-## 待核准配置
+## 舊付費提案（已由免費 Demo 決定取代，不執行）
 
 | 資源 | 配置 |
 |---|---|

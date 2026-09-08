@@ -101,3 +101,10 @@
 - 使用者選擇為本系統新建 GCP 專案，已建立 mai-touch-history-20260908（project number 331315864522），ACTIVE。不改動 gcloud 原預設專案。
 - 尚未綁定 billing 或建立 VM／磁碟／bucket。待核准方案為 Oregon e2-small 2GiB + 20GB boot + 10GB data + static IPv4 + Cloud Storage 備份，初估 US$18–22/月，另計流量等；詳見 docs/GCP_DEPLOYMENT.md。
 - 後端 HTTPS 自有網域尚待指定；來源仍只有 API 匯出，未取得完整 SQLite 快照。Render 持久磁碟方案尚未套用；GCP 路線接續資料保存目標。
+
+## GCP 免費 Demo 決定與阻塞（2026-09-08）
+
+- 使用者改指定免費 Demo VM，取代前述付費提案；目標 e2-micro、us-west1-b、20 GB boot + 10 GB data，皆 pd-standard。免費用量由帳務帳戶共享，建立前需核對其他專案用量。
+- billing link 實際回覆 FAILED_PRECONDITION: Cloud billing quota exceeded；唯一可見帳務帳戶專案連結額度已滿。複查 mai-touch-history-20260908 billingEnabled=false，Compute API 未啟用，VM／磁碟均未建立。
+- 需額度調升或另一可用帳務帳戶；不得自行解除其他專案 billing。初始無 external IPv4／NAT／LB，以 IAP 管理，但公開 webhook 與 Gemini 對外連線尚需處理，不能宣稱可上線。
+- 已更新 docs/GCP_DEPLOYMENT.md；仍暫不 push，避免 Render ephemeral DB 因部署重建。
