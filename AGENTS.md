@@ -108,3 +108,4 @@
 - billing link 實際回覆 FAILED_PRECONDITION: Cloud billing quota exceeded；唯一可見帳務帳戶專案連結額度已滿。複查 mai-touch-history-20260908 billingEnabled=false，Compute API 未啟用，VM／磁碟均未建立。
 - 需額度調升或另一可用帳務帳戶；不得自行解除其他專案 billing。初始無 external IPv4／NAT／LB，以 IAP 管理，但公開 webhook 與 Gemini 對外連線尚需處理，不能宣稱可上線。
 - 已更新 docs/GCP_DEPLOYMENT.md；仍暫不 push，避免 Render ephemeral DB 因部署重建。
+- 使用者後續確認只提高帳務帳戶專案連結數，讓建材 Demo 綁定，不提高護理平台規格。實查已連結 5 個專案；申請增加 1 個（總數 6），草稿見 docs/GCP_BILLING_QUOTA_REQUEST.md。Chrome 初始化兩次失敗，申請尚未送出，不能記為核准。
