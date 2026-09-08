@@ -27,12 +27,19 @@ export function createCheckedBooking(input: BookingInput) {
 }
 
 /** Re-confirmation must use the same capacity lock as new bookings. */
-export async function updateCheckedBookingStatus(id: number, status: "confirmed" | "pending" | "cancelled" | "completed") {
+export async function updateCheckedBookingStatus(id: number, status: "confirmed" | "pending" | "cancelled" | "completed", residentUserId?: number) {
   const initial = await db.getBookingById(id);
   if (!initial) throw new TRPCError({ code: "NOT_FOUND", message: "找不到預約" });
   return runExclusive(`booking:${initial.amenityId}:${initial.date}`, async () => {
     const before = await db.getBookingById(id);
     if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "找不到預約" });
+    if (residentUserId !== undefined) {
+      if (before.userId !== residentUserId) throw new TRPCError({ code: "FORBIDDEN", message: "只能取消自己的預約" });
+      if (status !== "cancelled" || before.status === "completed") {
+        throw new TRPCError({ code: "CONFLICT", message: "已完成的預約無法取消，請聯絡物業" });
+      }
+      if (before.status === "cancelled") return before;
+    }
     if (status === "confirmed" && before.status !== "confirmed") {
       const amenity = await db.getAmenityById(before.amenityId);
       if (!amenity) throw new TRPCError({ code: "NOT_FOUND", message: "找不到設施" });

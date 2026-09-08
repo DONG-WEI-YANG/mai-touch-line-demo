@@ -137,6 +137,7 @@ async function runIsolated() {
     await resident.bookings.cancel.mutate({ id: bookingId });
     bookings = await resident.bookings.myBookings.query();
     assert(bookings.find((booking) => booking.id === bookingId)?.status === "cancelled", "booking cancellation did not persist");
+    await resident.bookings.cancel.mutate({ id: bookingId });
     console.log("[local-smoke] booking write/read/cancel PASS");
 
     const managedAmenityId = await admin.amenities.create.mutate({
@@ -151,6 +152,13 @@ async function runIsolated() {
     await admin.bookings.updateStatus.mutate({ id: managedBookingId, status: "completed" });
     const managedBookings = await resident.bookings.myBookings.query();
     assert(managedBookings.find((booking) => booking.id === managedBookingId)?.status === "completed", "staff booking update not visible to resident");
+    let completedCancellationRejected = false;
+    try {
+      await resident.bookings.cancel.mutate({ id: managedBookingId });
+    } catch (error) {
+      completedCancellationRejected = error.data?.code === "CONFLICT";
+    }
+    assert(completedCancellationRejected, "resident could cancel a completed booking");
     await admin.amenities.update.mutate({ id: managedAmenityId, isActive: false });
     assert((await resident.amenities.getSlots.query({ amenityId: managedAmenityId, date: "2099-12-30" })).length === 0, "disabled amenity still offers slots");
     const workOrderId = await resident.workOrders.create.mutate({ title: "會議室燈具報修" });

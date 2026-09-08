@@ -2,8 +2,8 @@
  * My Bookings Screen
  * View and manage amenity reservations
  */
-import React, { useCallback } from "react";
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, Alert } from "react-native";
+import React, { useCallback, useRef, useState } from "react";
+import { View, Text, TouchableOpacity, FlatList, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -11,6 +11,9 @@ import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { offlineService } from "@/lib/offline";
 import { invalidateDomainCaches } from "@/lib/mutation-cache";
+import { cancelBooking } from "@/lib/booking-cancellation";
+import { parseError } from "@/lib/error-utils";
+import { useOfflineStatus } from "@/hooks/use-offline-status";
 
 type Booking = {
   id: number;
@@ -28,59 +31,43 @@ export default function MyBookingsScreen() {
   const colors = useColors();
   const router = useRouter();
   const utils = trpc.useUtils();
+  const [cancelTarget, setCancelTarget] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [notice, setNotice] = useState('');
+  const cancelling = useRef(false);
+  const offline = useOfflineStatus();
+  const queuedIds = new Set(offlineService.getOperations()
+    .filter((op) => op.type === 'cancel_booking' && op.status !== 'completed')
+    .map((op) => (op.data as { id: number }).id));
 
-  const { data: bookings = [], isLoading } = trpc.bookings.myBookings.useQuery();
+  const { data: bookings = [], isLoading, error, refetch, isFetching } = trpc.bookings.myBookings.useQuery(undefined, {
+    refetchInterval: 10_000, refetchOnWindowFocus: true,
+  });
+  const amenities = trpc.amenities.list.useQuery();
   const cancelBookingMutation = trpc.bookings.cancel.useMutation({
     onSuccess: () => invalidateDomainCaches("booking", utils),
   });
 
   const handleCancelBooking = useCallback(async (bookingId: number) => {
-    Alert.alert(
-      "Cancel Booking",
-      "Are you sure you want to cancel this reservation?",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes, Cancel",
-          style: "destructive",
-          onPress: async () => {
-            // Offline-first: if the device is currently offline, queue the
-            // cancel and surface a "will sync later" message instead of a
-            // hard error. The sync handler in _layout.tsx replays it via
-            // trpcProxy when the network comes back.
-            if (!offlineService.isDeviceOnline()) {
-              await offlineService.queueOperation({
-                type: 'cancel_booking',
-                data: { id: bookingId },
-              });
-              Alert.alert("Queued", "You're offline — cancellation will sync when you reconnect");
-              return;
-            }
-            try {
-              await cancelBookingMutation.mutateAsync({ id: bookingId });
-              Alert.alert("Success", "Booking cancelled successfully");
-            } catch (error) {
-              // Network errors during a "should-be-online" call still benefit
-              // from the queue — they often mean the server blipped or the
-              // device's online flag is stale.
-              const isNetworkErr = error instanceof TypeError ||
-                (error as { message?: string })?.message?.toLowerCase().includes('network');
-              if (isNetworkErr) {
-                await offlineService.queueOperation({
-                  type: 'cancel_booking',
-                  data: { id: bookingId },
-                });
-                Alert.alert("Queued", "Network hiccup — cancellation will retry automatically");
-                return;
-              }
-              Alert.alert("Error", "Failed to cancel booking");
-            }
-          },
-        },
-      ]
-    );
+    if (cancelling.current) return;
+    cancelling.current = true;
+    setBusyId(bookingId);
+    setNotice('正在送出取消申請…');
+    try {
+      const result = await cancelBooking(bookingId, {
+        isOnline: () => offlineService.isDeviceOnline(),
+        cancel: (id) => cancelBookingMutation.mutateAsync({ id }),
+        queue: (id) => offlineService.queueOperation({ type: 'cancel_booking', data: { id } }),
+      });
+      setNotice(result === 'confirmed' ? '預約已取消' : '取消申請已儲存，等待連線同步；預約尚未確認取消。');
+      setCancelTarget(null);
+    } catch (error) {
+      setNotice(`取消未完成：${parseError(error)}。請重試。`);
+    } finally {
+      cancelling.current = false;
+      setBusyId(null);
+    }
   }, [cancelBookingMutation]);
-
   const renderBooking = useCallback(({ item }: { item: Booking }) => {
     const statusColor = item.status === "confirmed" ? colors.success : colors.muted;
 
@@ -97,7 +84,7 @@ export default function MyBookingsScreen() {
         {/* Booking Info */}
         <View style={styles.bookingInfo}>
           <Text style={[styles.amenityName, { color: colors.foreground }]}>
-            Amenity #{item.amenityId}
+            {amenities.data?.find((amenity) => amenity.id === item.amenityId)?.name ?? `設施 #${item.amenityId}`}
           </Text>
 
           <View style={styles.detailRow}>
@@ -129,18 +116,29 @@ export default function MyBookingsScreen() {
         </View>
 
         {/* Actions */}
-        {item.status === "confirmed" && (
+        {(item.status === "confirmed" || item.status === "pending") && (
           <TouchableOpacity
             style={[styles.cancelButton, { borderColor: colors.error }]}
-            onPress={() => handleCancelBooking(item.id)}
+            accessibilityRole="button"
+            disabled={busyId !== null || queuedIds.has(item.id)}
+            onPress={() => setCancelTarget(item.id)}
             activeOpacity={0.7}
           >
-            <Text style={[styles.cancelButtonText, { color: colors.error }]}>Cancel</Text>
+            <Text style={[styles.cancelButtonText, { color: colors.error }]}>{queuedIds.has(item.id) ? '取消申請同步中／待重試，請查看同步狀態' : '取消預約'}</Text>
           </TouchableOpacity>
         )}
+        {cancelTarget === item.id && <View style={{ marginTop: 12 }}>
+          <Text style={{ color: colors.foreground }}>確定取消這筆預約？</Text>
+          <TouchableOpacity accessibilityRole="button" disabled={busyId !== null} onPress={() => handleCancelBooking(item.id)} style={styles.cancelButton}>
+            <Text style={{ color: colors.error }}>{busyId === item.id ? '送出中…' : '確認取消'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" disabled={busyId !== null} onPress={() => setCancelTarget(null)} style={styles.cancelButton}>
+            <Text style={{ color: colors.foreground }}>保留預約</Text>
+          </TouchableOpacity>
+        </View>}
       </View>
     );
-  }, [colors, handleCancelBooking]);
+  }, [colors, handleCancelBooking, amenities.data, cancelTarget, busyId, queuedIds]);
 
   return (
     <ScreenContainer edges={["top"]}>
@@ -163,13 +161,24 @@ export default function MyBookingsScreen() {
       </View>
 
       {/* Bookings List */}
+      {!!notice && <Text accessibilityRole="alert" style={{ color: colors.foreground, paddingHorizontal: 16, paddingVertical: 8 }}>{notice}</Text>}
+      {!offline.online && <Text style={{ color: colors.muted, paddingHorizontal: 16 }}>目前離線，顯示上次取得的預約。</Text>}
+      {error && <View style={{ padding: 16 }}>
+        <Text accessibilityRole="alert" style={{ color: colors.error }}>無法取得最新預約：{parseError(error)}</Text>
+        <TouchableOpacity accessibilityRole="button" onPress={() => refetch()} disabled={isFetching}>
+          <Text style={{ color: colors.primary }}>重新載入</Text>
+        </TouchableOpacity>
+      </View>}
       <FlatList
         data={bookings}
         renderItem={renderBooking}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        refreshing={isFetching && !isLoading}
+        onRefresh={() => refetch()}
         ListEmptyComponent={
+          error ? null :
           <View style={styles.emptyContainer}>
             <IconSymbol name="calendar" size={48} color={colors.muted} />
             <Text style={[styles.emptyText, { color: colors.muted }]}>
@@ -194,7 +203,8 @@ function formatDate(dateStr: string): string {
   const options: Intl.DateTimeFormatOptions = { 
     weekday: "short", 
     month: "short", 
-    day: "numeric" 
+    day: "numeric",
+    timeZone: "UTC",
   };
   return date.toLocaleDateString("en-US", options);
 }

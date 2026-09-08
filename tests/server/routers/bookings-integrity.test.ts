@@ -20,6 +20,34 @@ beforeEach(() => {
 });
 
 describe("booking integrity", () => {
+  it("rechecks completion inside the lock before resident cancellation", async () => {
+    vi.mocked(db.getBookingById)
+      .mockResolvedValueOnce({ ...input, id: 7, userId: 1, status: "confirmed" } as never)
+      .mockResolvedValueOnce({ ...input, id: 7, userId: 1, status: "confirmed" } as never)
+      .mockResolvedValue({ ...input, id: 7, userId: 1, status: "completed" } as never);
+    await expect(caller.cancel({ id: 7 })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(db.updateBookingStatus).not.toHaveBeenCalled();
+  });
+  it("allows residents to cancel pending bookings", async () => {
+    vi.mocked(db.getBookingById).mockResolvedValue({ ...input, id: 7, userId: 1, status: "pending" } as never);
+    await caller.cancel({ id: 7 });
+    expect(db.updateBookingStatus).toHaveBeenCalledWith(7, "cancelled");
+  });
+  it("rejects cancellation of another resident's booking", async () => {
+    vi.mocked(db.getBookingById).mockResolvedValue({ ...input, id: 7, userId: 2, status: "confirmed" } as never);
+    await expect(caller.cancel({ id: 7 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(db.updateBookingStatus).not.toHaveBeenCalled();
+  });
+  it("does not allow residents to cancel completed bookings", async () => {
+    vi.mocked(db.getBookingById).mockResolvedValue({ ...input, id: 7, userId: 1, status: "completed" } as never);
+    await expect(caller.cancel({ id: 7 })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(db.updateBookingStatus).not.toHaveBeenCalled();
+  });
+  it("treats an already cancelled booking as an idempotent success", async () => {
+    vi.mocked(db.getBookingById).mockResolvedValue({ ...input, id: 7, userId: 1, status: "cancelled" } as never);
+    await expect(caller.cancel({ id: 7 })).resolves.toBeUndefined();
+    expect(db.updateBookingStatus).not.toHaveBeenCalled();
+  });
   it.each([false, 0])("rejects a disabled amenity (%s) without writing", async (isActive) => {
     vi.mocked(db.getAmenityById).mockResolvedValue({ id: 1, isActive, capacity: 1 } as NonNullable<Awaited<ReturnType<typeof db.getAmenityById>>>);
     await expect(caller.create(input)).rejects.toMatchObject({ code: "BAD_REQUEST" });

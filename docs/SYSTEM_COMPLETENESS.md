@@ -6,8 +6,8 @@
 
 | 項目 | 結果 |
 |---|---|
-| Vitest | 98 個測試檔、665 項測試通過 |
-| 覆蓋率門檻 | 通過；statements 53.61%、branches 47.48%、functions 51.89%、lines 54.50% |
+| Vitest | 99 個測試檔、678 項測試通過 |
+| 覆蓋率門檻 | 通過；statements 53.89%、branches 47.83%、functions 52.08%、lines 54.81% |
 | TypeScript | `npm run type-check` 通過 |
 | ESLint | `npm run lint` 通過 |
 | Web 靜態輸出 | `npm run web:build` 通過 |
@@ -45,3 +45,9 @@ Python NLP 不包含在目前 Node CI。本輪 `python -m pytest -q nlp-service 
 - 住戶預約與工單每 10 秒重新查詢，回到網頁時重新查詢；同一客戶端設施異動會刷新列表、詳情與可用時段。
 - 擴充隔離 smoke，實際透過 HTTP API + SQLite 驗證設施新增修改、住戶預約、物業更新、住戶讀取及工單結案重開，全數通過。
 - 瀏覽器點擊驗收尚未完成：工具初始化失敗（e.nodeRepl?.setResponseMeta is not a function）。不能以建置或 API smoke 代替瀏覽器／手機驗收。
+
+## 住戶取消流程（2026-09-08）
+
+我的預約已改為頁面內取消確認，顯示實際設施名稱、讀取錯誤與重新載入。取消結果區分伺服器確認與等待同步；網路傳輸失敗可排隊，離線儲存失敗則顯示錯誤，不宣稱成功。取消中與已有佇列的預約避免重複提交。
+
+後端在鎖內重新檢查所有權與完成狀態，住戶不能取消已完成預約；已取消的重送請求視為成功且不重寫。新增 13 項測試，全套 678 項、型別、lint、Web 建置及 SQLite smoke 通過。瀏覽器／手機實際點擊驗收仍未完成。

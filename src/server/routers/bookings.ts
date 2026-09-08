@@ -37,7 +37,7 @@ export const bookingsRouter = router({
       if (booking.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "You can only cancel your own booking." });
       }
-      await updateCheckedBookingStatus(input.id, "cancelled");
+      await updateCheckedBookingStatus(input.id, "cancelled", ctx.user.id);
     }),
 
   listAll: staffProcedure.query(async () => db.getBookingsWithDetails()),
