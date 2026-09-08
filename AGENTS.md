@@ -40,3 +40,11 @@
 - src/lib/booking-cancellation.ts 區分伺服器確認與離線排隊；儲存失敗會顯示錯誤，伺服器 4xx/5xx 拒絕不誤排入離線佇列。
 - 住戶取消在容量鎖內重新檢查所有權與狀態；已完成預約回 CONFLICT，已取消重送不再寫入。
 - 99 個測試檔、678 項測試通過；行覆蓋率 54.81%；型別、lint、Web 建置、SQLite 隔離 smoke 通過。Web 建置會重寫 dist，smoke 必須在建置完成後執行。
+
+## 發布授權與基準（2026-09-08）
+
+- 使用者已要求記憶、commit、push、deploy。本次發布包含 d8550b1、c063b31、06b76dd、9968708：完整性驗證、預約容量、物業後台及住戶取消流程。
+- 發布前本機驗證：99 檔／678 項測試、型別、lint、Web 建置及 SQLite 隔離 smoke 通過；行覆蓋率 54.81%。
+- origin 為 DONG-WEI-YANG/mai-touch-line-demo；前端 .vercel/project.json 對應 mai-touch-web；render.yaml 指出現行後端為 mai-touch-line-us（Oregon），舊 blueprint mai-touch-demo 不是現行目標。
+- 2026-09-08 實查 Vercel CLI 59.11.2 已安裝；名為 render 的本機命令是模板工具，不是 Render 雲端 CLI。
+- 發布完成狀態須另以遠端部署結果確認，此記錄不代表部署已完成。
