@@ -1,0 +1,25 @@
+# 專案記憶
+
+## 工作方式
+
+- 2026-09-08 使用者指出 GitHub Actions CI 額度有問題，預期遠端檢查可能無法通過。後續優先以本機測試、型別、lint、建置及隔離 smoke 推進，不將 CI 額度不足視為程式失敗，也不因等待 CI 停止開發。
+- 本輪已加入 PR 驗證與 Pages 部署前檢查，但尚未執行遠端 CI；後續需評估減少重複 CI 消耗。使用者要求先記憶與 commit，尚未調整 workflow 觸發方式。
+- 專案記憶更新此檔，不修改 CLAUDE.md。最新完整性基準見 docs/SYSTEM_COMPLETENESS.md，待辦見 docs/NEXT_STEPS.md。
+
+## 2026-09-08 驗證基準
+
+- Vitest 96 個測試檔、644 項測試通過；覆蓋率 statements 52.50%、branches 46.79%、functions 50.58%、lines 53.33%，門檻通過。
+- npm run type-check、npm run lint、npm run web:build、npm run smoke:system 均通過。
+- smoke 使用暫存 SQLite 與本機 AI HTTP 契約服務，不代表真實外部 AI、LINE、IoT 或瀏覽器端到端驗收通過。
+- python -m pytest -q nlp-service --disable-warnings 本輪未完成並已中止。該目錄 test_models.py 會涉及模型下載／推理，test_service.py 連線 localhost:8000；不能當作無外部依賴的單元測試或宣稱通過。
+- 錢包加值仍因付款服務未設定而停用。
+
+## 下輪檢查線索（尚未修正）
+
+- src/server/routers/bookings.ts 的 create 只檢查設施存在，需核對停用設施是否仍可直接預約；鎖鍵包含 startTime，需驗證不同起始時間的重疊預約併發容量。
+- src/server/routers/workOrders.ts 的 update/delete 與 bookings.ts 的 updateStatus，需驗證不存在 ID 是否仍回報成功。
+- 上述僅為程式閱讀線索，需先重現與測試，不視為已確認缺陷。
+
+## 工作區注意
+
+- 本輪開始前 docs/slides 已有 PDF 刪除、V2 PDF 及精銳.pptx 新增；本輪完整性提交不包含這些使用者既有異動。

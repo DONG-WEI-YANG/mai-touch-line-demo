@@ -91,12 +91,13 @@ npm run type-check
 npm run lint
 npm run web:build
 npm run smoke:system
-python -m pytest -q nlp-service --disable-warnings
 ```
 
-2026-09-03 本機驗證結果：Vitest 73 個測試檔、435 項測試全數通過；Python NLP 9 項測試通過；執行路徑覆蓋率為 statements 47.93%、branches 42.16%、functions 46.46%、lines 48.90%，並已設定防倒退門檻。隔離 smoke 會建立暫存 SQLite，驗證權限、診斷、預約寫入／讀取／取消、AI 成功與失敗契約及 Web 輸出。
+NLP 整合腳本需要模型依賴及 `localhost:8000` 上運行中的服務；備妥後可另執行 `python -m pytest -q nlp-service --disable-warnings`。此命令可能下載模型，不屬於上述獨立 Node 驗證。
 
-外部能力不會被模擬成成功：正式 AI 需設定 `OPENAI_API_KEY`（或搭配 `OPENAI_BASE_URL` 的相容供應商）；獨立 NLP 需設定服務 URL 並啟動 Python 服務；錢包加值需另行配置付款供應商，在此之前 UI 會維持停用並說明原因。Vercel 與 GitHub 操作可分別使用已安裝的 `vercel`、`gh` CLI。
+2026-09-08 本機驗證結果：Vitest 96 個測試檔、644 項測試全數通過；執行路徑覆蓋率為 statements 52.50%、branches 46.79%、functions 50.58%、lines 53.33%，通過防倒退門檻。型別、lint、Web 建置與隔離 smoke 均通過。隔離 smoke 使用暫存 SQLite 與本機 AI 契約服務，驗證權限、診斷、預約寫入／讀取／取消、AI 成功與失敗契約及 Web 輸出。完整範圍與剩餘驗收見 [系統完整性驗證基準](docs/SYSTEM_COMPLETENESS.md)。PR 與 Pages 部署前會執行上述 Node 檢查。
+
+外部能力不會被模擬成成功：正式 AI 需設定 `OPENAI_API_KEY`（或搭配 `OPENAI_BASE_URL` 的相容供應商）；獨立 NLP 需設定服務 URL 並啟動 Python 服務；錢包加值需另行配置付款供應商，在此之前 UI 會維持停用並說明原因。需要 Vercel 部署管理時，建議先以 `npm i -g vercel` 安裝 CLI，以使用 `vercel env pull`、`vercel deploy` 與 `vercel logs`。
 
 ## 📱 技術棧
 
