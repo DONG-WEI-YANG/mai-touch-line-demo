@@ -55,3 +55,10 @@
 - 使用者指定 LINE 回應／預約解析改用 gemini-3.5-flash-lite，並提供主用及備援憑證。兩組皆已實際呼叫成功；僅寫入 Render 環境，不保存憑證於 Git。
 - 現行 Render 服務 OPENAI_MODEL 已設定 gemini-3.5-flash-lite；OPENAI_API_KEY 依主用、備援順序逗號分隔。部署後 getAi() 載入，首組失敗才切換下一組。
 - OpenAIIntent 預設最多 2 次，每次 timeout 8000ms，停用 SDK 重試，避免 LINE 長時間沒有錯誤回覆。679 項測試、型別及 lint 通過。
+
+## LINE 日期與逾時備援（2026-09-08）
+
+- 截圖對應日誌確認兩組模型均 timeout；居民 AI 不可用時提供服務選單及可直接操作的設施卡片。較晚完成的 AI 請求不覆寫已開始的會話。
+- 日期快捷鍵改為本地化標籤及台北日期 YYYY-MM-DD，補接 LINE 原生日期／時間選擇器 params。
+- 99 檔／682 項測試、型別及 lint 通過。尚需真實 LINE 點擊驗收。
+- 使用者詢問常用語料／RAG；建議常用意圖先規則辨識，RAG 查社區文件，即時空位與預約仍由資料庫處理；本次尚未實作 RAG。

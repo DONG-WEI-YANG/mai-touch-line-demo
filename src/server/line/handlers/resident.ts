@@ -1,5 +1,6 @@
 import type { SessionStore, SessionState } from '../session-store';
 import type { IntentClassifier, Lang, IntentName } from '../ai/types';
+import { AiUnavailableError } from '../ai/types';
 import type { LineClient } from '../line-client';
 import { parsePostback } from '../postback';
 import { facilityCarousel } from '../flex/facilityCarousel';
@@ -40,6 +41,11 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
   // ──── Postback branch ────
   if (ev.type === 'postback') {
     const params = parsePostback(ev.postback?.data ?? '');
+    if (params.picker === '1' && (params.slot === 'date' || params.slot === 'time')) {
+      const value = ev.postback?.params?.[params.slot];
+      if (typeof value === 'string' && (params.slot === 'date'
+        ? /^\d{4}-\d{2}-\d{2}$/.test(value) : /^\d{2}:\d{2}$/.test(value))) params.val = value;
+    }
 
     if (params.act === 'cancel') {
       deps.store.clear(userId);
@@ -120,7 +126,17 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
   // ──── Text branch — classify if no active intent ────
   if (ev.type === 'message' && ev.message?.type === 'text' && !session.intent) {
     const text = ev.message.text as string;
-    const r = await deps.ai.classify(text, { userId, history: session.history });
+    let r;
+    try {
+      r = await deps.ai.classify(text, { userId, history: session.history });
+      if (deps.store.get(userId)?.intent) return;
+    } catch (err) {
+      if (!(err instanceof AiUnavailableError)) throw err;
+      // Do not let a late failed request overwrite another event's progress.
+      if (deps.store.get(userId)?.intent) return;
+      await deps.client.replyOrPush(ev.replyToken, userId, [serviceMenu(lang), facilityCarousel(lang)]);
+      return;
+    }
     session = {
       ...session,
       intent: r.intent,

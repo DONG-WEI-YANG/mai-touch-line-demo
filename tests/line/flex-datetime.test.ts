@@ -9,3 +9,8 @@ describe('dateTimePicker', () => {
     expect(m.quickReply.items.some((i: any) => i.action.type === 'datetimepicker')).toBe(true);
   });
 });
+
+it('uses Taipei dates and readable Chinese labels', () => {
+  const m = dateTimePicker('date', 'zh-TW', new Date('2026-09-08T17:00:00Z'));
+  expect(m.quickReply.items[0].action).toMatchObject({ label: '今天', data: 'slot=date&val=2026-09-09', displayText: '今天' });
+});

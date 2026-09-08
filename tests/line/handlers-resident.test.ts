@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleResident } from '../../src/server/line/handlers/resident';
 import { SessionStore } from '../../src/server/line/session-store';
+import { AiUnavailableError } from '../../src/server/line/ai/types';
 
 const mkAi = (intent: any) => ({ classify: vi.fn().mockResolvedValue(intent) });
 const mkClient = () => ({
@@ -238,3 +239,28 @@ describe('resident handler — facility.book happy path', () => {
     expect(store.get('U1')?.step).toBe('CONFIRMING');
   });
 });
+
+it('offers facility buttons when AI times out', async () => {
+  const client = mkClient();
+  const ai = { classify: vi.fn().mockRejectedValue(new AiUnavailableError('timeout')) };
+  await handleResident(baseEv('我想游泳'), { ai, client: client as any,
+    store: new SessionStore({ ttlMs: 60000 }), channelId: 'C',
+    lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' },
+    bookFn: vi.fn(), reportFn: vi.fn(), pushHousekeepers: vi.fn(), listMyOrders: vi.fn(),
+  });
+  expect(client.replyOrPush.mock.calls.at(-1)?.[2][1].type).toBe('flex');
+});
+
+it('captures native date picker params', async () => {
+  const store = new SessionStore({ ttlMs: 60000 });
+  store.set('U1', { userId: 'U1', role: 'resident', intent: 'facility.book', step: 'SLOT_FILLING',
+    slots: { facility: 'pool' }, missingSlots: ['date','time'], language: 'zh-TW', updatedAt: Date.now() });
+  await handleResident({ type: 'postback', replyToken: 'rt', postback: {
+    data: 'slot=date&picker=1', params: { date: '2026-09-12' },
+  } }, { ai: mkAi({}), client: mkClient() as any, store, channelId: 'C',
+    lineUser: { lineUserId: 'U1', role: 'resident', language: 'zh-TW' },
+    bookFn: vi.fn(), reportFn: vi.fn(), pushHousekeepers: vi.fn(), listMyOrders: vi.fn(),
+  });
+  expect(store.get('U1')?.slots.date).toBe('2026-09-12');
+});
+
