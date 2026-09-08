@@ -1,9 +1,9 @@
-import { useState, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, Alert, ActivityIndicator, RefreshControl, StyleSheet, Pressable } from 'react-native';
+import { useState, useMemo } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl, StyleSheet, Pressable } from 'react-native';
 import { trpc } from '@/lib/trpc';
 import { useColors } from '@/hooks/use-colors';
 import { ScreenContainer } from '@/components/screen-container';
-import { AdminHeader, AdminCard, AdminButton } from '@/components/admin/admin-ui';
+import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
 import { parseError } from '@/lib/error-utils';
 import { invalidateDomainCaches } from '@/lib/mutation-cache';
 
@@ -29,15 +29,18 @@ export default function AdminWorkOrdersPage() {
   const utils = trpc.useUtils();
   const q = trpc.workOrders.listAll.useQuery();
   const [filter, setFilter] = useState<WOStatus | 'all'>('open');
+  const [notice, setNotice] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [assignment, setAssignment] = useState<{ id: number; assignedTo: string; priority: 'low' | 'medium' | 'high' | 'urgent' } | null>(null);
 
   const updateMut = trpc.workOrders.update.useMutation({
-    onSuccess: () => invalidateDomainCaches('workOrder', utils),
-    onError: (err) => Alert.alert('Failed', parseError(err)),
+    onSuccess: () => { setAssignment(null); setNotice('工單已更新'); return invalidateDomainCaches('workOrder', utils); },
+    onError: (err) => setNotice(`更新失敗：${parseError(err)}`),
   });
 
   const deleteMut = trpc.workOrders.delete.useMutation({
-    onSuccess: () => invalidateDomainCaches('workOrder', utils),
-    onError: (err) => Alert.alert('Failed', parseError(err)),
+    onSuccess: () => { setDeleteTarget(null); setNotice('工單已刪除'); return invalidateDomainCaches('workOrder', utils); },
+    onError: (err) => setNotice(`刪除失敗：${parseError(err)}`),
   });
 
   const rows = useMemo(() => {
@@ -68,12 +71,7 @@ export default function AdminWorkOrdersPage() {
     }
   };
 
-  const confirmDelete = useCallback((id: number) => {
-    Alert.alert('Delete Work Order', `Permanently delete WO-${id}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate({ id }) },
-    ]);
-  }, [deleteMut]);
+  const confirmDelete = (id: number) => setDeleteTarget(id);
 
   return (
     <ScreenContainer edges={['top']}>
@@ -81,6 +79,12 @@ export default function AdminWorkOrdersPage() {
         title="工單管理" 
         subtitle="Maintenance and repair requests"
       />
+
+      {!!notice && <Text accessibilityRole="alert" style={{ color: colors.foreground, padding: 16 }}>{notice}</Text>}
+      {deleteTarget !== null && <AdminCard title={`刪除工單 WO-${deleteTarget}？`}>
+        <AdminButton title="確認刪除" type="danger" disabled={deleteMut.isPending} onPress={() => deleteMut.mutate({ id: deleteTarget })} />
+        <AdminButton title="取消" type="secondary" disabled={deleteMut.isPending} onPress={() => setDeleteTarget(null)} />
+      </AdminCard>}
 
       <View style={styles.filterContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
@@ -130,6 +134,16 @@ export default function AdminWorkOrdersPage() {
               </View>
 
               <Text style={[styles.description, { color: colors.foreground }]}>{w.description}</Text>
+              <Text style={{ color: colors.muted, marginBottom: 8 }}>負責人：{w.assignedTo || '尚未指派'} · 優先級：{w.priority}</Text>
+              <AdminButton title="指派與優先級" type="secondary" onPress={() => setAssignment({ id: w.id, assignedTo: w.assignedTo ?? '', priority: w.priority as 'low' | 'medium' | 'high' | 'urgent' })} />
+              {assignment?.id === w.id && <View style={{ marginVertical: 12 }}>
+                <AdminField label="負責人／單位" value={assignment.assignedTo} onChangeText={(assignedTo) => setAssignment({ ...assignment, assignedTo })} />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                  {(['low', 'medium', 'high', 'urgent'] as const).map((priority) => <AdminButton key={priority} title={{ low: '低', medium: '一般', high: '高', urgent: '緊急' }[priority]} type={assignment.priority === priority ? 'primary' : 'secondary'} onPress={() => setAssignment({ ...assignment, priority })} />)}
+                </View>
+                <AdminButton title="儲存指派" disabled={updateMut.isPending} onPress={() => updateMut.mutate({ ...assignment, assignedTo: assignment.assignedTo.trim() })} />
+                <AdminButton title="取消編輯" type="secondary" onPress={() => setAssignment(null)} />
+              </View>}
               
               <View style={styles.timeInfo}>
                 <Text style={[styles.timeText, { color: colors.muted }]}>

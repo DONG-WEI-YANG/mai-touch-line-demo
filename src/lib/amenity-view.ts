@@ -35,7 +35,7 @@ export function toAmenityView(value: unknown): AmenityView | null {
     || (value.capacity as number) <= 0
     || (value.description !== null && typeof value.description !== "string")
     || (value.rules !== null && typeof value.rules !== "string")
-    || value.isActive === false) {
+    || value.isActive === false || value.isActive === 0) {
     return null;
   }
 

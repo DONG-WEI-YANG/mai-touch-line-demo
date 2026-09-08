@@ -2,7 +2,7 @@ import { residentProcedure, staffProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
-import { createCheckedBooking } from "../services/bookingService";
+import { createCheckedBooking, updateCheckedBookingStatus } from "../services/bookingService";
 
 
 export const bookingsRouter = router({
@@ -37,7 +37,7 @@ export const bookingsRouter = router({
       if (booking.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "You can only cancel your own booking." });
       }
-      return db.updateBookingStatus(input.id, "cancelled");
+      await updateCheckedBookingStatus(input.id, "cancelled");
     }),
 
   listAll: staffProcedure.query(async () => db.getBookingsWithDetails()),
@@ -48,8 +48,7 @@ export const bookingsRouter = router({
       status: z.enum(["confirmed", "pending", "cancelled", "completed"]),
     }))
     .mutation(async ({ ctx, input }) => {
-      const before = await db.getBookingById(input.id);
-      await db.updateBookingStatus(input.id, input.status);
+      const before = await updateCheckedBookingStatus(input.id, input.status);
       if (before && ctx.lineAdmin?.pushToLineUser) {
         try {
           const row = ctx.lineAdmin.db.prepare(

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, Alert, ActivityIndicator, RefreshControl, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl, Pressable, StyleSheet } from 'react-native';
 import { trpc } from '@/lib/trpc';
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
@@ -38,32 +38,42 @@ export default function AdminAmenitiesPage() {
   const utils = trpc.useUtils();
   const q = trpc.amenities.list.useQuery();
   const [showCreate, setShowCreate] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
   const [draft, setDraft] = useState<CreateInput>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<{
     name: string; description: string; capacity: number;
     openTime: string; closeTime: string; isActive: boolean;
+    location: string; rules: string; slotDurationMinutes: number;
   } | null>(null);
+
+  const refreshAmenities = () => Promise.all([
+    utils.amenities.list.invalidate(), utils.amenities.getById.invalidate(),
+    utils.amenities.getSlots.invalidate(),
+  ]);
 
   const createMut = trpc.amenities.create.useMutation({
     onSuccess: () => {
-      utils.amenities.list.invalidate();
+      void refreshAmenities();
+      setNotice('設施已新增');
       setDraft(EMPTY_DRAFT);
       setShowCreate(false);
     },
-    onError: (err) => Alert.alert('Create failed', err.message),
+    onError: (err) => setNotice(`新增失敗：${err.message}`),
   });
   const updateMut = trpc.amenities.update.useMutation({
     onSuccess: () => {
-      utils.amenities.list.invalidate();
+      void refreshAmenities();
+      setNotice('設施已更新');
       setEditingId(null);
       setEditDraft(null);
     },
-    onError: (err) => Alert.alert('Update failed', err.message),
+    onError: (err) => setNotice(`更新失敗：${err.message}`),
   });
   const deleteMut = trpc.amenities.delete.useMutation({
-    onSuccess: () => utils.amenities.list.invalidate(),
-    onError: (err) => Alert.alert('Delete failed', err.message),
+    onSuccess: () => { void refreshAmenities(); setDeleteTarget(null); setNotice('設施已刪除'); },
+    onError: (err) => setNotice(`刪除失敗：${err.message}`),
   });
 
   const beginEdit = (a: any) => {
@@ -74,13 +84,14 @@ export default function AdminAmenitiesPage() {
       capacity: a.capacity ?? 1,
       openTime: a.openTime ?? '08:00',
       closeTime: a.closeTime ?? '22:00',
-      isActive: a.isActive ?? true,
+      isActive: a.isActive == null ? true : Boolean(a.isActive),
+      location: a.location ?? '', rules: a.rules ?? '', slotDurationMinutes: a.slotDurationMinutes ?? 60,
     });
   };
 
   const submitCreate = () => {
     if (!draft.name.trim()) {
-      Alert.alert('Validation', 'Name is required');
+      setNotice('請輸入設施名稱');
       return;
     }
     createMut.mutate(draft);
@@ -92,10 +103,7 @@ export default function AdminAmenitiesPage() {
   };
 
   const confirmDelete = (id: number, name: string) => {
-    Alert.alert('Delete amenity', `Permanently delete "${name}"?`, [
-      { text: 'Cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate({ id }) },
-    ]);
+    setDeleteTarget({ id, name });
   };
 
   return (
@@ -117,6 +125,12 @@ export default function AdminAmenitiesPage() {
         contentContainerStyle={{ padding: 16 }}
         refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
       >
+        {!!notice && <Text accessibilityRole="alert" style={{ color: colors.foreground, marginBottom: 16 }}>{notice}</Text>}
+        {deleteTarget && <AdminCard title={`刪除「${deleteTarget.name}」？`} style={{ marginBottom: 16 }}>
+          <Text style={{ color: colors.muted, marginBottom: 12 }}>已有預約紀錄的設施請改為停用，以保留歷史資料。</Text>
+          <AdminButton title="確認刪除" type="danger" disabled={deleteMut.isPending} onPress={() => deleteMut.mutate({ id: deleteTarget.id })} />
+          <AdminButton title="取消" type="secondary" disabled={deleteMut.isPending} onPress={() => setDeleteTarget(null)} />
+        </AdminCard>}
         {showCreate && (
           <AdminCard title="New Amenity" style={{ marginBottom: 24 }}>
             <AdminField label="Name *" value={draft.name} onChangeText={(t) => setDraft({ ...draft, name: t })} />
@@ -177,7 +191,7 @@ export default function AdminAmenitiesPage() {
                   <Text style={[styles.amenityName, { color: colors.foreground }]}>{a.name}</Text>
                   <Text style={[styles.amenityMeta, { color: colors.muted }]}>
                     #{a.id} · {a.category} · capacity {a.capacity} · {a.openTime}-{a.closeTime}
-                    {a.isActive === false ? ' · INACTIVE' : ''}
+                    {a.isActive === false || a.isActive === 0 ? ' · 已停用' : ''}
                   </Text>
                 </View>
                 <View style={styles.actionButtons}>
@@ -206,6 +220,9 @@ export default function AdminAmenitiesPage() {
                 <View style={[styles.editForm, { borderTopColor: colors.border }]}>
                   <AdminField label="Name" value={editDraft.name} onChangeText={(t) => setEditDraft({ ...editDraft, name: t })} />
                   <AdminField label="Description" value={editDraft.description} onChangeText={(t) => setEditDraft({ ...editDraft, description: t })} multiline />
+                  <AdminField label="位置" value={editDraft.location} onChangeText={(t) => setEditDraft({ ...editDraft, location: t })} />
+                  <AdminField label="使用規則" value={editDraft.rules} onChangeText={(t) => setEditDraft({ ...editDraft, rules: t })} multiline />
+                  <AdminField label="每次預約分鐘數" value={String(editDraft.slotDurationMinutes)} onChangeText={(t) => setEditDraft({ ...editDraft, slotDurationMinutes: parseIntSafe(t, 60) })} keyboardType="number-pad" />
                   <AdminField label="Capacity" value={String(editDraft.capacity)} onChangeText={(t) => setEditDraft({ ...editDraft, capacity: parseIntSafe(t, 1) })} keyboardType="number-pad" />
                   
                   <View style={{ flexDirection: 'row', gap: 12 }}>

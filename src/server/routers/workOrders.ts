@@ -1,6 +1,7 @@
 import { residentProcedure, staffProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
+import { TRPCError } from "@trpc/server";
 
 export const workOrdersRouter = router({
   myOrders: residentProcedure.query(async ({ ctx }) => db.getUserWorkOrders(ctx.user.id)),
@@ -32,9 +33,11 @@ export const workOrdersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
       const before = await db.getWorkOrderById(id);
+      if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "找不到工單" });
       // Stamp resolvedAt when the order reaches a terminal state (audit finding:
       // resolvedAt was never populated → SLA/resolution reporting always null).
-      const patch: typeof data & { resolvedAt?: Date } = { ...data };
+      const patch: typeof data & { resolvedAt?: Date | null } = { ...data };
+      if (input.status === "open" || input.status === "in_progress") patch.resolvedAt = null;
       if ((input.status === "resolved" || input.status === "closed") && !before?.resolvedAt) {
         patch.resolvedAt = new Date();
       }
@@ -64,6 +67,7 @@ export const workOrdersRouter = router({
   delete: staffProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
+      if (!await db.getWorkOrderById(input.id)) throw new TRPCError({ code: "NOT_FOUND", message: "找不到工單" });
       await db.deleteWorkOrder(input.id);
       return { success: true };
     }),

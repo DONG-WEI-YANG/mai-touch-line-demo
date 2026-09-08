@@ -139,6 +139,29 @@ async function runIsolated() {
     assert(bookings.find((booking) => booking.id === bookingId)?.status === "cancelled", "booking cancellation did not persist");
     console.log("[local-smoke] booking write/read/cancel PASS");
 
+    const managedAmenityId = await admin.amenities.create.mutate({
+      name: "物業驗收會議室", capacity: 2, openTime: "08:00", closeTime: "18:00", slotDurationMinutes: 60,
+    });
+    await admin.amenities.update.mutate({ id: managedAmenityId, location: "二樓", rules: "使用後復原", slotDurationMinutes: 30 });
+    const managedAmenity = await resident.amenities.getById.query({ id: managedAmenityId });
+    assert(managedAmenity?.location === "二樓" && managedAmenity.slotDurationMinutes === 30, "amenity edits not visible to resident");
+    const managedBookingId = await resident.bookings.create.mutate({
+      amenityId: managedAmenityId, date: "2099-12-30", startTime: "09:00", endTime: "09:30", guestCount: 1,
+    });
+    await admin.bookings.updateStatus.mutate({ id: managedBookingId, status: "completed" });
+    const managedBookings = await resident.bookings.myBookings.query();
+    assert(managedBookings.find((booking) => booking.id === managedBookingId)?.status === "completed", "staff booking update not visible to resident");
+    await admin.amenities.update.mutate({ id: managedAmenityId, isActive: false });
+    assert((await resident.amenities.getSlots.query({ amenityId: managedAmenityId, date: "2099-12-30" })).length === 0, "disabled amenity still offers slots");
+    const workOrderId = await resident.workOrders.create.mutate({ title: "會議室燈具報修" });
+    await admin.workOrders.update.mutate({ id: workOrderId, status: "resolved", assignedTo: "物業維修", priority: "high" });
+    let managedOrders = await resident.workOrders.myOrders.query();
+    assert(managedOrders.find((order) => order.id === workOrderId)?.resolvedAt, "resolved work order lacks resolution timestamp");
+    await admin.workOrders.update.mutate({ id: workOrderId, status: "in_progress" });
+    managedOrders = await resident.workOrders.myOrders.query();
+    assert(managedOrders.find((order) => order.id === workOrderId)?.resolvedAt === null, "reopened work order retains resolution timestamp");
+    console.log("[local-smoke] property amenity + booking + work-order lifecycle PASS");
+
     const historyBefore = await resident.chat.history.query({ limit: 100, viewerKey: "smoke" });
     let chatRejected = false;
     try {

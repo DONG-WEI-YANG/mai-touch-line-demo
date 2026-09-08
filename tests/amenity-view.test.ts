@@ -33,7 +33,7 @@ describe("amenity API view conversion", () => {
     expect(view?.rules).toEqual([]);
   });
 
-  it("rejects malformed or inactive amenity payloads", () => {
+  it.each([false, 0])("rejects malformed or inactive amenity payloads (%s)", (isActive) => {
     expect(toAmenityView({ id: "1", name: "gym" })).toBeNull();
     expect(toAmenityView({
       id: 1,
@@ -43,7 +43,7 @@ describe("amenity API view conversion", () => {
       category: "recreation",
       capacity: 20,
       rules: null,
-      isActive: false,
+      isActive,
     })).toBeNull();
   });
 });

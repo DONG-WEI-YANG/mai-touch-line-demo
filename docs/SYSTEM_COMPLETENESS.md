@@ -6,8 +6,8 @@
 
 | 項目 | 結果 |
 |---|---|
-| Vitest | 96 個測試檔、644 項測試通過 |
-| 覆蓋率門檻 | 通過；statements 52.50%、branches 46.79%、functions 50.58%、lines 53.33% |
+| Vitest | 98 個測試檔、665 項測試通過 |
+| 覆蓋率門檻 | 通過；statements 53.61%、branches 47.48%、functions 51.89%、lines 54.50% |
 | TypeScript | `npm run type-check` 通過 |
 | ESLint | `npm run lint` 通過 |
 | Web 靜態輸出 | `npm run web:build` 通過 |
@@ -34,3 +34,14 @@
 
 依序執行 `npm ci`、`npm run type-check`、`npm run lint`、`npm run test:coverage`、`npm run web:build`、`npm run smoke:system`。
 Python NLP 不包含在目前 Node CI。本輪 `python -m pytest -q nlp-service --disable-warnings` 未完成，不能宣稱通過。該目錄的 `test_models.py` 包含模型下載／推理，`test_service.py` 直接連線 `localhost:8000`；需先備妥模型與運行中的 NLP 服務，再做整合驗收。
+
+## 物業後台缺口修正（2026-09-08）
+
+- 設施新增／修改驗證名稱、整數容量、HH:MM 時間及正整數時段長度；避免零長度造成時段查詢無限迴圈。
+- 停用設施不提供可預約時段，住戶列表同時辨識 false 與 SQLite 的 0；時段容量計入不同起始時間的重疊預約。
+- 有預約歷史的設施拒絕刪除，提示改為停用；新增位置、規則、預約時長編輯。
+- 預約重新確認共用容量鎖與容量檢查；不存在的預約／工單拒絕更新或刪除；工單重開清除結案時間。
+- 後台工單可編輯負責人與優先級；三個管理頁使用頁面內操作結果，設施／工單刪除改為頁面內確認。
+- 住戶預約與工單每 10 秒重新查詢，回到網頁時重新查詢；同一客戶端設施異動會刷新列表、詳情與可用時段。
+- 擴充隔離 smoke，實際透過 HTTP API + SQLite 驗證設施新增修改、住戶預約、物業更新、住戶讀取及工單結案重開，全數通過。
+- 瀏覽器點擊驗收尚未完成：工具初始化失敗（e.nodeRepl?.setResponseMeta is not a function）。不能以建置或 API smoke 代替瀏覽器／手機驗收。

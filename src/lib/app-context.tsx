@@ -150,12 +150,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const { data: remoteWorkOrders } = trpc.workOrders.myOrders.useQuery(undefined, {
     enabled: !!userProfile && isResident,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: 10_000,
   });
 
   const { data: remoteBookings } = trpc.bookings.myBookings.useQuery(undefined, {
     enabled: !!userProfile && isResident,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: 10_000,
   });
 
   // Include the authenticated user id in the input solely as a cache key. The

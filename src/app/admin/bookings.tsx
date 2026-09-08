@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { trpc } from '@/lib/trpc';
 import { useColors } from '@/hooks/use-colors';
 import { ScreenContainer } from '@/components/screen-container';
@@ -16,12 +16,13 @@ const FILTERS: StatusFilter[] = ['all', 'confirmed', 'pending', 'cancelled', 'co
 export default function AdminBookingsPage() {
   const colors = useColors();
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [notice, setNotice] = useState('');
   const utils = trpc.useUtils();
   const q = trpc.bookings.listAll.useQuery();
 
   const updateStatus = trpc.bookings.updateStatus.useMutation({
-    onSuccess: () => invalidateDomainCaches('booking', utils),
-    onError: (err) => Alert.alert('Update failed', parseError(err)),
+    onSuccess: () => { setNotice('預約狀態已更新'); return invalidateDomainCaches('booking', utils); },
+    onError: (err) => setNotice(`更新失敗：${parseError(err)}`),
   });
 
   const rows = useMemo(() => {
@@ -82,6 +83,7 @@ export default function AdminBookingsPage() {
         refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
       >
         {q.isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+        {!!notice && <Text accessibilityRole="alert" style={{ color: colors.foreground, marginBottom: 12 }}>{notice}</Text>}
         {q.error && <Text style={[styles.errorText, { color: colors.error }]}>Error: {q.error.message}</Text>}
         
         {!q.isLoading && rows.length === 0 && (

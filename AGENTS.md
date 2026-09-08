@@ -17,7 +17,7 @@
 ## 下輪檢查線索（尚未修正）
 
 - 2026-09-08 已修正一般 API 可預約停用設施，以及不同 startTime 的重疊請求超額問題。API 與語音寫入共用 src/server/services/bookingService.ts，按設施／日期鎖定檢查及寫入；僅保障同一程序，多實例仍需資料庫層併發保護。
-- src/server/routers/workOrders.ts 的 update/delete 與 bookings.ts 的 updateStatus，需驗證不存在 ID 是否仍回報成功。
+- 2026-09-08 已補上工單 update/delete 與預約 updateStatus 的 NOT_FOUND；預約重新確認檢查容量，工單重新開啟清除 resolvedAt。
 - 上述僅為程式閱讀線索，需先重現與測試，不視為已確認缺陷。
 
 ## 工作區注意
@@ -27,3 +27,9 @@
 ## 預約修正驗證
 
 - 2026-09-08：97 個測試檔、649 項測試通過；行覆蓋率 53.54%；型別、lint、隔離 smoke 通過。新增停用設施、重疊併發、跨 API／語音寫入及相鄰時段回歸測試。
+
+## 物業後台修正驗證
+
+- 2026-09-08：98 個測試檔、665 項測試通過；行覆蓋率 54.50%；型別、lint、擴充 SQLite 隔離 smoke 通過。
+- 設施參數驗證、停用時段、重疊容量、預約歷史刪除保護、Web 操作提示／刪除確認、工單指派優先級及住戶 10 秒狀態更新已補齊；詳見 docs/SYSTEM_COMPLETENESS.md。
+- 瀏覽器工具初始化報 e.nodeRepl?.setResponseMeta is not a function，未完成點擊驗收；不要把 API smoke 說成瀏覽器驗收。

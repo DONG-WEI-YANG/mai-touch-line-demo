@@ -25,3 +25,28 @@ export function createCheckedBooking(input: BookingInput) {
     return db.createBooking(input);
   });
 }
+
+/** Re-confirmation must use the same capacity lock as new bookings. */
+export async function updateCheckedBookingStatus(id: number, status: "confirmed" | "pending" | "cancelled" | "completed") {
+  const initial = await db.getBookingById(id);
+  if (!initial) throw new TRPCError({ code: "NOT_FOUND", message: "找不到預約" });
+  return runExclusive(`booking:${initial.amenityId}:${initial.date}`, async () => {
+    const before = await db.getBookingById(id);
+    if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "找不到預約" });
+    if (status === "confirmed" && before.status !== "confirmed") {
+      const amenity = await db.getAmenityById(before.amenityId);
+      if (!amenity) throw new TRPCError({ code: "NOT_FOUND", message: "找不到設施" });
+      if (amenity.isActive === false || Number(amenity.isActive) === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "設施已停用，無法確認預約" });
+      }
+      const existing = await db.getBookingsByAmenityAndDate(before.amenityId, before.date);
+      try {
+        assertWithinCapacity({ ...before, existing: existing.filter((booking) => booking.id !== id), capacity: amenity.capacity });
+      } catch (error) {
+        throw new TRPCError({ code: "CONFLICT", message: error instanceof Error ? error.message : "Capacity exceeded" });
+      }
+    }
+    await db.updateBookingStatus(id, status);
+    return before;
+  });
+}
