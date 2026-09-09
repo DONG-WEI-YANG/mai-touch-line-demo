@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="810" viewBox="0 0 1200 810"><rect width="1200" height="810" fill="#FFFFFF"/><g font-family="Microsoft JhengHei, Noto Sans CJK TC, sans-serif"><g transform="translate(0 0)">
+      <rect x="7" y="7" width="386" height="391" rx="20" fill="#24221F"/>
+      <svg x="144" y="55" width="112" height="112" viewBox="0 0 28 28"><rect width="28" height="28" rx="5" fill="#F5F2EB"/><g fill="none" stroke="#8B6C35" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9v6m3-8v10m10-8v6m-3-8v10M11 12h7"/></g></svg>
+      <text x="200" y="245" text-anchor="middle" font-size="48" font-weight="700" fill="#E8D7B4">預約公設</text>
+      <text x="200" y="310" text-anchor="middle" font-size="25" fill="#E5E0D7">選設施・日期・時段</text>
+    </g><g transform="translate(400 0)">
+      <rect x="7" y="7" width="386" height="391" rx="20" fill="#F5F2EB"/>
+      <svg x="144" y="55" width="112" height="112" viewBox="0 0 28 28"><rect width="28" height="28" rx="5" fill="#F5F2EB"/><g fill="none" stroke="#8B6C35" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="20" height="18" rx="2"/><path d="M9 3v6m10-6v6M4 12h20M9 17h2m5 0h2m-9 4h2"/></g></svg>
+      <text x="200" y="245" text-anchor="middle" font-size="48" font-weight="700" fill="#24221F">查空時段</text>
+      <text x="200" y="310" text-anchor="middle" font-size="25" fill="#626262">先看看還有哪些名額</text>
+    </g><g transform="translate(800 0)">
+      <rect x="7" y="7" width="386" height="391" rx="20" fill="#F5F2EB"/>
+      <svg x="144" y="55" width="112" height="112" viewBox="0 0 28 28"><rect width="28" height="28" rx="5" fill="#F5F2EB"/><g fill="none" stroke="#8B6C35" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="16" height="21" rx="2"/><path d="M10 10h8m-8 5h8m-8 5h5"/></g></svg>
+      <text x="200" y="245" text-anchor="middle" font-size="48" font-weight="700" fill="#24221F">我的預約</text>
+      <text x="200" y="310" text-anchor="middle" font-size="25" fill="#626262">查看預約與歷史紀錄</text>
+    </g><g transform="translate(0 405)">
+      <rect x="7" y="7" width="386" height="391" rx="20" fill="#F5F2EB"/>
+      <svg x="144" y="55" width="112" height="112" viewBox="0 0 28 28"><rect width="28" height="28" rx="5" fill="#F5F2EB"/><g fill="none" stroke="#8B6C35" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="9" r="4"/><path d="M3 24v-3a8 8 0 0 1 16 0v3m1-19a4 4 0 0 1 0 8m3 11v-3a8 8 0 0 0-3-6"/></g></svg>
+      <text x="200" y="245" text-anchor="middle" font-size="48" font-weight="700" fill="#24221F">訪客登記</text>
+      <text x="200" y="310" text-anchor="middle" font-size="25" fill="#626262">安排親友來訪</text>
+    </g><g transform="translate(400 405)">
+      <rect x="7" y="7" width="386" height="391" rx="20" fill="#F5F2EB"/>
+      <svg x="144" y="55" width="112" height="112" viewBox="0 0 28 28"><rect width="28" height="28" rx="5" fill="#F5F2EB"/><g fill="none" stroke="#8B6C35" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="m16 5 1 5 5 1a7 7 0 0 1-8 7l-7 7-4-4 7-7a7 7 0 0 1 6-9Z"/></g></svg>
+      <text x="200" y="245" text-anchor="middle" font-size="48" font-weight="700" fill="#24221F">報修服務</text>
+      <text x="200" y="310" text-anchor="middle" font-size="25" fill="#626262">報修・反映・查進度</text>
+    </g><g transform="translate(800 405)">
+      <rect x="7" y="7" width="386" height="391" rx="20" fill="#F5F2EB"/>
+      <svg x="144" y="55" width="112" height="112" viewBox="0 0 28 28"><rect width="28" height="28" rx="5" fill="#F5F2EB"/><g fill="none" stroke="#8B6C35" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M5 24V5h13v19M2 24h24m-8-14h6v14M9 9h5m-5 5h5m-5 5h5"/></g></svg>
+      <text x="200" y="245" text-anchor="middle" font-size="48" font-weight="700" fill="#24221F">服務首頁</text>
+      <text x="200" y="310" text-anchor="middle" font-size="25" fill="#626262">行事曆與更多服務</text>
+    </g></g></svg>

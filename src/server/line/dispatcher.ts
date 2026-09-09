@@ -8,7 +8,7 @@ import { handleHousekeeper } from './handlers/housekeeper';
 import { continueDemo } from './handlers/demo';
 import { isCommand } from './handlers/command';
 import { welcome } from './flex/welcome';
-import { serviceHome, recordResult, homeQuickReply } from './flex/serviceHome';
+import { serviceHome, serviceActions, recordResult, homeQuickReply } from './flex/serviceHome';
 import { facilityCarousel } from './flex/facilityCarousel';
 import { parsePostback } from './postback';
 
@@ -141,6 +141,13 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       const p = ev.type === 'postback' ? parsePostback(ev.postback?.data ?? '') : {};
       const menuText = ev.type === 'message' && ev.message?.type === 'text' ? ev.message.text.trim() : '';
       if (['服務首頁','主選單','選單','開始使用'].includes(menuText)) p.nav='home';
+      const entryLabels:Record<string,string>={'預約公設':'facilities','查空時段':'availability','我的預約':'bookings','訪客登記':'visitorRegister','報修服務':'services'};
+      if (entryLabels[menuText]) p.nav=entryLabels[menuText];
+      if (p.nav==='visitorRegister') {
+        deps.store.clear(userId);
+        if (lineUser.role==='resident') { delete p.nav; p.flow='visitor.notify'; }
+        else p.nav='visitors';
+      }
       const lang=(lineUser.language ?? 'zh-TW') as Lang;
       const servicePhrases:Record<string,string>={'我要報修':'repair.report','我要登記訪客':'visitor.notify','我要反映問題':'complaint.file'};
       if (servicePhrases[menuText]) p.flow=servicePhrases[menuText];
@@ -151,9 +158,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
         if (p.nav==='facilities' || p.nav==='availability') message=facilityCarousel(lang,p.nav==='availability' || lineUser.role!=='resident');
         if (p.nav==='portal') {
           const portal=deps.bindWebUser(userId,lineUser.displayName);
-          message={type:'text',text:'開啟您的後台，查看行事曆與服務紀錄。',quickReply:{items:[
-            {type:'action',action:{type:'uri',label:'開啟後台',uri:portal.url}},...homeQuickReply().items,
-          ]}};
+          message=serviceActions(lineUser.role==='resident'?'我的行事曆':'管理後台','查看預約歷史與服務紀錄。',[{type:'uri',label:'開啟行事曆與紀錄',uri:portal.url}]);
         }
         if (p.nav==='visitors' || p.nav==='services') {
           const actions=p.nav==='visitors'
@@ -164,7 +169,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
             const flows=p.nav==='visitors' ? [['登記訪客','visitor.notify']] : [['我要報修','repair.report'],['反映問題','complaint.file']];
             for (const [label,flow] of flows) items.push({type:'action',action:{type:'postback',label,data:`flow=${flow}`,displayText:label}});
           }
-          message={type:'text',text:p.nav==='visitors'?'請選擇訪客或車號服務':'請選擇需要的服務',quickReply:{items:[...items,...homeQuickReply().items]}};
+          message=serviceActions(p.nav==='visitors'?'訪客與車號':'報修與服務','點選下方按鈕開始操作。',items.map(item=>item.action));
         }
         const query=p.nav==='bookings'?'查詢空間預約單':p.nav==='workorders'?'查詢工單':undefined;
         if (query && deps.queryRecords) message=recordResult(await deps.queryRecords(query,userId) ?? '查無紀錄');
@@ -202,7 +207,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
         }
       }
       if (lineUser.role === 'resident' || p.act==='availability' || (session?.slots.queryOnly && p.act!=='book')) {
-        await handleResident(ev, {
+        await handleResident(p.flow ? {...ev,type:'postback',postback:{data:`flow=${p.flow}`}} : ev, {
           ai: deps.ai,
           client: deps.lineClient,
           store: deps.store,

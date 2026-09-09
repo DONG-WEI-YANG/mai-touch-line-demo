@@ -12,6 +12,7 @@ import { bookingDone } from '../flex/bookingDone';
 import { serviceMenu } from '../flex/serviceMenu';
 import { myOrders, type MyOrderItem } from '../flex/myOrders';
 import { t } from '../flex/i18n';
+import { homeQuickReply } from '../flex/serviceHome';
 
 const REQUIRED_SLOTS: Partial<Record<IntentName, string[]>> = {
   'facility.book':   ['facility', 'date', 'time'],
@@ -67,7 +68,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     if (params.act === 'cancel') {
       deps.store.clear(userId);
       await deps.client.replyOrPush(ev.replyToken, userId,
-        { type: 'text', text: t('booking.btn.cancel', lang) });
+        { type: 'text', text: t('booking.btn.cancel', lang), quickReply:homeQuickReply() });
       return;
     }
 

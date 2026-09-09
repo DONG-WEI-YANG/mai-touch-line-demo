@@ -1,0 +1,95 @@
+{
+  "size": {
+    "width": 1200,
+    "height": 810
+  },
+  "selected": true,
+  "name": "MAI Touch community v1",
+  "chatBarText": "社區服務",
+  "areas": [
+    {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 400,
+        "height": 405
+      },
+      "action": {
+        "type": "postback",
+        "label": "預約公設",
+        "data": "nav=facilities",
+        "displayText": "預約公設"
+      }
+    },
+    {
+      "bounds": {
+        "x": 400,
+        "y": 0,
+        "width": 400,
+        "height": 405
+      },
+      "action": {
+        "type": "postback",
+        "label": "查空時段",
+        "data": "nav=availability",
+        "displayText": "查空時段"
+      }
+    },
+    {
+      "bounds": {
+        "x": 800,
+        "y": 0,
+        "width": 400,
+        "height": 405
+      },
+      "action": {
+        "type": "postback",
+        "label": "我的預約",
+        "data": "nav=bookings",
+        "displayText": "我的預約"
+      }
+    },
+    {
+      "bounds": {
+        "x": 0,
+        "y": 405,
+        "width": 400,
+        "height": 405
+      },
+      "action": {
+        "type": "postback",
+        "label": "訪客登記",
+        "data": "nav=visitorRegister",
+        "displayText": "訪客登記"
+      }
+    },
+    {
+      "bounds": {
+        "x": 400,
+        "y": 405,
+        "width": 400,
+        "height": 405
+      },
+      "action": {
+        "type": "postback",
+        "label": "報修服務",
+        "data": "nav=services",
+        "displayText": "報修服務"
+      }
+    },
+    {
+      "bounds": {
+        "x": 800,
+        "y": 405,
+        "width": 400,
+        "height": 405
+      },
+      "action": {
+        "type": "postback",
+        "label": "服務首頁",
+        "data": "nav=home",
+        "displayText": "服務首頁"
+      }
+    }
+  ]
+}

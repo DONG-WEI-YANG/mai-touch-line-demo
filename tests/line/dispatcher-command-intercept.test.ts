@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { dispatch, setDispatchDeps, resetDispatchDeps } from '../../src/server/line/dispatcher';
 import { SessionStore } from '../../src/server/line/session-store';
@@ -141,5 +142,45 @@ describe('dispatcher command intercept', () => {
     expect(commandHandler).not.toHaveBeenCalled();
     // Resident handler ran instead
     expect(deps.ai.classify).toHaveBeenCalled();
+  });
+});
+
+
+describe('visible service entry points', () => {
+  it.each(['預約公設','查空時段','我的預約','報修服務'])('routes desktop label %s without AI', async text => {
+    const deps=mkDeps({lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1})),upsert:vi.fn()},queryRecords:vi.fn(async (text:string)=>text==='查詢空間預約單'?'查無紀錄':undefined)});
+    await dispatch([mkTextEv(text)],deps);
+    expect(deps.lineClient.replyOrPush).toHaveBeenCalled();
+    expect(deps.ai.classify).not.toHaveBeenCalled();
+  });
+  it('opens visitor registration without consuming the entry label as a visitor name', async()=>{
+    const deps=mkDeps({lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1})),upsert:vi.fn()}});
+    await dispatch([mkTextEv('訪客登記')],deps);
+    expect(deps.store.get('U1')?.intent).toBe('visitor.notify');
+    expect(deps.store.get('U1')?.slots.visitor_name).toBeUndefined();
+    expect(deps.ai.classify).not.toHaveBeenCalled();
+  });
+  it('sends staff visitor entry to records without starting a resident write flow',async()=>{
+    const deps=mkDeps({lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1,role:'housekeeper'})),upsert:vi.fn()}});
+    await dispatch([{type:'postback',replyToken:'rt',source:{userId:'U1'},postback:{data:'nav=visitorRegister'}}],deps);
+    expect(deps.lineClient.replyOrPush).toHaveBeenCalled();
+    expect(deps.store.get('U1')?.intent).not.toBe('visitor.notify');
+    expect(deps.ai.classify).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('published rich menu actions',()=>{
+  const menu=JSON.parse(readFileSync('public/line-menu/community.json','utf8'));
+  it.each(['resident','housekeeper'])('routes every published touch area for %s without AI or writes',async role=>{
+    for (const area of menu.areas) {
+      const deps=mkDeps({lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1,role})),upsert:vi.fn()},queryRecords:vi.fn().mockResolvedValue('查無紀錄')});
+      await dispatch([{type:'postback',replyToken:'rt',source:{userId:'U1'},postback:{data:area.action.data}}],deps);
+      expect(deps.lineClient.replyOrPush,area.action.label).toHaveBeenCalledTimes(1);
+      expect(deps.ai.classify,area.action.label).not.toHaveBeenCalled();
+      expect(deps.bookFn).not.toHaveBeenCalled();
+      if(area.action.data==='nav=visitorRegister' && role==='resident') expect(deps.store.get('U1')?.intent).toBe('visitor.notify');
+      if(area.action.data==='nav=facilities' && role==='housekeeper') expect(JSON.stringify(deps.lineClient.replyOrPush.mock.calls)).not.toContain('act=book&');
+    }
   });
 });

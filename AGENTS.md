@@ -144,3 +144,15 @@
 - Render 與舊 Vercel 網址仍是舊環境，不共享新資料；請使用 Firebase 入口。HF 仍留作語料／RAG 測試。
 - 憑證只存在忽略的本機暫存、VM `/etc/mai-touch.env` 與 Cloud Run 環境，不可提交。前端 EXPO_PUBLIC_DEMO_* 必須與 VM WEB_*_TOKEN 一致，重新建置使用 `--clear` 防止 Metro 沿用舊值。
 - 帳務已啟用後付；此配置以免費額度為目標，超量仍可計費，NT$2,000付款門檻不是免費額度。先前不得 push 的原因為保留舊 Demo；本次已获准重新初始化，完成切換後可提交推送。
+
+## LINE 直覺入口（2026-09-10）
+
+- 使用者同意六格固定選單、兩欄首頁、操作後下一步及物業管理入口。LINE 預設 rich menu 已啟用 `richmenu-e20db206cf73bbb882c8cd5b14908661`，selected=true、chatBarText=社區服務；六格為預約公設／查空時段／我的預約／訪客登記／報修服務／服務首頁。
+- 選單原稿、LINE PNG 與觸控區域位於 public/line-menu；scripts/generate-line-rich-menu.cjs 由既有 SVG 圖示重建。使用文字標籤與 SVG，不以 emoji 當主要入口。
+- serviceHome 改兩欄大按鈕；報修、訪客查詢、行事曆使用保留於訊息內的 Flex 按鈕。預約完成卡保留查看這筆預約、繼續預約與回首頁；取消亦有快捷入口。
+- 六個預設入口依真實 LINE 角色分流。visitorRegister 對住戶直接詢問訪客姓名，對物業開查詢；文字入口轉流程時不把「訪客登記」或「我要報修」誤當欄位值。物業公設入口維持僅查空檔。
+- 底部 rich menu 主要供手機 LINE 使用；電腦版保留「服務首頁」及六格同名文字入口。尚未完成使用者真實手機點擊驗收，不能宣稱所有 LINE 用戶端顯示一致。
+- 官方 validate/reply 通過8組訊息，richmenu/validate 通過；啟用後回讀 default 及圖片 SHA256 與本機一致，webhook/test success=true／200。未代發用戶訊息。
+- 108檔734項全套測試、type-check、lint 通過；另加入2項逐格住戶／物業整合測試，該檔15項全通過。Web build 與 Firebase Hosting 發布成功，線上選單圖片 SHA256 與本機一致。
+- GCP release `/opt/mai-touch/releases/line-ui-20260910` 已啟用，server.js SHA256 與本機一致、服務 active；更新前快照驗證通過，更新後預約 #4 cancelled 仍保留，未重跑 init。
+- scripts/validate-line-ui.ts 僅做官方格式驗證；scripts/publish-line-rich-menu.cjs --apply 需環境中的 LINE_CHANNEL_ACCESS_TOKEN，依內容 hash 重用選單，先保存舊 default 到忽略的 _local，再設定預設；不刪舊選單、不發用戶訊息。
