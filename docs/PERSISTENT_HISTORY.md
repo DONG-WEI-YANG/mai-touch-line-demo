@@ -1,5 +1,8 @@
 # SQLite 歷史保存切換
 
+2026-09-09 已改採 Firebase HTTPS＋GCP VM 獨立磁碟，LINE 已切換並完成重啟保存驗證。使用者接受重新初始化 Demo，未匯入 Render 舊歷史。現況與更新流程見 [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md)。下方 Render 付費方案僅保留作歷史參考，未套用。
+
+
 目標：現行 Oregon `mai-touch-line-us`（srv-d81bh0gg4nts739bt1v0）保留預約、工單、訪客、停車、關聯、LINE 綁定及會話。保留 SQLite，避免將依賴 better-sqlite3 的 LINE 功能直接切換至不相容的資料庫。
 
 ## 已準備、尚未套用

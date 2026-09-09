@@ -131,3 +131,16 @@
 - scripts/gcp-install-node.sh 已在 VM 安裝 Node24.20.0/npm11.19.0，官方 SHA256 校驗通過。
 - persistentMountInfo 在 Linux REQUIRE_PERSISTENT_STORAGE=1 時會驗證真實 mount，不再僅認 RENDER；回歸測試先重現未掛載卻通過，再修正通過。
 - 現行 Render 全庫備份端點再次確認404。已詢問固定 HTTPS 網域與是否接受部分 API 資料搬移，尚待回覆；不能以使用者要求搬移推定接受資料遺失。後端未部署、LINE未切換。
+
+## Firebase／GCP LINE 已切換（2026-09-09）
+
+- 使用者指定 Firebase，並接受 Demo 不保留舊紀錄；此次建立新示範資料庫，並非無損移轉 Render 歷史。
+- 正式 Demo 入口 https://mai-touch-history-20260908.web.app 。LINE webhook 已改為此網址的 `/line/webhook`，GET endpoint 確認 active=true，切換前後官方 test 均 success=true、HTTP 200（2026-09-09 05:03 UTC）。
+- Firebase Hosting 靜態前端與 HTTPS → Cloud Run `mai-touch-gateway`（us-west1，min=0/max=2，256Mi）→ Direct VPC → VM 10.77.0.2:3000。只有 gateway 網路標籤可通過新增的 API 防火牆。
+- VM 使用 Node24.20.0、systemd `mai-touch`、`/opt/mai-touch/current`；資料庫 `/var/data/mai-touch.db` 位於獨立10GB磁碟。REQUIRE_PERSISTENT_STORAGE=1，拒絕缺掛載或缺資料庫的啟動；首次種子僅在本次明確初始化時執行。
+- LINE 出口透過 Cloud Run 的 `/_line` 白名單及 token 驗證，沒有新增付費 IPv4／NAT／負載平衡器。Gemini 3.5 Flash-Lite API 實測200，LINE bot/info 及 validate/reply 亦200，未代發真實用戶訊息。
+- Firebase 六項公設可查；測試預約 #4 建立並取消，VM OS 重啟後仍為 cancelled；完整 SQLite 快照下載及 integrity 驗證成功。啟動與每24小時備份，保留14份；自動異地備份尚未配置。
+- 108檔／728項測試、type-check、lint、Web build 通過。尚未完成真實 LINE 點擊與瀏覽器 UI 驗收。
+- Render 與舊 Vercel 網址仍是舊環境，不共享新資料；請使用 Firebase 入口。HF 仍留作語料／RAG 測試。
+- 憑證只存在忽略的本機暫存、VM `/etc/mai-touch.env` 與 Cloud Run 環境，不可提交。前端 EXPO_PUBLIC_DEMO_* 必須與 VM WEB_*_TOKEN 一致，重新建置使用 `--clear` 防止 Metro 沿用舊值。
+- 帳務已啟用後付；此配置以免費額度為目標，超量仍可計費，NT$2,000付款門檻不是免費額度。先前不得 push 的原因為保留舊 Demo；本次已获准重新初始化，完成切換後可提交推送。

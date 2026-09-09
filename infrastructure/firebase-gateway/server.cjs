@@ -1,0 +1,76 @@
+const http = require('node:http');
+const crypto = require('node:crypto');
+
+const allowedLine = new Set([
+  'GET /v2/bot/info',
+  'POST /v2/bot/message/reply',
+  'POST /v2/bot/message/push',
+  'POST /v2/bot/message/validate/reply',
+]);
+const hopHeaders = new Set(['host','connection','keep-alive','proxy-authenticate','proxy-authorization','te','trailer','transfer-encoding','upgrade']);
+function headersWithoutHop(headers) {
+  const blocked = new Set([...hopHeaders,...String(headers.connection || '').split(',').map(s=>s.trim().toLowerCase())]);
+  return Object.fromEntries(Object.entries(headers).filter(([name])=>!blocked.has(name.toLowerCase())));
+}
+function authorized(actual, token) {
+  return crypto.timingSafeEqual(crypto.createHash('sha256').update(String(actual || '')).digest(),
+    crypto.createHash('sha256').update(`Bearer ${token}`).digest());
+}
+function readBody(req) {
+  return new Promise((resolve,reject)=>{
+    let size=0; const chunks=[];
+    req.on('data',chunk=>{
+      size+=chunk.length;
+      if(size>1024*1024) { reject(Object.assign(new Error('Too large'),{status:413})); return; }
+      chunks.push(chunk);
+    });
+    req.on('end',()=>resolve(Buffer.concat(chunks)));
+    req.on('error',reject);
+  });
+}
+function createGateway({backendOrigin,lineToken,lineFetch=fetch}) {
+  if(!backendOrigin || !lineToken) throw new Error('Backend and LINE token are required');
+  const backend=new URL(backendOrigin);
+  if(backend.protocol!=='http:') throw new Error('Backend must be an internal HTTP origin');
+  return async(req,res)=>{
+    const target=req.url || '/';
+    res.setHeader('cache-control','no-store');
+    if(!target.startsWith('/') || target.startsWith('//')) { res.writeHead(400).end(); return; }
+    if(target.startsWith('/_line')) {
+      if(!authorized(req.headers.authorization,lineToken)) { res.writeHead(401).end(); return; }
+      const path=target.slice('/_line'.length);
+      if(!allowedLine.has(`${req.method} ${path}`)) { res.writeHead(404).end(); return; }
+      try {
+        const body=await readBody(req);
+        const response=await lineFetch(`https://api.line.me${path}`,{
+          method:req.method,
+          headers:{Authorization:`Bearer ${lineToken}`,'Content-Type':'application/json'},
+          ...(req.method==='GET'?{}:{body}),
+          redirect:'error',signal:AbortSignal.timeout(15000),
+        });
+        res.setHeader('content-type',response.headers.get('content-type') || 'application/json');
+        res.writeHead(response.status).end(Buffer.from(await response.arrayBuffer()));
+      } catch(error) {
+        if(!res.headersSent) res.writeHead(error.status || 502);
+        res.end('LINE relay unavailable');
+      }
+      return;
+    }
+    const upstream=http.request({
+      hostname:backend.hostname,port:backend.port || 80,path:target,method:req.method,
+      headers:headersWithoutHop(req.headers),timeout:45000,
+    },response=>{
+      res.writeHead(response.statusCode || 502,{...headersWithoutHop(response.headers),'cache-control':'no-store'});
+      response.pipe(res);
+    });
+    upstream.on('timeout',()=>upstream.destroy(new Error('Backend timeout')));
+    upstream.on('error',()=>{if(!res.headersSent) res.writeHead(502);res.end('Backend unavailable');});
+    res.on('close',()=>upstream.destroy());
+    req.pipe(upstream);
+  };
+}
+module.exports={createGateway};
+if(require.main===module) {
+  http.createServer(createGateway({backendOrigin:process.env.BACKEND_ORIGIN,lineToken:process.env.LINE_CHANNEL_ACCESS_TOKEN}))
+    .listen(Number(process.env.PORT || 8080),'0.0.0.0');
+}

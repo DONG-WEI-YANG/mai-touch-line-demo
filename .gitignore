@@ -124,3 +124,6 @@ priority_download*.log
 
 expo-env.d.ts
 # @end expo-cli
+
+# Firebase deployment cache
+.firebase/

@@ -102,6 +102,7 @@ async function startServer() {
       const lineClient = new LineClient({
         channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '',
         channelSecret: process.env.LINE_CHANNEL_SECRET ?? '',
+        apiProxyUrl: process.env.LINE_API_PROXY_URL,
         // Evaluated per message-send so dashboard changes take effect without restart
         demoBanner: () =>
           process.env.DEPLOY_PROFILE === 'demo' &&

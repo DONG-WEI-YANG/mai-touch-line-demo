@@ -1,5 +1,30 @@
 # GCP 專用環境
 
+## Firebase／GCP LINE 已切換（2026-09-09）
+
+- 使用者指定 Firebase，並接受 Demo 不保留舊紀錄；此次建立新示範資料庫，並非無損移轉 Render 歷史。
+- 正式 Demo 入口 https://mai-touch-history-20260908.web.app 。LINE webhook 已改為此網址的 `/line/webhook`，GET endpoint 確認 active=true，切換前後官方 test 均 success=true、HTTP 200（2026-09-09 05:03 UTC）。
+- Firebase Hosting 靜態前端與 HTTPS → Cloud Run `mai-touch-gateway`（us-west1，min=0/max=2，256Mi）→ Direct VPC → VM 10.77.0.2:3000。只有 gateway 網路標籤可通過新增的 API 防火牆。
+- VM 使用 Node24.20.0、systemd `mai-touch`、`/opt/mai-touch/current`；資料庫 `/var/data/mai-touch.db` 位於獨立10GB磁碟。REQUIRE_PERSISTENT_STORAGE=1，拒絕缺掛載或缺資料庫的啟動；首次種子僅在本次明確初始化時執行。
+- LINE 出口透過 Cloud Run 的 `/_line` 白名單及 token 驗證，沒有新增付費 IPv4／NAT／負載平衡器。Gemini 3.5 Flash-Lite API 實測200，LINE bot/info 及 validate/reply 亦200，未代發真實用戶訊息。
+- Firebase 六項公設可查；測試預約 #4 建立並取消，VM OS 重啟後仍為 cancelled；完整 SQLite 快照下載及 integrity 驗證成功。啟動與每24小時備份，保留14份；自動異地備份尚未配置。
+- 108檔／728項測試、type-check、lint、Web build 通過。尚未完成真實 LINE 點擊與瀏覽器 UI 驗收。
+- Render 與舊 Vercel 網址仍是舊環境，不共享新資料；請使用 Firebase 入口。HF 仍留作語料／RAG 測試。
+- 憑證只存在忽略的本機暫存、VM `/etc/mai-touch.env` 與 Cloud Run 環境，不可提交。前端 EXPO_PUBLIC_DEMO_* 必須與 VM WEB_*_TOKEN 一致，重新建置使用 `--clear` 防止 Metro 沿用舊值。
+- 帳務已啟用後付；此配置以免費額度為目標，超量仍可計費，NT$2,000付款門檻不是免費額度。先前不得 push 的原因為保留舊 Demo；本次已获准重新初始化，完成切換後可提交推送。
+
+## 操作與更新
+
+1. `node scripts/build-gcp-backend.cjs` 產生後端 release，依鎖定版本安裝 Linux Node24 依賴；better-sqlite3 必須使用對應 ABI 的原生模組。
+2. 將 release 安裝到 `/opt/mai-touch/releases/`，以 maitouch 擁有，再更新 current symlink，重啟 `mai-touch`；更新不得重跑 init.js。服務設定見 `infrastructure/mai-touch.service`。
+3. Gateway 原始碼與 Dockerfile 位於 `infrastructure/firebase-gateway/`；BACKEND_ORIGIN 固定為內網後端，LINE_CHANNEL_ACCESS_TOKEN 使用現行 LINE token。部署保留 Direct VPC、標籤與 min=0。
+4. 設定 EXPO_PUBLIC_API_URL 為 Firebase 網址及對應 Demo token，再執行 `npm run web:build -- --clear`、`firebase deploy --only hosting --config firebase.gcp.json --project mai-touch-history-20260908 --non-interactive`。
+5. 使用 ADMIN_DASHBOARD_TOKEN 存取 `/admin/database/backup`，下載後以 snapshot 工具 verify。不要把資料庫或環境檔加入 Git。
+6. IAP 管理必須明確指定 project、zone、account；不更改全域預設專案。
+
+以下為歷史規劃與當時驗證，現況以上方切換紀錄為準。
+
+
 ## 最新狀態：免費 Demo VM 已建立（2026-09-09）
 
 - 新帳務帳戶 `01C823-3F2E66-0A509A` 已確認 `open=true`，新專案已綁定且 `billingEnabled=true`。帳戶屬於 openclaw19830331@gmail.com；NT$2,000 是付款門檻，不是免費點數。

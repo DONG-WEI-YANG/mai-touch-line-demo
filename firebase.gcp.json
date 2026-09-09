@@ -1,0 +1,14 @@
+{
+  "hosting": {
+    "site": "mai-touch-history-20260908",
+    "public": "dist",
+    "ignore": ["**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {"source":"/line/webhook","run":{"serviceId":"mai-touch-gateway","region":"us-west1"}},
+      {"source":"/api/**","run":{"serviceId":"mai-touch-gateway","region":"us-west1"}},
+      {"source":"/health","run":{"serviceId":"mai-touch-gateway","region":"us-west1"}},
+      {"source":"/admin/database/**","run":{"serviceId":"mai-touch-gateway","region":"us-west1"}},
+      {"source":"**","destination":"/index.html"}
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+[Unit]
+Description=MAI Touch LINE and booking backend
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/var/data
+
+[Service]
+Type=simple
+User=maitouch
+Group=maitouch
+WorkingDirectory=/opt/mai-touch/current
+EnvironmentFile=/etc/mai-touch.env
+ExecStart=/usr/local/bin/node server.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/data
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

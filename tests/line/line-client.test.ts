@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const replyMessage = vi.fn().mockResolvedValue({});
 const pushMessage  = vi.fn().mockResolvedValue({});
@@ -14,8 +14,24 @@ vi.mock('@line/bot-sdk', () => {
 });
 
 beforeEach(() => { replyMessage.mockClear(); pushMessage.mockClear(); });
+afterEach(()=>vi.unstubAllGlobals());
 
 describe('LineClient', () => {
+  it('uses the configured relay and preserves expired-token fallback', async () => {
+    const calls: {url:string;body:any}[]=[];
+    vi.stubGlobal('fetch',async(url:string,init:any)=>{
+      calls.push({url,body:JSON.parse(init.body)});
+      expect(init.headers.Authorization).toBe('Bearer t');
+      return new Response('{}',{status:calls.length===1?400:200});
+    });
+    const { LineClient } = await import('../../src/server/line/line-client');
+    const c=new LineClient({channelAccessToken:'t',channelSecret:'s',apiProxyUrl:'https://relay.run.app'});
+    await c.replyOrPush('expired','U1',{type:'text',text:'hello'});
+    expect(calls).toEqual([
+      {url:'https://relay.run.app/_line/v2/bot/message/reply',body:{replyToken:'expired',messages:[{type:'text',text:'hello'}]}},
+      {url:'https://relay.run.app/_line/v2/bot/message/push',body:{to:'U1',messages:[{type:'text',text:'hello'}]}},
+    ]);
+  });
   it('reply calls SDK replyMessage', async () => {
     const { LineClient } = await import('../../src/server/line/line-client');
     const c = new LineClient({ channelAccessToken: 't', channelSecret: 's' });

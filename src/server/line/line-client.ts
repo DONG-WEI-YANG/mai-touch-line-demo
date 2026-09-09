@@ -4,6 +4,7 @@ export type LineClientOpts = {
   channelAccessToken: string;
   channelSecret: string;
   demoBanner?: boolean | (() => boolean);
+  apiProxyUrl?: string;
 };
 
 const BANNER = '🧪 [DEMO] ';
@@ -24,7 +25,8 @@ export class LineClient {
   private sdk: Client;
   private demoBannerOpt: boolean | (() => boolean);
 
-  constructor(opts: LineClientOpts) {
+  constructor(private opts: LineClientOpts) {
+    if (opts.apiProxyUrl && new URL(opts.apiProxyUrl).protocol !== 'https:') throw new Error('LINE relay must use HTTPS');
     this.sdk = new Client(opts);
     this.demoBannerOpt = opts.demoBanner ?? false;
   }
@@ -35,10 +37,22 @@ export class LineClient {
   }
 
   async reply(token: string, msg: any | any[]): Promise<void> {
+    if (this.opts.apiProxyUrl) return this.sendViaProxy('reply',{replyToken:token},msg);
     await this.sdk.replyMessage(token, applyBanner(msg, this.isBannerOn()));
   }
   async push(userId: string, msg: any | any[]): Promise<void> {
+    if (this.opts.apiProxyUrl) return this.sendViaProxy('push',{to:userId},msg);
     await this.sdk.pushMessage(userId, applyBanner(msg, this.isBannerOn()));
+  }
+  private async sendViaProxy(kind: 'reply' | 'push', recipient: object, msg: any | any[]): Promise<void> {
+    const messages=applyBanner(Array.isArray(msg)?msg:[msg],this.isBannerOn());
+    const url=new URL(`/_line/v2/bot/message/${kind}`,this.opts.apiProxyUrl).toString();
+    const response=await fetch(url,{
+      method:'POST',headers:{Authorization:`Bearer ${this.opts.channelAccessToken}`,'Content-Type':'application/json'},
+      body:JSON.stringify({...recipient,messages}),signal:AbortSignal.timeout(20000),redirect:'error',
+    });
+    if(!response.ok) throw Object.assign(new Error(`LINE relay failed (HTTP ${response.status})`),{statusCode:response.status});
+    await response.arrayBuffer();
   }
   async replyOrPush(replyToken: string | undefined, userId: string, msg: any | any[]): Promise<void> {
     if (replyToken) {
