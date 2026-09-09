@@ -116,3 +116,11 @@
 - gcloud 已登入並切換 openclaw19830331@gmail.com；後續指令仍必須明確指定 --project，不能沿用全域 internship-checkin-system。
 - 新帳號可見 My Billing Account（01C823-3F2E66-0A509A，TWD），list 與 describe 都回 open=false。帳務尚未開啟，不能記為可部署；需使用者在 Google 帳務頁完成啟用／處理頁面提示。
 - 已由原管理帳號授予 openclaw19830331@gmail.com 在 mai-touch-history-20260908 的 roles/billing.projectManager，限帳務綁定管理，不是 Owner／Editor。VM 尚未建立，Render 未切換。
+
+## GCP 免費 Demo VM 已建立（2026-09-09，取代上述帳務阻塞）
+
+- 新帳務帳戶 01C823-3F2E66-0A509A 已 open=true，mai-touch-history-20260908 已綁定且 billingEnabled=true。使用者頁面顯示 NT$1,000 手動付款與 NT$2,000 後付扣款門檻；扣款門檻不等於免費額度。
+- mai-touch-demo：us-west1-b、e2-micro、Debian 12、內網10.77.0.2、無公開IPv4／NAT／LB／VM service account；20 GB boot＋10 GB data 都是 pd-standard，data autoDelete=false。
+- scripts/gcp-demo-startup.sh 只對明確命名且無檔案系統／分割／掛載的資料磁碟初始化 ext4，掛載 /var/data，建立 maitouch 系統帳戶。IAP SSH 實測成功，OS reboot 後 boot ID 改變、啟動腳本成功、掛載與測試檔均保留。
+- 網路 mai-touch-demo-net，子網 mai-touch-demo-us-west1，IAP SSH 僅35.235.240.0/20→tcp22。openclaw 另獲 compute.viewer；管理 SSH 暫以原 kevin19830331@gmail.com 明確 --account 操作。
+- VM 尚未部署 Node／後端／資料庫；一般對外連線、HTTPS、來源完整快照與 GCP mount 啟動防護尚未完成。不要宣稱 LINE／長期歷史已遷移；Render 與 Vercel 未切換，暫不 push。詳細現況見 docs/GCP_DEPLOYMENT.md。
