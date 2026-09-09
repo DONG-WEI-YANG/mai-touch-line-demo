@@ -2,13 +2,99 @@
   "hosting": {
     "site": "mai-touch-history-20260908",
     "public": "dist",
-    "ignore": ["**/.*", "**/node_modules/**"],
+    "ignore": [
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "rewrites": [
-      {"source":"/line/webhook","run":{"serviceId":"mai-touch-gateway","region":"us-west1"}},
-      {"source":"/api/**","run":{"serviceId":"mai-touch-gateway","region":"us-west1"}},
-      {"source":"/health","run":{"serviceId":"mai-touch-gateway","region":"us-west1"}},
-      {"source":"/admin/database/**","run":{"serviceId":"mai-touch-gateway","region":"us-west1"}},
-      {"source":"**","destination":"/index.html"}
+      {
+        "source": "/line/webhook",
+        "run": {
+          "serviceId": "mai-touch-gateway",
+          "region": "us-west1"
+        }
+      },
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "mai-touch-gateway",
+          "region": "us-west1"
+        }
+      },
+      {
+        "source": "/health",
+        "run": {
+          "serviceId": "mai-touch-gateway",
+          "region": "us-west1"
+        }
+      },
+      {
+        "source": "/admin/database/**",
+        "run": {
+          "serviceId": "mai-touch-gateway",
+          "region": "us-west1"
+        }
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/_expo/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/api/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          }
+        ]
+      },
+      {
+        "source": "/line/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          }
+        ]
+      },
+      {
+        "source": "/health",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          }
+        ]
+      },
+      {
+        "source": "/admin/database/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          }
+        ]
+      }
     ]
   }
 }

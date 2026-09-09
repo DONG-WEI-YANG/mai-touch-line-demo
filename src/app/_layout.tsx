@@ -155,7 +155,9 @@ function ResidentLayout() {
 
   return (
     <Tabs
-      screenOptions={{
+      screenOptions={({ route }) => ({
+        // Only the four resident destinations belong in the bottom navigation.
+        tabBarItemStyle: ["index", "services", "activity", "settings"].includes(route.name) ? undefined : { display: "none" },
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
@@ -163,7 +165,7 @@ function ResidentLayout() {
           backgroundColor: colors.background,
           borderTopColor: colors.border,
           borderTopWidth: 0.5,
-          height: 65,
+          height: 76,
           paddingBottom: 10,
           paddingTop: 8,
           elevation: 0,
@@ -174,7 +176,7 @@ function ResidentLayout() {
           fontWeight: "600",
           letterSpacing: 0.3,
         },
-      }}
+      })}
     >
       <Tabs.Screen
         name="index"

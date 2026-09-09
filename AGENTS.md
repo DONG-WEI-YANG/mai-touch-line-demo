@@ -164,3 +164,14 @@
 - 同使用者限流提示每60秒至多一次，跨兩類額度共用提示冷卻；提示依實際分鐘／每日窗口計算等待時間，不再每日超額仍叫用戶稍候。保留所有入站稽核及事件去重。
 - 先以回歸測試重現，再修正；108檔739項測試、型別、lint 通過。涵蓋連續20次導覽不被文字額度阻擋、選單仍有上限、自由文字保護、重複提示合併、每日等待與重設。
 - 已部署 GCP release `/opt/mai-touch/releases/line-rate-fix-20260910`，server.js SHA256 與本機一致、服務 active、健康檢查 db=ok／line=ready、LINE 官方 webhook/test 200。部署後全庫快照驗證成功，28張表筆數未減少；未代發真實用戶訊息。
+
+## UX全流程稽核與時段／導覽修正（2026-09-10）
+
+- 使用者指出查空檔一直繞圈，接續要求整體UX／UI稽核，再提供Web內部分頁外洩截圖。範圍為LINE完整服務旅程與住戶／物業Web；稽核文件 docs/UX_UI_AUDIT_20260910.md，42個TSX頁面／layout靜態掃描與代表旅程瀏覽器實測，16類發現、3類已處理、13類待修／實機驗收。
+- slotMessage改為帶設施／日期的Flex時段列，住戶點選後重新查名額→確認頁，queryOnly在明確選時段後才解除，不自動建立；物業只讀。分頁前後與回首頁保留於訊息內；舊卡日期／設施不匹配會提示重新查詢，已滿不進確認。
+- 住戶底部分頁採index/services/activity/settings白名單，8個IoT元件從app/admin/iot-components移至components/admin/iot，更新引用。Demo角色切換器移至底列上方，分頁列高度76，避免遮擋與文字裁切。
+- Playwright本輪可用，不再沿用之前Chrome工具故障當成阻塞。已實測公設服務入口404、管理工單ALL(9)但狀態0且點ALL崩潰、登出按鈕無動作。沒有做真實資料修改／刪除／LINE代發。
+- Web React Native Alert.alert 實作為空，17個頁面檔共64處呼叫；稽核中的重大待修：工單API巢狀資料映射、缺失/amenities列表、登出無清憑證、通知錯誤被當成預約寫入失敗。不要把這些記為本次已修。
+- Hosting曾預設HTML max-age=3600造成部署後瀏覽器仍載入舊bundle；新增HTML no-cache/must-revalidate、hash JS immutable、API與webhook no-store。已存在的舊HTML快取需強制重新整理一次。
+- 本輪108檔743項測試、type-check、lint、Web build及11組LINE Flex官方驗證通過。GCP release line-slots-20260910已啟用且SHA256相符；健康檢查及LINE webhook/test200。所有更新保留DB，未重跑init，LINE真實手機點擊仍待使用者驗收。
+- 最終瀏覽器驗收：390px四個分頁中心點均可點且未遮擋，逐一切到正確路由；admin/logistics沒有住戶分頁。Firebase最新bundle為5f201e3c3f55354c17ba266524e768dd；CLI release complete後有非零退出，但線上HTML／瀏覽器已驗證生效。

@@ -60,7 +60,8 @@ export function DemoRoleSwitcher() {
       pointerEvents="box-none"
       style={{
         position: 'absolute',
-        bottom: 16,
+        // Keep demo controls above the resident navigation, never over its tabs.
+        bottom: currentRole === 'resident' ? 92 : 16,
         right: 16,
         zIndex: 9999,
       }}

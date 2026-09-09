@@ -12,7 +12,7 @@ import { bookingDone } from '../flex/bookingDone';
 import { serviceMenu } from '../flex/serviceMenu';
 import { myOrders, type MyOrderItem } from '../flex/myOrders';
 import { t } from '../flex/i18n';
-import { homeQuickReply } from '../flex/serviceHome';
+import { homeQuickReply, serviceActions } from '../flex/serviceHome';
 
 const REQUIRED_SLOTS: Partial<Record<IntentName, string[]>> = {
   'facility.book':   ['facility', 'date', 'time'],
@@ -45,6 +45,33 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
   // ──── Postback branch ────
   if (ev.type === 'postback') {
     const params = parsePostback(ev.postback?.data ?? '');
+    const slotCard = (slots: AvailableSlot[],offset=0) => slotMessage(slots,String(session.slots.date),offset,{facility:String(session.slots.facility),readOnly:deps.lineUser.role!=='resident',lang});
+    if ((params.act==='chooseSlot' || params.slotsOffset || params.act==='changeDate') && params.date &&
+        (params.fac!==session.slots.facility || params.date!==session.slots.date)) {
+      await deps.client.replyOrPush(ev.replyToken,userId,serviceActions('這張時段卡已過期','請重新查詢設施與日期，避免預約到其他時段。',[{type:'postback',label:'重新查空時段',data:'nav=availability'}]));
+      return;
+    }
+    if (params.act==='chooseSlot') {
+      if (deps.lineUser.role!=='resident') {
+        await deps.client.replyOrPush(ev.replyToken,userId,serviceActions('物業空檔查詢','此入口僅供查詢，請由住戶確認預約。',[]));
+        return;
+      }
+      if (!params.fac || !params.date || params.fac!==session.slots.facility || params.date!==session.slots.date || !deps.getAvailableSlots) {
+        await deps.client.replyOrPush(ev.replyToken,userId,serviceActions('請重新選擇時段','目前沒有有效的設施與日期。',[{type:'postback',label:'查空時段',data:'nav=availability'}]));
+        return;
+      }
+      const slots=await deps.getAvailableSlots(params.fac,params.date);
+      if (!slots.some(slot=>slot.startTime===params.time && slot.remainingCapacity>0)) {
+        await deps.client.replyOrPush(ev.replyToken,userId,[{type:'text',text:'這個時段已無名額，請重新選擇。'},slotCard(slots)]);
+        return;
+      }
+      const {queryOnly: _queryOnly,...bookingSlots}=session.slots;
+      session={...session,intent:'facility.book',step:'CONFIRMING',slots:{...bookingSlots,time:params.time},missingSlots:[]};
+      deps.store.set(userId,session);
+      await deps.client.replyOrPush(ev.replyToken,userId,bookingConfirm(session.slots as any,lang));
+      return;
+    }
+
     if (params.act === 'changeDate' || params.act === 'edit') {
       delete session.slots.date;
       delete session.slots.time;
@@ -53,8 +80,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
       const offset = Number(params.slotsOffset);
       if (Number.isInteger(offset) && offset >= 0) {
         const slots = await deps.getAvailableSlots(String(session.slots.facility), String(session.slots.date));
-        const msg=slotMessage(slots, String(session.slots.date), offset);
-        if (session.slots.queryOnly) msg.quickReply.items=msg.quickReply.items.filter(i=>!i.action.data.startsWith('slot=time'));
+        const msg=slotCard(slots,offset);
         await deps.client.replyOrPush(ev.replyToken, userId, msg);
         return;
       }
@@ -218,8 +244,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
   // ──── Slot accumulation + state advance ────
   if (session.slots.queryOnly && session.slots.facility && session.slots.date && deps.getAvailableSlots) {
     const slots = await deps.getAvailableSlots(String(session.slots.facility), String(session.slots.date));
-    const msg = slotMessage(slots, String(session.slots.date));
-    msg.quickReply.items = msg.quickReply.items.filter(i=>!i.action.data.startsWith('slot=time'));
+    const msg = slotMessage(slots, String(session.slots.date),0,{facility:String(session.slots.facility),readOnly:deps.lineUser.role!=='resident',lang});
     deps.store.set(userId, session);
     await deps.client.replyOrPush(ev.replyToken,userId,msg);
     return;
@@ -283,7 +308,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     deps.store.set(userId, session);
     if (next === 'time' && session.intent === 'facility.book' && deps.getAvailableSlots) {
       const slots = await deps.getAvailableSlots(String(session.slots.facility), String(session.slots.date));
-      await deps.client.replyOrPush(ev.replyToken, userId, slotMessage(slots, String(session.slots.date)));
+      await deps.client.replyOrPush(ev.replyToken, userId, slotMessage(slots, String(session.slots.date),0,{facility:String(session.slots.facility),readOnly:deps.lineUser.role!=='resident',lang}));
     } else await deps.client.replyOrPush(ev.replyToken, userId, dateTimePicker(next, lang));
     return;
   }

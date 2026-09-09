@@ -289,6 +289,31 @@ it('asks with actual availability instead of fixed hours', async () => {
   });
   expect(getAvailableSlots).toHaveBeenCalledWith('pool','2026-09-12');
   const msg=client.replyOrPush.mock.calls.at(-1)?.[2];
-  expect(msg.text).toContain('09:30–10:00：2');
-  expect(msg.quickReply.items[0].action.data).toBe('slot=time&val=09:30');
+  expect(JSON.stringify(msg)).toContain('09:30–10:00');
+  expect(msg.contents.body.contents[0].action.data).toContain('time=09%3A30');
+});
+
+
+it.each(['resident','housekeeper'] as const)('handles choosing a queried slot for %s without a write',async role=>{
+  const store=new SessionStore({ttlMs:60000});
+  store.set('U1',{userId:'U1',role,language:'zh-TW',updatedAt:Date.now(),intent:'facility.book',step:'SLOT_FILLING',missingSlots:[],slots:{facility:'pool',date:'2026-09-12',queryOnly:true}});
+  const client=mkClient(), bookFn=vi.fn(), ai=mkAi({});
+  await handleResident({type:'postback',replyToken:'rt',postback:{data:'act=chooseSlot&fac=pool&date=2026-09-12&time=09%3A30'}},{ai,client:client as any,store,channelId:'C',lineUser:{lineUserId:'U1',role,language:'zh-TW'},bookFn,reportFn:vi.fn(),pushHousekeepers:vi.fn(),listMyOrders:vi.fn(),getAvailableSlots:vi.fn().mockResolvedValue([{startTime:'09:30',endTime:'10:00',remainingCapacity:2}])});
+  expect(bookFn).not.toHaveBeenCalled();
+  expect(ai.classify).not.toHaveBeenCalled();
+  if(role==='resident') {
+    expect(store.get('U1')?.step).toBe('CONFIRMING');
+    expect(store.get('U1')?.slots.queryOnly).toBeUndefined();
+    expect(store.get('U1')?.slots.time).toBe('09:30');
+  } else expect(store.get('U1')?.slots.queryOnly).toBe(true);
+});
+
+
+it.each(['stale','occupied'])('does not confirm a %s slot card',async scenario=>{
+  const store=new SessionStore({ttlMs:60000});
+  store.set('U1',{userId:'U1',role:'resident',language:'zh-TW',updatedAt:Date.now(),intent:'facility.book',step:'SLOT_FILLING',missingSlots:[],slots:{facility:'pool',date:scenario==='stale'?'2026-09-13':'2026-09-12',queryOnly:true}});
+  const bookFn=vi.fn();
+  await handleResident({type:'postback',replyToken:'rt',postback:{data:'act=chooseSlot&fac=pool&date=2026-09-12&time=09%3A30'}},{ai:mkAi({}),client:mkClient() as any,store,channelId:'C',lineUser:{lineUserId:'U1',role:'resident',language:'zh-TW'},bookFn,reportFn:vi.fn(),pushHousekeepers:vi.fn(),listMyOrders:vi.fn(),getAvailableSlots:vi.fn().mockResolvedValue([])});
+  expect(bookFn).not.toHaveBeenCalled();
+  expect(store.get('U1')?.step).not.toBe('CONFIRMING');
 });

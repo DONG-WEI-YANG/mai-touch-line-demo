@@ -1,3 +1,5 @@
+import { t } from './flex/i18n';
+import type { Lang } from './ai/types';
 import { amenitiesRouter } from '../routers/amenities';
 import { recognizeFacilityPhrase } from './ai/facility-phrases';
 import type { makeRecordLinks, RecordActor, LinkedRecord } from './record-links';
@@ -12,16 +14,37 @@ export async function availableSlots(amenityId: number, date: string, now = new 
   return slots.filter(s => s.available && (date > today || s.startTime > local.slice(11, 16)));
 }
 
-export function slotMessage(slots: AvailableSlot[], date: string, offset = 0) {
-  const page = slots.slice(offset, offset + 10);
+export function slotMessage(slots: AvailableSlot[], date: string, offset = 0, options: {facility?: string; readOnly?: boolean; lang?: Lang} = {}) {
+  const lastPage = Math.max(0,Math.floor((slots.length-1)/10)*10);
+  const start = Math.min(lastPage,Math.max(0,Math.floor(offset/10)*10));
+  const page = slots.slice(start,start+10);
+  const readOnly = options.readOnly || !options.facility;
+  const context = `&fac=${encodeURIComponent(options.facility ?? '')}&date=${encodeURIComponent(date)}`;
+  const button = (label: string,data: string) => ({type:'button',height:'sm',style:'secondary',action:{type:'postback',label,data}});
+  const facility = options.facility ? t(`facility.${options.facility}` as any,options.lang ?? 'zh-TW') : '公設';
   return {
-    type: 'text',
-    text: page.length ? `${date} 可預約時段（剩餘名額）\n${page.map(s => `${s.startTime}–${s.endTime}：${s.remainingCapacity}`).join('\n')}\n送出時會再次確認名額。` : `${date} 沒有可預約時段，請選擇其他日期。`,
-    quickReply: { items: [
-      ...page.map(s => ({ type: 'action', action: { type: 'postback', label: s.startTime, data: `slot=time&val=${s.startTime}`, displayText: s.startTime } })),
-      ...(offset + 10 < slots.length ? [{ type: 'action', action: { type: 'postback', label: '更多時段', data: `slotsOffset=${offset + 10}` } }] : []),
-      { type: 'action', action: { type: 'postback', label: '更換日期', data: 'act=changeDate' } },
-    ] },
+    type:'flex',altText:`${facility} ${date} ${readOnly?'空檔查詢':'選擇預約時段'}`,
+    contents:{type:'bubble',size:'giga',
+      header:{type:'box',layout:'vertical',spacing:'sm',backgroundColor:'#24221F',paddingAll:'16px',contents:[
+        {type:'text',text:`${facility}｜${date}`,weight:'bold',color:'#E8D7B4',size:'lg',wrap:true},
+        {type:'text',text:readOnly?'空檔查詢（僅查詢，不建立預約）':'點選時段，下一步確認預約',color:'#FFFFFF',size:'sm',wrap:true},
+        {type:'text',text:page.length?`第 ${start+1}–${start+page.length} 筆，共 ${slots.length} 個時段`:'當日無可用時段',color:'#E5E0D7',size:'xs'},
+      ]},
+      body:{type:'box',layout:'vertical',spacing:'sm',paddingAll:'12px',contents:page.length?page.map(slot=>({
+        type:'box',layout:'horizontal',paddingAll:'12px',spacing:'sm',backgroundColor:'#F5F2EB',cornerRadius:'6px',
+        ...(!readOnly?{action:{type:'postback',label:slot.startTime,data:`act=chooseSlot${context}&time=${encodeURIComponent(slot.startTime)}`,displayText:`選擇 ${date} ${slot.startTime}`}}:{}),
+        contents:[
+          {type:'text',text:`${slot.startTime}–${slot.endTime}`,weight:'bold',size:'md',flex:3,wrap:true},
+          {type:'text',text:`剩 ${slot.remainingCapacity} 名${readOnly?'':'・選擇'}`,size:'sm',color:'#8B6C35',align:'end',flex:2,wrap:true},
+        ],
+      })):[{type:'text',text:'請更換日期，或回首頁選擇其他設施。',wrap:true,size:'sm'}]},
+      footer:{type:'box',layout:'vertical',spacing:'sm',contents:[
+        ...(start>0?[button('上一頁',`slotsOffset=${start-10}${context}`)]:[]),
+        ...(start+10<slots.length?[button('下一頁',`slotsOffset=${start+10}${context}`)]:[]),
+        button('更換日期',`act=changeDate${context}`),
+        button('回服務首頁','nav=home'),
+      ]},
+    },
   };
 }
 

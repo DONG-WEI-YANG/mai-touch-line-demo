@@ -17,14 +17,14 @@ import {
   Amenity,
   Device,
   PendingBulkAction
-} from "./iot-components/types";
-import { GatewayHealthCard } from "./iot-components/GatewayHealthCard";
-import { BulkControlPanel } from "./iot-components/BulkControlPanel";
-import { DeviceList } from "./iot-components/DeviceList";
-import { DispatchHistory } from "./iot-components/DispatchHistory";
-import { AuditRetentionPolicy } from "./iot-components/AuditRetentionPolicy";
-import { AuditCleanupReports } from "./iot-components/AuditCleanupReports";
-import { BulkAuditLogs } from "./iot-components/BulkAuditLogs";
+} from "@/components/admin/iot/types";
+import { GatewayHealthCard } from "@/components/admin/iot/GatewayHealthCard";
+import { BulkControlPanel } from "@/components/admin/iot/BulkControlPanel";
+import { DeviceList } from "@/components/admin/iot/DeviceList";
+import { DispatchHistory } from "@/components/admin/iot/DispatchHistory";
+import { AuditRetentionPolicy } from "@/components/admin/iot/AuditRetentionPolicy";
+import { AuditCleanupReports } from "@/components/admin/iot/AuditCleanupReports";
+import { BulkAuditLogs } from "@/components/admin/iot/BulkAuditLogs";
 
 export default function AmenityIotScreen() {
   const colors = useColors();
