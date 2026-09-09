@@ -1,3 +1,4 @@
+import { makeRateLimiter } from '../../src/server/line/rate-limit';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { dispatch, setDispatchDeps, resetDispatchDeps } from '../../src/server/line/dispatcher';
@@ -90,7 +91,7 @@ describe('dispatcher command intercept', () => {
     // Rate-limit reply sent
     expect(deps.lineClient.replyOrPush).toHaveBeenCalledWith(
       'rt', 'U1',
-      expect.objectContaining({ type: 'text', text: expect.stringMatching(/fast|速|速すぎ/i) }),
+      expect.objectContaining({ type: 'text', text: expect.stringMatching(/requests|上限/i) }),
     );
     // messageLog.write IS called (audit guarantee) but AI/role handler is not
     expect(deps.messageLog.write).toHaveBeenCalled();
@@ -183,4 +184,18 @@ describe('published rich menu actions',()=>{
       if(area.action.data==='nav=facilities' && role==='housekeeper') expect(JSON.stringify(deps.lineClient.replyOrPush.mock.calls)).not.toContain('act=book&');
     }
   });
+});
+
+
+it('lets repeated menu taps pass while text remains limited, then sends only one limit notice',async()=>{
+  const rateLimiter=makeRateLimiter({getLimits:()=>({perMinute:1,perDay:200}),getInteractionLimits:()=>({perMinute:20,perDay:2000}),now:()=>0});
+  const deps=mkDeps({rateLimiter,lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1})),upsert:vi.fn()}});
+  for(let i=0;i<20;i++) await dispatch([{type:'postback',replyToken:'rt',source:{userId:'U1'},postback:{data:'nav=home'}}],deps);
+  expect(deps.lineClient.replyOrPush).toHaveBeenCalledTimes(20);
+  expect(deps.lineClient.replyOrPush.mock.calls.every((call:any[])=>call[2].type==='flex')).toBe(true);
+  for(let i=0;i<3;i++) await dispatch([{type:'postback',replyToken:'rt',source:{userId:'U1'},postback:{data:'nav=home'}}],deps);
+  expect(deps.lineClient.replyOrPush).toHaveBeenCalledTimes(21);
+  expect(deps.ai.classify).not.toHaveBeenCalled();
+  expect(rateLimiter.check('U1')).toBe(true);
+  expect(rateLimiter.check('U1')).toBe(false);
 });

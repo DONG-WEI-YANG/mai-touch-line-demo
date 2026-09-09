@@ -48,3 +48,29 @@ describe('makeRateLimiter', () => {
     expect(rl.check('U1')).toBe(false); // now over new limit of 3
   });
 });
+
+
+describe('menu interaction limits',()=>{
+  it('allows normal menu bursts without consuming the text budget, but still bounds menu traffic',()=>{
+    const rl=makeRateLimiter({getLimits:()=>({perMinute:2,perDay:4}),getInteractionLimits:()=>({perMinute:60,perDay:2000}),now:()=>0});
+    for(let i=0;i<60;i++) expect(rl.check('U1','interaction')).toBe(true);
+    expect(rl.check('U1','interaction')).toBe(false);
+    expect(rl.check('U1')).toBe(true);
+    expect(rl.check('U1')).toBe(true);
+    expect(rl.check('U1')).toBe(false);
+  });
+  it('coalesces warnings for one minute and reports the actual daily wait',()=>{
+    let now=0;
+    const rl=makeRateLimiter({getLimits:()=>({perMinute:10,perDay:1}),now:()=>now});
+    expect(rl.check('U1')).toBe(true);
+    expect(rl.check('U1')).toBe(false);
+    expect(rl.shouldNotify('U1')).toBe(true);
+    expect(rl.shouldNotify('U1')).toBe(false);
+    expect(rl.retryAfterSeconds('U1')).toBe(86400);
+    now=60000;
+    expect(rl.shouldNotify('U1')).toBe(true);
+    expect(rl.retryAfterSeconds('U1')).toBe(86340);
+    rl.reset();
+    expect(rl.shouldNotify('U1')).toBe(true);
+  });
+});

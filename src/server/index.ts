@@ -112,6 +112,8 @@ async function startServer() {
       // ── Rate limiter & event dedupe (boot-time singletons) ────────────────
       // getLimits() is called per-check so dashboard changes take effect without restart
       const rateLimiter = makeRateLimiter({
+        // Button navigation and slot selection do not consume the free-text budget.
+        getInteractionLimits: () => ({ perMinute: 60, perDay: 2000 }),
         getLimits: () => ({
           perMinute: runtimeConfig.get<number>('line.rateLimit.perMinute',
             Number(process.env.LINE_RATE_LIMIT_PER_MIN ?? '10')),

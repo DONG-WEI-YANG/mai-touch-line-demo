@@ -12,6 +12,10 @@ import { serviceHome, serviceActions, recordResult, homeQuickReply } from './fle
 import { facilityCarousel } from './flex/facilityCarousel';
 import { parsePostback } from './postback';
 
+const ENTRY_LABELS:Record<string,string>={'預約公設':'facilities','查空時段':'availability','我的預約':'bookings','訪客登記':'visitorRegister','報修服務':'services'};
+const SERVICE_PHRASES:Record<string,string>={'我要報修':'repair.report','我要登記訪客':'visitor.notify','我要反映問題':'complaint.file'};
+const HOME_LABELS = ['服務首頁','主選單','選單','開始使用'];
+
 export type DispatchDeps = {
   queryRecords?: (text: string, lineUserId: string) => Promise<string | undefined>;
   getAvailableSlots?: import('./handlers/resident').ResidentDeps['getAvailableSlots'];
@@ -39,7 +43,11 @@ export type DispatchDeps = {
   /** Handles /commands. Returns true if the command was recognized and handled. */
   commandHandler: (text: string, ev: any, lineUser: { lineUserId: string; role: 'resident'|'housekeeper'|'admin'; language: Lang }) => Promise<boolean>;
   /** Per-user rate limiter. check() returns false when the user is over limit. */
-  rateLimiter: { check: (userId: string) => boolean };
+  rateLimiter: {
+    check: (userId: string, kind?: 'message'|'interaction') => boolean;
+    shouldNotify?: (userId: string) => boolean;
+    retryAfterSeconds?: (userId: string, kind?: 'message'|'interaction') => number;
+  };
   /** Event-id de-duplication (LRU). seen() returns true if this webhookEventId was already processed. */
   eventDedupe: { seen: (id: string) => boolean };
 };
@@ -86,11 +94,17 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
     });
 
     // ── 4. Rate limit (after lineUser so we can reply with lang-aware text) ────
-    if (!deps.rateLimiter.check(userId)) {
+    const text = ev.type === 'message' && ev.message?.type === 'text' ? ev.message.text.trim() : '';
+    const interaction = ev.type === 'postback' || HOME_LABELS.includes(text) || Object.hasOwn(ENTRY_LABELS,text) || Object.hasOwn(SERVICE_PHRASES,text);
+    const allowed = interaction ? deps.rateLimiter.check(userId,'interaction') : deps.rateLimiter.check(userId);
+    if (!allowed) {
+      if (deps.rateLimiter.shouldNotify && !deps.rateLimiter.shouldNotify(userId)) continue;
       const lang = (lineUser.language ?? 'zh-TW') as Lang;
-      const msg = lang === 'en' ? 'You are sending messages too fast. Please wait a moment.'
-                : lang === 'ja' ? 'メッセージの送信が速すぎます。少々お待ちください。'
-                                : '您傳送訊息的速度太快，請稍候再試 🙏';
+      const seconds = Math.max(1,deps.rateLimiter.retryAfterSeconds?.(userId,interaction?'interaction':'message') ?? 60);
+      const wait = seconds < 60 ? `${seconds} 秒` : `${Math.ceil(seconds/60)} 分鐘`;
+      const msg = lang === 'en' ? `Too many requests. Please try again in ${seconds} seconds.`
+                : lang === 'ja' ? `操作回数の上限です。${seconds}秒後にもう一度お試しください。`
+                                : `操作次數已達暫時上限，請等約 ${wait}後再試。`;
       try {
         await deps.lineClient.replyOrPush(ev.replyToken, userId, { type: 'text', text: msg });
       } catch (err) {
@@ -140,17 +154,17 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       // Explicit navigation is deterministic and never consumes model tokens.
       const p = ev.type === 'postback' ? parsePostback(ev.postback?.data ?? '') : {};
       const menuText = ev.type === 'message' && ev.message?.type === 'text' ? ev.message.text.trim() : '';
-      if (['服務首頁','主選單','選單','開始使用'].includes(menuText)) p.nav='home';
-      const entryLabels:Record<string,string>={'預約公設':'facilities','查空時段':'availability','我的預約':'bookings','訪客登記':'visitorRegister','報修服務':'services'};
-      if (entryLabels[menuText]) p.nav=entryLabels[menuText];
+      if (HOME_LABELS.includes(menuText)) p.nav='home';
+
+      if (ENTRY_LABELS[menuText]) p.nav=ENTRY_LABELS[menuText];
       if (p.nav==='visitorRegister') {
         deps.store.clear(userId);
         if (lineUser.role==='resident') { delete p.nav; p.flow='visitor.notify'; }
         else p.nav='visitors';
       }
       const lang=(lineUser.language ?? 'zh-TW') as Lang;
-      const servicePhrases:Record<string,string>={'我要報修':'repair.report','我要登記訪客':'visitor.notify','我要反映問題':'complaint.file'};
-      if (servicePhrases[menuText]) p.flow=servicePhrases[menuText];
+
+      if (SERVICE_PHRASES[menuText]) p.flow=SERVICE_PHRASES[menuText];
       if (p.nav) {
         deps.store.clear(userId);
         let message: any;

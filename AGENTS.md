@@ -156,3 +156,11 @@
 - 108檔734項全套測試、type-check、lint 通過；另加入2項逐格住戶／物業整合測試，該檔15項全通過。Web build 與 Firebase Hosting 發布成功，線上選單圖片 SHA256 與本機一致。
 - GCP release `/opt/mai-touch/releases/line-ui-20260910` 已啟用，server.js SHA256 與本機一致、服務 active；更新前快照驗證通過，更新後預約 #4 cancelled 仍保留，未重跑 init。
 - scripts/validate-line-ui.ts 僅做官方格式驗證；scripts/publish-line-rich-menu.cjs --apply 需環境中的 LINE_CHANNEL_ACCESS_TOKEN，依內容 hash 重用選單，先保存舊 default 到忽略的 _local，再設定預設；不刪舊選單、不發用戶訊息。
+
+## LINE 選單誤觸限流修正（2026-09-10）
+
+- 使用者截圖顯示正常選單操作連續收到「訊息速度太快」。線上快照確認 runtime_config 為每分鐘10／每日200，00:28–00:29共12次 postback；舊 dispatcher 對所有事件共用文字額度且每次拒絕都回覆。
+- makeRateLimiter 新增 interaction 獨立計數；正式入口將 postback、首頁／六格同名文字及固定服务流程文字歸入 interaction（每分鐘60／每日2000）。其他自由文字維持原可動態設定的10／200，選單不能耗用其額度。
+- 同使用者限流提示每60秒至多一次，跨兩類額度共用提示冷卻；提示依實際分鐘／每日窗口計算等待時間，不再每日超額仍叫用戶稍候。保留所有入站稽核及事件去重。
+- 先以回歸測試重現，再修正；108檔739項測試、型別、lint 通過。涵蓋連續20次導覽不被文字額度阻擋、選單仍有上限、自由文字保護、重複提示合併、每日等待與重設。
+- 已部署 GCP release `/opt/mai-touch/releases/line-rate-fix-20260910`，server.js SHA256 與本機一致、服務 active、健康檢查 db=ok／line=ready、LINE 官方 webhook/test 200。部署後全庫快照驗證成功，28張表筆數未減少；未代發真實用戶訊息。
