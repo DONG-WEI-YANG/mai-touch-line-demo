@@ -1,9 +1,11 @@
+import { useAuth } from "@/hooks/use-auth";
+import { Alert } from "@/lib/alert";
 /**
  * Settings Screen
  * User profile and preferences with RBAC
  */
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet, Alert, Image, Linking } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet,  Image, Linking } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
@@ -25,6 +27,7 @@ type SettingItem = {
 
 export default function SettingsScreen() {
   const colors = useColors();
+  const { logout } = useAuth();
   const colorScheme = useColorScheme();
   const router = useRouter();
   const { state, setLanguage, t } = useApp();
@@ -138,7 +141,7 @@ export default function SettingsScreen() {
     title: t("settings.logout"),
     icon: "arrow.right",
     type: "action",
-    onPress: () => Alert.alert("Logout", "Are you sure?"),
+    onPress: () => Alert.alert("登出", "確定要登出目前帳戶？", [{text:"取消",style:"cancel"},{text:"登出",onPress:() => { void logout().then(() => router.replace("/login")).catch(() => Alert.alert("登出失敗", "請檢查連線後重試。")); }}]),
   });
 
   const renderSettingItem = (item: SettingItem) => {

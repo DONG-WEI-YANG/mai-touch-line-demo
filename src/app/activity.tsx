@@ -79,9 +79,8 @@ export default function ActivityScreen() {
     const categoryLabel = t(`activity.category.${item.type}` as TranslationKey);
 
     return (
-      <TouchableOpacity
+      <View
         style={[styles.orderCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        activeOpacity={0.7}
       >
         {/* Type Icon */}
         <View style={[styles.iconContainer, { backgroundColor: colors.primary + "20" }]}>
@@ -124,7 +123,7 @@ export default function ActivityScreen() {
             </Text>
           </View>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   }, [colors, t]);
 

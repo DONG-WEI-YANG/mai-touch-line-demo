@@ -1,5 +1,6 @@
+import { Alert } from "@/lib/alert";
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";

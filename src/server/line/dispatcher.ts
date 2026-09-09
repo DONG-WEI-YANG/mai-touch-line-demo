@@ -197,7 +197,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
         await deps.lineClient.replyOrPush(ev.replyToken,userId,recordResult(response ?? '請從服務首頁選擇查詢項目'));
         continue;
       }
-      if (lineUser.role==='resident' && ['visitor.notify','repair.report','complaint.file'].includes(p.flow)) {
+      if (lineUser.role==='resident' && ['visitor.notify','repair.report','complaint.file'].includes(p.flow) && !(deps.store.get(userId)?.intent === p.flow && deps.store.get(userId)?.step === 'SLOT_FILLING')) {
         deps.store.set(userId,{userId,role:'resident',language:lang,updatedAt:Date.now(),step:'SLOT_FILLING',slots:{},missingSlots:[],intent:p.flow as any});
       }
       // ── 6. Demo intercept — BEFORE role routing ────────────────────────────

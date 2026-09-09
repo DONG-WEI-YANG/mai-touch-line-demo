@@ -1,3 +1,4 @@
+import { AlertHost } from "@/components/ui/alert-host";
 import React, { useEffect } from "react";
 import { View, ActivityIndicator, Text } from "react-native";
 import { Tabs, usePathname, useRouter, useRootNavigationState } from "expo-router";
@@ -249,6 +250,7 @@ export default function RootLayout() {
           <AppProvider>
             <Root />
             <DemoRoleSwitcher />
+            <AlertHost />
           </AppProvider>
         </QueryClientProvider>
       </trpc.Provider>

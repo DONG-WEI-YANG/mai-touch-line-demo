@@ -1,5 +1,6 @@
+import { Alert } from "@/lib/alert";
 import { useState } from 'react';
-import { View, Text, ScrollView, Alert, ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Pressable } from 'react-native';
+import { View, Text, ScrollView,  ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Pressable } from "react-native";
 import { useRouter } from 'expo-router';
 import { ScreenContainer } from '@/components/screen-container';
 import { IconSymbol } from '@/components/ui/icon-symbol';

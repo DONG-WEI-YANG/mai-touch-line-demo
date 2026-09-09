@@ -175,3 +175,11 @@
 - Hosting曾預設HTML max-age=3600造成部署後瀏覽器仍載入舊bundle；新增HTML no-cache/must-revalidate、hash JS immutable、API與webhook no-store。已存在的舊HTML快取需強制重新整理一次。
 - 本輪108檔743項測試、type-check、lint、Web build及11組LINE Flex官方驗證通過。GCP release line-slots-20260910已啟用且SHA256相符；健康檢查及LINE webhook/test200。所有更新保留DB，未重跑init，LINE真實手機點擊仍待使用者驗收。
 - 最終瀏覽器驗收：390px四個分頁中心點均可點且未遮擋，逐一切到正確路由；admin/logistics沒有住戶分頁。Firebase最新bundle為5f201e3c3f55354c17ba266524e768dd；CLI release complete後有非零退出，但線上HTML／瀏覽器已驗證生效。
+
+## UX修正接續（2026-09-10，本機未發布）
+
+- 工作區已有AlertHost／共通Alert、登出、工單資料映射等未提交修正；本輪保留，移除工單映射留下的未使用型別。
+- 補上src/app/amenities/index.tsx公設列表，串接真實API、停用過濾、詳情入口與載入／空／重試狀態。
+- LINE預約／報修寫入成功後先結束會話，再分別處理住戶回覆與物業通知；通知失敗不復原成可重送狀態，不再提示寫入失敗。4項故障測試先失敗後通過；尚未加入持久通知重試佇列。
+- 109檔748項測試、type-check、lint、Web build與SQLite隔離smoke通過。瀏覽器初始化setResponseMeta錯誤，Playwright另回browser already in use，本輪未完成點擊驗收。
+- 本輪未deploy／push，線上仍是先前版本；詳見docs/UX_UI_AUDIT_20260910.md文末。本機開發後端啟動時套用既有0016 migration，未操作線上DB。

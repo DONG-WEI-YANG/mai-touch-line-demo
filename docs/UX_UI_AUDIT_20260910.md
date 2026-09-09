@@ -1,6 +1,6 @@
 # UX／UI 稽核 — 2026-09-10
 
-本次發現16類問題；時段流程、底部分頁及Hosting HTML快取已處理，其餘13類列為待修或待實機驗證。沒有宣稱全系統UX已修完。
+本次發現16類問題；時段流程、底部分頁及Hosting HTML快取已上線。後續本機修正與驗證見文末；其餘項目仍須修復或實機驗證，沒有宣稱全系統UX已修完。
 
 ## 範圍與方法
 
@@ -42,7 +42,7 @@
 ### UX-05 P1 — 公設服務入口不存在
 
 - 現象／原因：實測服務頁 Dynamic Lifestyle Curation 點入 /amenities，顯示 Unmatched Route；只有 /amenities/[id]，沒有列表頁。
-- 狀態：待修。
+- 狀態：已補本機 `/amenities` 列表，讀取實際公設、排除停用項目，提供載入／空清單／失敗重試與詳情入口；尚未部署或完成瀏覽器點擊驗收。
 - 依據：`src/app/services.tsx:73`
 - 驗收：提供真實公設列表，或改成確實存在且符合標籤的入口。
 
@@ -56,7 +56,7 @@
 ### UX-07 P1 — 通知失敗被當成預約／工單失敗
 
 - 現象／原因：bookFn/reportFn成功後，回覆與pushHousekeepers仍在同一try。推播失敗會走失敗提示；預約回CONFIRMING，可能誘導重送。
-- 狀態：程式確認，尚未注入線上推播故障；不可把推播失敗當作資料寫入失敗。
+- 狀態：本機已分離通知錯誤，成功寫入後先保存 IDLE，再獨立嘗試住戶回覆與物業通知；失敗記錄單號，不回到確認或提示寫入失敗。尚未加入持久通知重試佇列、未部署。
 - 依據：`src/server/line/handlers/resident.ts:123`
 - 驗收：寫入成功應明確保留成功狀態；通知另外重試，不能引導再建立一次。
 
@@ -206,3 +206,12 @@
 - 390×844瀏覽器驗證四分頁皆可見、中心點未遭其他元素遮挡；分頁底緣834px，頁寬390px。修正截圖保存在忽略的 `_local/ux-audit-mobile-navigation.png`。
 - Firebase CLI最後一次發布在release complete後仍以unexpected error退出；已由線上HTML與瀏覽器實際載入最新bundle確認發布生效，不把CLI退出碼誤記為0。
 - 四個住戶分頁逐一點擊，均到正確路由；admin/logistics角色下可見住戶tab數為0，測試後恢復原logistics角色。
+
+## 接續本機修正與驗證（2026-09-10）
+
+- 工作區開始時已有 Web AlertHost／Alert adapter、工單展平、登出、預約返回及 LINE 填寫進度等未提交修改；本輪保留並納入本機檢查，尚不可視為各頁點擊驗收完成。
+- 補上公設列表 `/amenities`，使用 amenities.list，顯示開放時間、時段長度、容量並連接既有詳情頁；區分讀取中、讀取失敗與無開放公設。
+- UX-07 四項通知故障測試先失敗後通過，涵蓋預約／報修的住戶回覆與物業推播故障。資料成功寫入後立即結束會話，兩方通知分別處理；舊確認重送不再新增。通知失敗記錄單號，尚無持久化通知重試。
+- 109檔／748項測試、type-check、lint、Web build、SQLite隔離smoke通過。型別及lint首次發現工單展平後未使用的WorkOrderRecord，移除後重跑通過。
+- 瀏覽器驗證未完成：in-app browser初始化報 setResponseMeta 錯誤；Playwright回覆 browser already in use。沒有關閉其他工作階段，也沒有將smoke記為點擊驗收。
+- 本輪未部署、未push；線上仍為先前版本。啟動本機開發後端時，本機SQLite自動套用既有0016 migration；未操作線上資料。

@@ -1,3 +1,4 @@
+import { Alert } from "@/lib/alert";
 import { useState, useCallback, useMemo } from "react";
 import {
   ScrollView,
@@ -5,7 +6,7 @@ import {
   View,
   TouchableOpacity,
   TextInput,
-  Alert,
+
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
@@ -70,7 +71,7 @@ export default function AmenityDetailScreen() {
 
   const handleProceedToSlots = useCallback(() => {
     if (!dates.length) return;
-    setSelectedDate(dates[0]);
+    setSelectedDate(previous => previous || dates[0]);
     setStep("slots");
   }, [dates]);
 
@@ -116,7 +117,7 @@ export default function AmenityDetailScreen() {
           </View>
           <Text style={[styles.successTitle, { color: colors.foreground }]}>{t("amenity.success_title")}</Text>
           <Text style={[styles.successSub, { color: colors.muted }]}>{t("amenity.success_sub")}</Text>
-          
+
           <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
              <Text style={[styles.summaryText, { color: colors.foreground }]}>{amenity.name}</Text>
              <Text style={[styles.summaryDetail, { color: colors.muted }]}>{formatDateDisplay(selectedDate)} | {selectedSlot?.startTime}</Text>
@@ -134,7 +135,7 @@ export default function AmenityDetailScreen() {
     <ScreenContainer edges={["top", "left", "right"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={() => step === "details" ? router.back() : setStep("details")}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.surface }]} onPress={() => step === "details" ? router.back() : setStep(step === "confirm" ? "slots" : "details")}>
           <IconSymbol name="chevron.left" size={20} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>{step === "details" ? amenity.name : t("amenity.select_date")}</Text>
@@ -148,7 +149,7 @@ export default function AmenityDetailScreen() {
           </View>
           <View style={styles.detailBody}>
             <Text style={[styles.description, { color: colors.foreground }]}>{amenity.description}</Text>
-            
+
             <View style={[styles.infoRow, { borderColor: colors.border }]}>
               <IconSymbol name="person.3.fill" size={20} color={colors.primary} />
               <Text style={[styles.infoText, { color: colors.foreground }]}>{t("amenity.capacity")}: {amenity.capacity} {t("common.guests")}</Text>
@@ -217,7 +218,7 @@ export default function AmenityDetailScreen() {
           <View style={[styles.confirmCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={{ color: colors.muted }}>{t("common.date")}: {selectedDate}</Text>
             <Text style={{ color: colors.muted }}>{t("common.time")}: {selectedSlot?.startTime}</Text>
-            
+
             <Text style={[styles.fieldLabel, { color: colors.foreground, marginTop: 20 }]}>{t("amenity.guests")}</Text>
             <View style={styles.guestPicker}>
                <TouchableOpacity onPress={() => setGuestCount(s => String(Math.max(1, parseInt(s)-1)))}><IconSymbol name="minus" color={colors.primary} /></TouchableOpacity>

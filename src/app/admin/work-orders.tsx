@@ -7,20 +7,6 @@ import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/ad
 import { parseError } from '@/lib/error-utils';
 import { invalidateDomainCaches } from '@/lib/mutation-cache';
 
-interface WorkOrderRecord {
-  id: number;
-  userId: number;
-  userName?: string;
-  title: string | null;
-  description: string | null;
-  category: string;
-  priority: string;
-  status: string;
-  assignedTo: string | null;
-  location?: string;
-  createdAt: string;
-}
-
 type WOStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
 const STATUS_OPTIONS: WOStatus[] = ['open', 'in_progress', 'resolved', 'closed'];
 
@@ -45,7 +31,7 @@ export default function AdminWorkOrdersPage() {
 
   const rows = useMemo(() => {
     if (!q.data) return [];
-    const all = q.data as WorkOrderRecord[];
+    const all = q.data.map(({ workOrder, userName }) => ({ ...workOrder, userName }));
     if (filter === 'all') return all;
     return all.filter(w => w.status === filter);
   }, [q.data, filter]);
@@ -53,7 +39,7 @@ export default function AdminWorkOrdersPage() {
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: 0, open: 0, in_progress: 0, resolved: 0, closed: 0 };
     if (!q.data) return c;
-    const all = q.data as WorkOrderRecord[];
+    const all = q.data.map(({ workOrder, userName }) => ({ ...workOrder, userName }));
     c.all = all.length;
     for (const w of all) {
       if (w.status in c) c[w.status]++;

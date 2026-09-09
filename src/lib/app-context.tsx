@@ -55,7 +55,7 @@ const initialState: AppState = {
   isTyping: false,
   lastNLPResult: null,
   routingSuggestion: null,
-  language: "en",
+  language: "zh",
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {

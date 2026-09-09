@@ -1,5 +1,6 @@
+import { Alert } from "@/lib/alert";
 import { useState, useCallback } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, } from "react-native";
 import { router } from 'expo-router';
 import { setStoredToken } from '../lib/trpc';
 import { useAuth } from '../hooks/use-auth';

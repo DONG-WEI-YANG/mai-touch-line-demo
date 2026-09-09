@@ -1,5 +1,6 @@
+import { Alert } from "@/lib/alert";
 import { useState } from 'react';
-import { View, Text, ScrollView, Alert, ActivityIndicator, RefreshControl, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView,  ActivityIndicator, RefreshControl, Pressable, StyleSheet } from "react-native";
 import { trpc } from '@/lib/trpc';
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';

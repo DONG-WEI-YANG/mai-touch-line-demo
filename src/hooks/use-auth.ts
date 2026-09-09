@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { trpc, clearStoredToken } from '../lib/trpc';
 
@@ -20,6 +21,8 @@ export function useAuth() {
     refetchOnWindowFocus: false,
   });
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
+  const logoutMutation = trpc.auth.logout.useMutation();
 
   const user = (q.data ?? null) as AuthUser | null;
   const loading = q.isLoading;
@@ -31,9 +34,12 @@ export function useAuth() {
   }, [utils]);
 
   const logout = useCallback(async () => {
+    await logoutMutation.mutateAsync();
     clearStoredToken();
-    await utils.auth.me.invalidate();
-  }, [utils]);
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    if (typeof window !== "undefined") window.location.replace("/login");
+  }, [logoutMutation, queryClient]);
 
   return { user, loading, error, isAuthenticated, refresh, logout };
 }

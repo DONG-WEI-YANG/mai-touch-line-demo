@@ -199,3 +199,15 @@ it('lets repeated menu taps pass while text remains limited, then sends only one
   expect(rateLimiter.check('U1')).toBe(true);
   expect(rateLimiter.check('U1')).toBe(false);
 });
+
+
+it('keeps a repair draft on repeated entry and gives an explicit input instruction',async()=>{
+  const deps=mkDeps({lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1})),upsert:vi.fn()}});
+  await dispatch([mkTextEv('我要報修')],deps);
+  expect(JSON.stringify(deps.lineClient.replyOrPush.mock.calls.at(-1)?.[2])).toContain('訊息欄');
+  deps.store.set('U1',{userId:'U1',role:'resident',language:'zh-TW',updatedAt:Date.now(),intent:'repair.report',step:'SLOT_FILLING',slots:{issue:'冷氣不冷'},missingSlots:['location','urgency']});
+  await dispatch([mkTextEv('我要報修')],deps);
+  expect(deps.store.get('U1')?.slots.issue).toBe('冷氣不冷');
+  expect(JSON.stringify(deps.lineClient.replyOrPush.mock.calls.at(-1)?.[2])).toContain('2 / 3');
+  expect(deps.ai.classify).not.toHaveBeenCalled();
+});

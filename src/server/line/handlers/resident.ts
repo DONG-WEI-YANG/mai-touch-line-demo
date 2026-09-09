@@ -37,6 +37,16 @@ export type ResidentDeps = {
   listMyOrders: (lineUserId: string) => Promise<MyOrderItem[]>;
 };
 
+// Delivery failure cannot undo a committed request or invite another write.
+// Each recipient is attempted independently; failures retain the order ID in logs.
+async function deliverCommittedNotification(orderId: string, recipient: string, send: () => Promise<unknown>) {
+  try {
+    await send();
+  } catch (error) {
+    console.error('[LINE] committed request notification failed', { orderId, recipient, error });
+  }
+}
+
 export async function handleResident(ev: any, deps: ResidentDeps): Promise<void> {
   const userId = deps.lineUser.lineUserId;
   const lang = deps.lineUser.language;
@@ -119,14 +129,12 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
       deps.store.set(userId, session);
       try {
         const order = await deps.bookFn(session.slots as any, userId);
-        await deps.client.replyOrPush(ev.replyToken, userId, bookingDone({ orderId: order.id }, lang));
-        await deps.pushHousekeepers({
+        deps.store.set(userId, newSession(userId, lang));
+        await deliverCommittedNotification(order.id, 'resident', () => deps.client.replyOrPush(ev.replyToken, userId, bookingDone({ orderId: order.id }, lang)));
+        await deliverCommittedNotification(order.id, 'housekeepers', () => deps.pushHousekeepers({
           orderId: order.id, from: userId, intent: session.intent,
           summary: JSON.stringify(session.slots),
-        });
-        deps.store.clear(userId);
-        // Set a minimal IDLE record so store.get(userId)?.step === 'IDLE'
-        deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+        }));
       } catch (err: any) {
         // Keep extended LINE/axios detail in logs so Flex/format issues are diagnosable
         // without redeploying. Plain `err` alone hides response.data behind '[Object]'.
@@ -269,19 +277,19 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     deps.store.set(userId, session);
     try {
       const order = await deps.reportFn({ intent: session.intent, slots: session.slots }, userId);
+      deps.store.set(userId, newSession(userId, lang));
       const labels: Partial<Record<IntentName, string>> = {
         'repair.report':  '報修',
         'visitor.notify': '訪客通知',
         'complaint.file': '投訴',
       };
       const label = labels[session.intent] ?? '工單';
-      await deps.client.replyOrPush(ev.replyToken, userId,
-        { type: 'text', text: `✅ ${label}已送出,單號 ${order.id}` });
-      await deps.pushHousekeepers({
+      await deliverCommittedNotification(order.id, 'resident', () => deps.client.replyOrPush(ev.replyToken, userId,
+        { type: 'text', text: `✅ ${label}已送出,單號 ${order.id}` }));
+      await deliverCommittedNotification(order.id, 'housekeepers', () => deps.pushHousekeepers({
         orderId: order.id, from: userId, intent: session.intent,
         summary: JSON.stringify(session.slots),
-      });
-      deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
+      }));
     } catch (err: any) {
       const lineDetail = err?.originalError?.response?.data ?? err?.response?.data;
       console.error('[LINE] reportFn failed', {
@@ -317,7 +325,9 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     session = { ...session, step: 'SLOT_FILLING' };
     deps.store.set(userId, session);
     const askKey = ('ask.' + next.replace('_', '.')) as any;
-    await deps.client.replyOrPush(ev.replyToken, userId, { type: 'text', text: t(askKey, lang) });
+    const label = session.intent === 'repair.report' ? '報修服務' : session.intent === 'visitor.notify' ? '訪客登記' : '反映問題';
+    const examples: Record<string,string> = {issue:'例如：冷氣不冷、電梯異常',location:'例如：A 棟 3 樓走廊',urgency:'例如：一般、急件',visitor_name:'請填寫訪客姓名',visitor_count:'請填寫來訪人數，例如：2'};
+    await deps.client.replyOrPush(ev.replyToken, userId, serviceActions(`${label}｜${required.length - missing.length + 1} / ${required.length}`, `${t(askKey, lang)}\n請在訊息欄輸入並送出。${examples[next] ?? ''}`, [{type:'postback',label:'取消填寫',data:'act=cancel'}]));
     return;
   }
 }
