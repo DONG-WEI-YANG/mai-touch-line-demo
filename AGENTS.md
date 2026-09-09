@@ -109,3 +109,10 @@
 - 需額度調升或另一可用帳務帳戶；不得自行解除其他專案 billing。初始無 external IPv4／NAT／LB，以 IAP 管理，但公開 webhook 與 Gemini 對外連線尚需處理，不能宣稱可上線。
 - 已更新 docs/GCP_DEPLOYMENT.md；仍暫不 push，避免 Render ephemeral DB 因部署重建。
 - 使用者後續確認只提高帳務帳戶專案連結數，讓建材 Demo 綁定，不提高護理平台規格。實查已連結 5 個專案；申請增加 1 個（總數 6），草稿見 docs/GCP_BILLING_QUOTA_REQUEST.md。Chrome 初始化兩次失敗，申請尚未送出，不能記為核准。
+
+## GCP 新帳號接續（2026-09-09）
+
+- 使用者確認 GCP 承接免費 Demo，HF 留作公設語料辨識與 RAG 測試，不搬移目前後端到 HF。
+- gcloud 已登入並切換 openclaw19830331@gmail.com；後續指令仍必須明確指定 --project，不能沿用全域 internship-checkin-system。
+- 新帳號可見 My Billing Account（01C823-3F2E66-0A509A，TWD），list 與 describe 都回 open=false。帳務尚未開啟，不能記為可部署；需使用者在 Google 帳務頁完成啟用／處理頁面提示。
+- 已由原管理帳號授予 openclaw19830331@gmail.com 在 mai-touch-history-20260908 的 roles/billing.projectManager，限帳務綁定管理，不是 Owner／Editor。VM 尚未建立，Render 未切換。
