@@ -5,7 +5,7 @@ import { homeQuickReply } from './serviceHome';
 export function bookingDone(input: { orderId: string }, lang: Lang) {
   return {
     type: 'flex',
-    quickReply: homeQuickReply(),
+    quickReply: homeQuickReply('booking'),
     altText: `${t('booking.done.title', lang)} ${input.orderId}`,
     contents: {
       type: 'bubble',

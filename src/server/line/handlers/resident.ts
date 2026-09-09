@@ -104,7 +104,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     if (params.act === 'cancel') {
       deps.store.clear(userId);
       await deps.client.replyOrPush(ev.replyToken, userId,
-        { type: 'text', text: t('booking.btn.cancel', lang), quickReply:homeQuickReply() });
+        { type: 'text', text: t('booking.btn.cancel', lang), quickReply:homeQuickReply(session.intent === 'facility.book' ? 'booking' : session.intent === 'visitor.notify' ? 'visitors' : 'services') });
       return;
     }
 
@@ -327,7 +327,7 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
     const askKey = ('ask.' + next.replace('_', '.')) as any;
     const label = session.intent === 'repair.report' ? '報修服務' : session.intent === 'visitor.notify' ? '訪客登記' : '反映問題';
     const examples: Record<string,string> = {issue:'例如：冷氣不冷、電梯異常',location:'例如：A 棟 3 樓走廊',urgency:'例如：一般、急件',visitor_name:'請填寫訪客姓名',visitor_count:'請填寫來訪人數，例如：2'};
-    await deps.client.replyOrPush(ev.replyToken, userId, serviceActions(`${label}｜${required.length - missing.length + 1} / ${required.length}`, `${t(askKey, lang)}\n請在訊息欄輸入並送出。${examples[next] ?? ''}`, [{type:'postback',label:'取消填寫',data:'act=cancel'}]));
+    await deps.client.replyOrPush(ev.replyToken, userId, serviceActions(`${label}｜${required.length - missing.length + 1} / ${required.length}`, `${t(askKey, lang)}\n請在訊息欄輸入並送出。${examples[next] ?? ''}`, [{type:'postback',label:'取消填寫',data:'act=cancel'}],session.intent === 'visitor.notify' ? 'visitors' : 'services'));
     return;
   }
 }

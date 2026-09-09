@@ -2,8 +2,12 @@ import type { Lang } from '../ai/types';
 import { t } from './i18n';
 import { serviceIcon } from './serviceIcon';
 
-export function homeQuickReply() {
-  return { items:[['服務首頁','home'],['查空時段','availability'],['預約紀錄','bookings']].map(([label,nav])=>({ type:'action', action:{ type:'postback', label, data:`nav=${nav}`, displayText:label } })) };
+type ShortcutContext = 'home' | 'booking' | 'services' | 'visitors';
+export function homeQuickReply(context: ShortcutContext = 'home') {
+  const links = context === 'booking' ? [['查空時段','availability'],['預約紀錄','bookings']]
+    : context === 'services' ? [['工單進度','workorders'],['報修與服務','services']]
+    : context === 'visitors' ? [['訪客與車號','visitors']] : [];
+  return { items:[['服務首頁','home'],...links].map(([label,nav])=>({ type:'action', action:{ type:'postback', label, data:`nav=${nav}`, displayText:label } })) };
 }
 export function serviceHome(role: 'resident'|'housekeeper'|'admin', lang: Lang) {
   const staff=role!=='resident';
@@ -42,8 +46,8 @@ export function serviceHome(role: 'resident'|'housekeeper'|'admin', lang: Lang) 
     ]},
   }};
 }
-export function serviceActions(title: string, description: string, actions: any[]) {
-  return {type:'flex',altText:title,quickReply:homeQuickReply(),contents:{
+export function serviceActions(title: string, description: string, actions: any[], context: ShortcutContext = 'home') {
+  return {type:'flex',altText:title,quickReply:homeQuickReply(context),contents:{
     type:'bubble',
     body:{type:'box',layout:'vertical',spacing:'md',contents:[
       {type:'text',text:title,weight:'bold',size:'lg',color:'#202020'},

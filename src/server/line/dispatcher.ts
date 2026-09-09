@@ -183,7 +183,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
             const flows=p.nav==='visitors' ? [['登記訪客','visitor.notify']] : [['我要報修','repair.report'],['反映問題','complaint.file']];
             for (const [label,flow] of flows) items.push({type:'action',action:{type:'postback',label,data:`flow=${flow}`,displayText:label}});
           }
-          message=serviceActions(p.nav==='visitors'?'訪客與車號':'報修與服務','點選下方按鈕開始操作。',items.map(item=>item.action));
+          message=serviceActions(p.nav==='visitors'?'訪客與車號':'報修與服務','點選下方按鈕開始操作。',items.map(item=>item.action),p.nav);
         }
         const query=p.nav==='bookings'?'查詢空間預約單':p.nav==='workorders'?'查詢工單':undefined;
         if (query && deps.queryRecords) message=recordResult(await deps.queryRecords(query,userId) ?? '查無紀錄');

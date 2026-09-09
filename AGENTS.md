@@ -193,3 +193,11 @@
 - 部署前HTTPS快照請求502，改由VM snapshot.js Online Backup成功；快照在/var/data/backups/pre-ux-e986b39/。部署後HTTPS全庫下載成功，SQLite完整性／外鍵檢查通過，本機忽略檔_local/gcp/ux-e986b39-after.db。
 - 28張表逐表比較，27張筆數相同（含6筆預約、9筆工單）；line_sessions暫存會話由1變0，不能宣稱所有表完全不變。既有SessionStore有30分鐘TTL清理，但未單獨證明本筆刪除原因。
 - 本輪發布前沿用109檔748項測試、型別、lint、隔離smoke通過結果，正式前端重新以--clear建置成功。瀏覽器點擊與真實LINE手機旅程仍未完成；簡報既有異動未提交。
+
+## LINE工單快捷列錯配修正（2026-09-10）
+
+- 使用者截圖指出工單／報修卡底下卻有查空時段與預約紀錄；原因是serviceActions共用固定公設快捷列，不是要求新增表單點選功能。
+- homeQuickReply改明確情境：報修卡為服務首頁／工單進度／報修與服務；訪客卡為服務首頁／訪客與車號；預約完成保留公設入口；通用卡只顯示首頁，取消依原流程選擇快捷列。
+- 回歸測試先重現後通過；109檔749項測試、type-check、lint通過，13組LINE訊息及rich menu官方格式驗證通過。
+- 已發布GCP /opt/mai-touch/releases/context-menu-20260910；server.js SHA256 0ebd6293cb203f34d2fb1e287af1ce7539d145967ab2e9a352ed0daab2f8b2ed一致，公開health及LINE webhook/test成功200。切換前快照已驗證，未重跑init、未代發用戶訊息。前端無變更。
+- 舊聊天卡片不會重寫，需重新開啟報修服務取得新卡；尚待使用者實機確認。

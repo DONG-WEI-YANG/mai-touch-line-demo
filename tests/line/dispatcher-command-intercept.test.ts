@@ -211,3 +211,13 @@ it('keeps a repair draft on repeated entry and gives an explicit input instructi
   expect(JSON.stringify(deps.lineClient.replyOrPush.mock.calls.at(-1)?.[2])).toContain('2 / 3');
   expect(deps.ai.classify).not.toHaveBeenCalled();
 });
+
+it('keeps repair menu and form shortcuts relevant to work orders', async () => {
+  const deps=mkDeps({lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1})),upsert:vi.fn()}});
+  for (const text of ['報修服務', '我要報修']) {
+    await dispatch([mkTextEv(text)], deps);
+    const actions = deps.lineClient.replyOrPush.mock.calls.at(-1)?.[2].quickReply.items.map((item:any)=>item.action);
+    expect(actions.map((action:any)=>action.label)).toContain('工單進度');
+    expect(actions.some((action:any)=>action.data==='nav=availability' || action.data==='nav=bookings')).toBe(false);
+  }
+});
