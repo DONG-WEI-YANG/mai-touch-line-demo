@@ -183,3 +183,13 @@
 - LINE預約／報修寫入成功後先結束會話，再分別處理住戶回覆與物業通知；通知失敗不復原成可重送狀態，不再提示寫入失敗。4項故障測試先失敗後通過；尚未加入持久通知重試佇列。
 - 109檔748項測試、type-check、lint、Web build與SQLite隔離smoke通過。瀏覽器初始化setResponseMeta錯誤，Playwright另回browser already in use，本輪未完成點擊驗收。
 - 本輪未deploy／push，線上仍是先前版本；詳見docs/UX_UI_AUDIT_20260910.md文末。本機開發後端啟動時套用既有0016 migration，未操作線上DB。
+
+## UX修正發布完成（2026-09-10）
+
+- 使用者明確要求部署、commit、push；程式commit e986b39已推送origin/main。
+- Firebase Hosting發布成功（CLI exit 0）；正式入口https://mai-touch-history-20260908.web.app，線上HTML已驗證最新bundle entry-841238e6e207c36cc761a0b7c8bb8859.js與no-cache/must-revalidate。
+- GCP current切換至/opt/mai-touch/releases/ux-e986b39；server.js SHA256 dc7c9a5c54fec1f2aeca8047c4a15d1a4ae7677889965fd92a79421c0e053de5與本機一致，服務active。沿用雜湊一致的package.json與既有Linux依賴，未重跑init或改動憑證。
+- 公開health 200、db=ok／line=ready，LINE官方webhook/test success=true／200。未代發用戶訊息。
+- 部署前HTTPS快照請求502，改由VM snapshot.js Online Backup成功；快照在/var/data/backups/pre-ux-e986b39/。部署後HTTPS全庫下載成功，SQLite完整性／外鍵檢查通過，本機忽略檔_local/gcp/ux-e986b39-after.db。
+- 28張表逐表比較，27張筆數相同（含6筆預約、9筆工單）；line_sessions暫存會話由1變0，不能宣稱所有表完全不變。既有SessionStore有30分鐘TTL清理，但未單獨證明本筆刪除原因。
+- 本輪發布前沿用109檔748項測試、型別、lint、隔離smoke通過結果，正式前端重新以--clear建置成功。瀏覽器點擊與真實LINE手機旅程仍未完成；簡報既有異動未提交。

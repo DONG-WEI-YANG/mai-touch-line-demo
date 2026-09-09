@@ -215,3 +215,10 @@
 - 109檔／748項測試、type-check、lint、Web build、SQLite隔離smoke通過。型別及lint首次發現工單展平後未使用的WorkOrderRecord，移除後重跑通過。
 - 瀏覽器驗證未完成：in-app browser初始化報 setResponseMeta 錯誤；Playwright回覆 browser already in use。沒有關閉其他工作階段，也沒有將smoke記為點擊驗收。
 - 本輪未部署、未push；線上仍為先前版本。啟動本機開發後端時，本機SQLite自動套用既有0016 migration；未操作線上資料。
+
+## 發布結果（2026-09-10）
+
+- 程式e986b39已commit並push origin/main；Firebase Hosting與GCP後端均已發布，前述「本機未發布」為發布前歷史狀態。
+- Firebase線上bundle為entry-841238e6e207c36cc761a0b7c8bb8859.js，HTML快取策略已核對。GCP release為ux-e986b39，後端SHA256與本機一致，health及LINE官方webhook/test均200。
+- VM部署前快照與部署後下載快照均通過完整性檢查，未重跑資料初始化。28表中27表筆數相同，包含6筆預約與9筆工單；line_sessions由1變0，未單獨證明其刪除原因。
+- UX-03共通提示、UX-04工單映射、UX-05公設列表、UX-06登出、UX-07通知失敗隔離及既有返回修正均已隨版本發布；不等於各頁互動驗收完成。通知持久重試、其他稽核待辦與真實手機／瀏覽器點擊仍待接續。
