@@ -91,5 +91,6 @@ export function startBackupScheduler(db: Database.Database, directory: string) {
 }
 
 export function persistentMountInfo(): string | undefined {
-  return process.env.RENDER === 'true' && os.platform()==='linux' ? fs.readFileSync('/proc/self/mountinfo','utf8') : undefined;
+  const requireMount = process.env.RENDER === 'true' || process.env.REQUIRE_PERSISTENT_STORAGE === '1';
+  return requireMount && os.platform()==='linux' ? fs.readFileSync('/proc/self/mountinfo','utf8') : undefined;
 }

@@ -124,3 +124,10 @@
 - scripts/gcp-demo-startup.sh 只對明確命名且無檔案系統／分割／掛載的資料磁碟初始化 ext4，掛載 /var/data，建立 maitouch 系統帳戶。IAP SSH 實測成功，OS reboot 後 boot ID 改變、啟動腳本成功、掛載與測試檔均保留。
 - 網路 mai-touch-demo-net，子網 mai-touch-demo-us-west1，IAP SSH 僅35.235.240.0/20→tcp22。openclaw 另獲 compute.viewer；管理 SSH 暫以原 kevin19830331@gmail.com 明確 --account 操作。
 - VM 尚未部署 Node／後端／資料庫；一般對外連線、HTTPS、來源完整快照與 GCP mount 啟動防護尚未完成。不要宣稱 LINE／長期歷史已遷移；Render 與 Vercel 未切換，暫不 push。詳細現況見 docs/GCP_DEPLOYMENT.md。
+
+## LINE 搬移準備（2026-09-09，尚未切換）
+
+- VM／子網已改 IPV4_IPV6，外部 IPv6 為2600:1900:4040:21b::，未加公開 IPv4／NAT／入站規則；IPv6 IP 本身免費，流量仍受免費額度限制。實測 nodejs.org IPv6 HTTPS 可達，api.line.me DNS 目前僅IPv4，LINE 出口仍需處理。
+- scripts/gcp-install-node.sh 已在 VM 安裝 Node24.20.0/npm11.19.0，官方 SHA256 校驗通過。
+- persistentMountInfo 在 Linux REQUIRE_PERSISTENT_STORAGE=1 時會驗證真實 mount，不再僅認 RENDER；回歸測試先重現未掛載卻通過，再修正通過。
+- 現行 Render 全庫備份端點再次確認404。已詢問固定 HTTPS 網域與是否接受部分 API 資料搬移，尚待回覆；不能以使用者要求搬移推定接受資料遺失。後端未部署、LINE未切換。

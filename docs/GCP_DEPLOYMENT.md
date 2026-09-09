@@ -3,7 +3,7 @@
 ## 最新狀態：免費 Demo VM 已建立（2026-09-09）
 
 - 新帳務帳戶 `01C823-3F2E66-0A509A` 已確認 `open=true`，新專案已綁定且 `billingEnabled=true`。帳戶屬於 openclaw19830331@gmail.com；NT$2,000 是付款門檻，不是免費點數。
-- `mai-touch-demo`：`RUNNING`、`e2-micro`、Debian 12、`us-west1-b`、內網 `10.77.0.2`，無公開 IP、無 VM service account。
+- `mai-touch-demo`：`RUNNING`、`e2-micro`、Debian 12、`us-west1-b`、內網 `10.77.0.2`，無公開 IPv4、無 VM service account。LINE 搬移準備階段已加入免費外部 IPv6 `2600:1900:4040:21b::`，未新增外部入站規則。
 - 20 GB 開機磁碟 `mai-touch-demo`＋10 GB 資料磁碟 `mai-touch-history-data`，均為 `pd-standard`。資料磁碟 `autoDelete=false`，ext4 掛載 `/var/data`，`maitouch` 系統帳戶擁有該目錄。
 - 專用網路 `mai-touch-demo-net`、子網 `mai-touch-demo-us-west1`（`10.77.0.0/24`，Private Google Access）；SSH 僅允許 IAP `35.235.240.0/20` 到帶 `mai-touch-iap` 標籤的 VM。
 - `scripts/gcp-demo-startup.sh` 已套用。實際 IAP SSH 驗證啟動腳本 `Result=success / ExecMainStatus=0`、20 GB 根目錄擴容、獨立磁碟掛載。建立測試檔後執行 OS reboot，確認 boot ID 改變、掛載恢復且測試檔仍存在；這是磁碟持久化驗收，不是應用資料遷移驗收。
@@ -12,9 +12,13 @@
 
 ### 尚未上線的部分
 
-VM 尚未安裝 Node.js／部署後端／匯入 SQLite；沒有一般網際網路出口或公開 HTTPS。尚未切換 LINE webhook 或 Vercel API URL。HF 僅保留為公設語料辨識與 RAG 測試方向。
+VM 已經由 IPv6 安裝 Node.js 24.20.0／npm 11.19.0；下載檔 SHA-256 已與 Node 官方校驗表核對，腳本為 `scripts/gcp-install-node.sh`。尚未部署後端／匯入 SQLite，沒有公開 HTTPS。尚未切換 LINE webhook 或 Vercel API URL。HF 僅保留為公設語料辨識與 RAG 測試方向。
 
-後續須解決免費條件下的對外連線、取得並確認來源資料可還原範圍、補上 GCP 真實 mount 啟動防護，再驗證後端、備份還原、LINE 與 HTTPS。保持現行 Render，暫不 push 觸發 ephemeral DB 重建。
+IPv6 已實測可連 nodejs.org；目前 DNS 查詢 api.line.me 僅取得 IPv4，因此仍需可用的 IPv4 出口／轉接，不能把 IPv6 連通當成 LINE 可回覆。免費 IPv6 來源：https://cloud.google.com/vpc/pricing （IPv6 IP 本身免費，流量仍依額度計算）。
+
+GCP 持久模式現在也會讀 `/proc/self/mountinfo`，不再僅靠 RENDER 旗標；測試確認缺掛載時拒絕啟動。現行 Render `/admin/database/backup` 再查仍為404，未取得全庫快照。已詢問使用者可用 HTTPS 網域與是否接受部分 API 資料遷移，尚待回覆；不得未確認就切換或重建來源資料。
+
+後續須解決免費條件下的 LINE 對外連線、取得並確認來源資料可還原範圍，再驗證後端、備份還原、LINE 與 HTTPS。保持現行 Render，暫不 push 觸發 ephemeral DB 重建。
 
 管理指令（明確指定原管理帳號及本專案）：
 

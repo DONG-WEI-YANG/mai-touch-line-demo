@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { afterEach,beforeEach,expect,it } from 'vitest';
-import { assertPersistentStorage,backupDatabase,restoreDatabase,verifySnapshot,pruneBackups } from '../../src/server/database/persistence';
+import { afterEach,beforeEach,expect,it,vi } from 'vitest';
+import { assertPersistentStorage,backupDatabase,restoreDatabase,verifySnapshot,pruneBackups,persistentMountInfo } from '../../src/server/database/persistence';
 let directory:string;
 let db:Database.Database;
 beforeEach(()=>{
@@ -12,7 +12,14 @@ beforeEach(()=>{
   db.pragma('journal_mode=WAL');
   db.exec('CREATE TABLE history(id INTEGER PRIMARY KEY, value TEXT); INSERT INTO history VALUES(1,\'booking visitor plate link\')');
 });
-afterEach(()=>{db.close();fs.rmSync(directory,{recursive:true,force:true});});
+afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();db.close();fs.rmSync(directory,{recursive:true,force:true});});
+it('refuses an unmounted data directory on a persistent Linux host outside Render',()=>{
+  vi.stubEnv('RENDER','');
+  vi.stubEnv('REQUIRE_PERSISTENT_STORAGE','1');
+  vi.spyOn(os,'platform').mockReturnValue('linux');
+  vi.spyOn(fs,'readFileSync').mockReturnValue('');
+  expect(()=>assertPersistentStorage(path.join(directory,'live.db'),directory,persistentMountInfo())).toThrow('not mounted');
+});
 it('backs up WAL contents and restores history after reopening',async()=>{
   const snapshot=await backupDatabase(db,path.join(directory,'backups'));
   verifySnapshot(snapshot);
