@@ -11,12 +11,15 @@ import { welcome } from './flex/welcome';
 import { serviceHome, serviceActions, recordResult, homeQuickReply } from './flex/serviceHome';
 import { facilityCarousel } from './flex/facilityCarousel';
 import { parsePostback } from './postback';
+import { calendarMessage, type makeBookingCalendar } from './booking-calendar';
+import { taipeiToday } from '../../lib/booking-calendar';
 
-const ENTRY_LABELS:Record<string,string>={'預約公設':'facilities','查空時段':'availability','我的預約':'bookings','訪客登記':'visitorRegister','報修服務':'services'};
+const ENTRY_LABELS:Record<string,string>={'預約公設':'facilities','查空時段':'availability','我的預約':'bookings','訪客登記':'visitorRegister','報修服務':'services','我的行事曆':'calendar'};
 const SERVICE_PHRASES:Record<string,string>={'我要報修':'repair.report','我要登記訪客':'visitor.notify','我要反映問題':'complaint.file'};
 const HOME_LABELS = ['服務首頁','主選單','選單','開始使用'];
 
 export type DispatchDeps = {
+  getBookingCalendar?: ReturnType<typeof makeBookingCalendar>;
   queryRecords?: (text: string, lineUserId: string) => Promise<string | undefined>;
   getAvailableSlots?: import('./handlers/resident').ResidentDeps['getAvailableSlots'];
   lineClient: LineClient;
@@ -170,9 +173,27 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
         let message: any;
         if (p.nav==='home') message=serviceHome((lineUser.role ?? 'resident') as any,lang);
         if (p.nav==='facilities' || p.nav==='availability') message=facilityCarousel(lang,p.nav==='availability' || lineUser.role!=='resident');
+        if (p.nav==='calendar') {
+          if (lineUser.role!=='resident') {
+            message=serviceActions('住戶行事曆','此入口提供住戶查看本人預約；物業請使用預約紀錄或管理後台。',[{type:'postback',label:'預約紀錄',data:'nav=bookings'},{type:'postback',label:'管理後台',data:'nav=portal'}]);
+          } else {
+            try {
+              if (!deps.getBookingCalendar) throw new Error('Calendar unavailable');
+              const month=p.month ?? taipeiToday().slice(0,7);
+              const calendar=deps.getBookingCalendar(userId,month,p.day,p.offset===undefined?0:Number(p.offset));
+              const portal=deps.bindWebUser(userId,lineUser.displayName);
+              message=calendarMessage(calendar,portal.url);
+            } catch {
+              message=serviceActions('行事曆暫時無法讀取','請重新開啟行事曆；若仍無法載入，可使用 Web 入口。',[{type:'postback',label:'重新開啟行事曆',data:'nav=calendar'},{type:'postback',label:'Web 行事曆入口',data:'nav=portal'}],'booking');
+            }
+          }
+        }
         if (p.nav==='portal') {
           const portal=deps.bindWebUser(userId,lineUser.displayName);
-          message=serviceActions(lineUser.role==='resident'?'我的行事曆':'管理後台','查看預約歷史與服務紀錄。',[{type:'uri',label:'開啟行事曆與紀錄',uri:portal.url}]);
+          message=serviceActions(lineUser.role==='resident'?'我的行事曆':'管理後台',lineUser.role==='resident'?'可留在 LINE 查日期與預約，或開啟 Web 查看完整行事曆及取消預約。':'查看預約歷史與服務紀錄。',[
+            ...(lineUser.role==='resident'?[{type:'postback',label:'LINE 內查看行事曆',data:'nav=calendar'}]:[]),
+            {type:'uri',label:lineUser.role==='resident'?'Web 完整行事曆':'開啟管理後台',uri:portal.url},
+          ]);
         }
         if (p.nav==='visitors' || p.nav==='services') {
           const actions=p.nav==='visitors'

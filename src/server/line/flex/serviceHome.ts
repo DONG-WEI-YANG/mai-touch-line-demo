@@ -11,7 +11,7 @@ export function homeQuickReply(context: ShortcutContext = 'home') {
 }
 export function serviceHome(role: 'resident'|'housekeeper'|'admin', lang: Lang) {
   const staff=role!=='resident';
-  const icons:Record<string,string>={facilities:'gym',availability:'calendar',bookings:'records',visitors:'visitors',visitorRegister:'visitors',workorders:'service',services:'service',portal:'portal'};
+  const icons:Record<string,string>={facilities:'gym',availability:'calendar',bookings:'records',visitors:'visitors',visitorRegister:'visitors',workorders:'service',services:'service',portal:'portal',calendar:'calendar'};
   const tiles = staff ? [
     ['公設空檔','依日期查看剩餘名額','availability'],
     ['空間預約','查詢住戶預約與關聯紀錄','bookings'],
@@ -24,7 +24,7 @@ export function serviceHome(role: 'resident'|'housekeeper'|'admin', lang: Lang) 
     ['我的預約','查看歷史與關聯訪客／車號','bookings'],
     ['訪客登記','登記來訪姓名與時間','visitorRegister'],
     ['報修與服務','報修、反映問題、查進度','services'],
-    ['我的行事曆','開啟住戶後台查看預約歷史','portal'],
+    ['我的行事曆','LINE 內查日期，也可開啟 Web','calendar'],
   ];
   return { type:'flex', altText:staff ? '物業服務中心' : '住戶服務中心', quickReply:homeQuickReply(), contents:{
     type:'bubble',size:'giga',

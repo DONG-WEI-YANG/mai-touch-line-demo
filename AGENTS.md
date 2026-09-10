@@ -225,3 +225,10 @@
 - 部署前Online Backup保存在/var/data/backups/pre-record-ux-20260910/；部署後完整性／外鍵檢查通過，28表筆數未減少。未重跑init，未改憑證。
 - 公開health db=ok／line=ready；直接呼叫LINE官方webhook/test成功200（06:32 UTC）。舊VM驗證腳本代理網址回404，不能當成官方測試結果；本機直連官方API驗證成功。
 - 16組訊息與rich menu官方格式驗證通過，未代發用戶訊息。沿用本輪109檔753測試、type-check、lint通過；真實手機旅程仍待驗收。程式尚未commit／push，簡報異動保留。
+
+## LINE／Web行事曆雙入口（2026-09-10）
+
+- 使用者要求兩種行事曆皆可使用；住戶首頁「我的行事曆」與同名文字改nav=calendar，LINE Flex月曆可前後月、今天、點日期查本人預約、單日每10筆分頁，保留Web完整行事曆／取消入口。舊nav=portal卡重新點擊提供LINE與Web雙選擇；物業維持管理後台。
+- 新booking-calendar.ts直接按LINE綁定appUserId與月份查SQLite，不沿用最近20筆清單，不回退共用種子帳戶；含已取消／已完成，拒絕無效年月日，失敗有重試與Web入口，不呼叫AI或建立預約。
+- 110檔762項測試、type-check、lint與後端bundle通過。LINE官方格式驗證通過六週空月及閏日10筆／多頁卡，未代發訊息；手機／桌面點擊仍待實機驗收。
+- 已部署GCP /opt/mai-touch/releases/calendar-20260910，server.js SHA256 9150df50aa779f1281102c5655b7dd7925cf3a6c563da6f0b641b46d7a7fd670，服務active、db=ok／line=ready；官方webhook/test成功200（07:31 UTC）。部署前快照pre-calendar-20260910，部署後完整性／外鍵檢查通過，28表筆數未減少，未重跑init。前端無變更。

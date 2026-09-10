@@ -148,6 +148,39 @@ describe('dispatcher command intercept', () => {
 
 
 describe('visible service entry points', () => {
+  it.each(['text','postback'])('opens the personal calendar from %s without AI or writes',async kind=>{
+    const getBookingCalendar=vi.fn().mockReturnValue({month:'2026-09',counts:{},bookings:[],offset:0});
+    const deps=mkDeps({getBookingCalendar,bindWebUser:vi.fn().mockReturnValue({url:'https://example.com/personal',isNew:false}),lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1})),upsert:vi.fn()}});
+    await dispatch([kind==='text'?mkTextEv('我的行事曆'):{type:'postback',replyToken:'rt',source:{userId:'U1'},postback:{data:'nav=calendar&month=2026-09&day=2026-09-12&offset=10'}}],deps);
+    expect(getBookingCalendar).toHaveBeenCalled();
+    expect(getBookingCalendar.mock.calls[0][0]).toBe('U1');
+    if(kind==='postback') expect(getBookingCalendar).toHaveBeenCalledWith('U1','2026-09','2026-09-12',10);
+    const json=JSON.stringify(deps.lineClient.replyOrPush.mock.calls[0][2]);
+    expect(json).toContain('Web 完整行事曆');
+    expect(deps.ai.classify).not.toHaveBeenCalled();
+    expect(deps.bookFn).not.toHaveBeenCalled();
+  });
+  it('keeps both choices on old portal cards',async()=>{
+    const deps=mkDeps({bindWebUser:vi.fn().mockReturnValue({url:'https://example.com/personal'}),lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1})),upsert:vi.fn()}});
+    await dispatch([{type:'postback',replyToken:'rt',source:{userId:'U1'},postback:{data:'nav=portal'}}],deps);
+    const json=JSON.stringify(deps.lineClient.replyOrPush.mock.calls[0][2]);
+    expect(json).toContain('nav=calendar');
+    expect(json).toContain('https://example.com/personal');
+  });
+  it('offers recovery when the calendar query fails',async()=>{
+    const deps=mkDeps({getBookingCalendar:vi.fn(()=>{throw new Error('database unavailable');})});
+    await dispatch([mkTextEv('我的行事曆')],deps);
+    const json=JSON.stringify(deps.lineClient.replyOrPush.mock.calls[0][2]);
+    expect(json).toContain('重新開啟行事曆');
+    expect(json).not.toContain('本月沒有預約');
+    expect(deps.ai.classify).not.toHaveBeenCalled();
+  });
+  it('does not expose resident calendar queries to staff',async()=>{
+    const deps=mkDeps({getBookingCalendar:vi.fn(),lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({role:'housekeeper',appUserId:3})),upsert:vi.fn()}});
+    await dispatch([mkTextEv('我的行事曆')],deps);
+    expect(deps.getBookingCalendar).not.toHaveBeenCalled();
+    expect(JSON.stringify(deps.lineClient.replyOrPush.mock.calls[0][2])).toContain('管理後台');
+  });
   it.each(['text','postback'])('opens terminal record details through %s without AI or writes',async kind=>{
     const deps=mkDeps({queryRecords:vi.fn().mockResolvedValue('紀錄與關聯：\nBK-1｜泳池')});
     const event=kind==='text'?mkTextEv('查詢 BK-1'):{type:'postback',replyToken:'rt',source:{userId:'U1'},postback:{data:`query=${encodeURIComponent('查詢 BK-1')}`}};

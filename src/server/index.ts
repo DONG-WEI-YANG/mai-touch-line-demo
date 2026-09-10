@@ -407,6 +407,8 @@ async function startServer() {
         return [...woItems, ...bkItems];
       };
       const records = makeRecordLinks(rawSqlite);
+      const { makeBookingCalendar } = await import('./line/booking-calendar');
+      const getBookingCalendar = makeBookingCalendar(rawSqlite, lineUserId => lineUserRepo.byLineId(channelId, lineUserId)?.appUserId ?? undefined);
       const queryRecords = makeRecordQuery({
         records, resolveAmenityId,
         actor: (lineUserId) => {
@@ -523,6 +525,7 @@ async function startServer() {
         pushHousekeepers,
         listMyOrders,
         queryRecords,
+        getBookingCalendar,
         getAvailableSlots,
         updateOrder,
         runSideEffect,
