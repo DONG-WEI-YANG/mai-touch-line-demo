@@ -6,6 +6,7 @@ import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { invalidateDomainCaches } from "@/lib/mutation-cache";
 import { trpc } from "@/lib/trpc";
+import { formatWorkOrder } from '@/lib/work-order-presentation';
 
 type WorkOrder = {
   workOrder: {
@@ -112,27 +113,28 @@ export default function LogisticsDashboardScreen() {
 
   const WorkOrderCard = ({ item }: { item: WorkOrder }) => {
     const wo = item.workOrder;
+    const display = formatWorkOrder(wo);
     return (
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.cardHeader}>
-          <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={1}>{wo.title}</Text>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>{display.title}</Text>
           <View style={[styles.statusBadge, { backgroundColor: woStatusColor[wo.status] + '22' }]}>
             <Text style={[styles.statusText, { color: woStatusColor[wo.status] }]}>{woStatusLabel[wo.status]}</Text>
           </View>
         </View>
         <View style={styles.chipRow}>
           <View style={[styles.chip, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}>
-            <Text style={[styles.chipText, { color: colors.primary }]}>#WO-{wo.id}</Text>
+            <Text style={[styles.chipText, { color: colors.primary }]}>#{display.reference}</Text>
           </View>
           <View style={[styles.chip, { backgroundColor: colors.muted + '15', borderColor: colors.muted + '40' }]}>
-            <Text style={[styles.chipText, { color: colors.foreground }]}>{categoryLabel[wo.category]}</Text>
+            <Text style={[styles.chipText, { color: colors.foreground }]}>{display.isVisitor ? '訪客登記' : categoryLabel[wo.category]}</Text>
           </View>
           <View style={[styles.chip, { backgroundColor: priorityColors[wo.priority] + '15', borderColor: priorityColors[wo.priority] + '40' }]}>
-            <Text style={[styles.chipText, { color: priorityColors[wo.priority] }]}>{wo.priority.toUpperCase()}</Text>
+            <Text style={[styles.chipText, { color: priorityColors[wo.priority] }]}>{display.priority}</Text>
           </View>
         </View>
-        <Text style={[styles.cardDescription, { color: colors.muted }]} numberOfLines={2}>
-          {wo.description || "No description provided."}
+        <Text style={[styles.cardDescription, { color: colors.muted }]}>
+          {display.description || '尚未提供說明'}
         </Text>
         <View style={styles.cardFooter}>
           <Text style={[styles.cardMeta, { color: colors.muted }]}>From: {item.userName || 'N/A'}</Text>

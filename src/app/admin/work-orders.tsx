@@ -6,6 +6,7 @@ import { ScreenContainer } from '@/components/screen-container';
 import { AdminHeader, AdminCard, AdminButton, AdminField } from '@/components/admin/admin-ui';
 import { parseError } from '@/lib/error-utils';
 import { invalidateDomainCaches } from '@/lib/mutation-cache';
+import { formatWorkOrder, workOrderPriorityLabel } from '@/lib/work-order-presentation';
 
 type WOStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
 const STATUS_OPTIONS: WOStatus[] = ['open', 'in_progress', 'resolved', 'closed'];
@@ -58,6 +59,8 @@ export default function AdminWorkOrdersPage() {
   };
 
   const confirmDelete = (id: number) => setDeleteTarget(id);
+  const deleteOrder = q.data?.find(({ workOrder }) => workOrder.id === deleteTarget)?.workOrder;
+  const deleteReference = deleteOrder ? formatWorkOrder(deleteOrder).reference : `WO-${deleteTarget}`;
 
   return (
     <ScreenContainer edges={['top']}>
@@ -67,7 +70,7 @@ export default function AdminWorkOrdersPage() {
       />
 
       {!!notice && <Text accessibilityRole="alert" style={{ color: colors.foreground, padding: 16 }}>{notice}</Text>}
-      {deleteTarget !== null && <AdminCard title={`刪除工單 WO-${deleteTarget}？`}>
+      {deleteTarget !== null && <AdminCard title={`刪除紀錄 ${deleteReference}？`}>
         <AdminButton title="確認刪除" type="danger" disabled={deleteMut.isPending} onPress={() => deleteMut.mutate({ id: deleteTarget })} />
         <AdminButton title="取消" type="secondary" disabled={deleteMut.isPending} onPress={() => setDeleteTarget(null)} />
       </AdminCard>}
@@ -105,13 +108,14 @@ export default function AdminWorkOrdersPage() {
 
         {rows.map((w) => {
           const statusColor = getStatusColor(w.status as WOStatus);
+          const display = formatWorkOrder(w);
           return (
             <AdminCard key={w.id} style={styles.woCard}>
               <View style={styles.cardHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.woTitle, { color: colors.foreground }]}>{w.title}</Text>
+                  <Text style={[styles.woTitle, { color: colors.foreground }]}>{display.title}</Text>
                   <Text style={[styles.woMeta, { color: colors.muted }]}>
-                    #WO-{w.id} · {w.userName ?? `User #${w.userId}`}
+                    #{display.reference} · {w.userName ?? `User #${w.userId}`}
                   </Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
@@ -119,13 +123,13 @@ export default function AdminWorkOrdersPage() {
                 </View>
               </View>
 
-              <Text style={[styles.description, { color: colors.foreground }]}>{w.description}</Text>
-              <Text style={{ color: colors.muted, marginBottom: 8 }}>負責人：{w.assignedTo || '尚未指派'} · 優先級：{w.priority}</Text>
+              <Text style={[styles.description, { color: colors.foreground }]}>{display.description || '尚未提供說明'}</Text>
+              <Text style={{ color: colors.muted, marginBottom: 8 }}>負責人：{w.assignedTo || '尚未指派'} · 優先級：{display.priority}</Text>
               <AdminButton title="指派與優先級" type="secondary" onPress={() => setAssignment({ id: w.id, assignedTo: w.assignedTo ?? '', priority: w.priority as 'low' | 'medium' | 'high' | 'urgent' })} />
               {assignment?.id === w.id && <View style={{ marginVertical: 12 }}>
                 <AdminField label="負責人／單位" value={assignment.assignedTo} onChangeText={(assignedTo) => setAssignment({ ...assignment, assignedTo })} />
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                  {(['low', 'medium', 'high', 'urgent'] as const).map((priority) => <AdminButton key={priority} title={{ low: '低', medium: '一般', high: '高', urgent: '緊急' }[priority]} type={assignment.priority === priority ? 'primary' : 'secondary'} onPress={() => setAssignment({ ...assignment, priority })} />)}
+                  {(['low', 'medium', 'high', 'urgent'] as const).map((priority) => <AdminButton key={priority} title={workOrderPriorityLabel(priority)} type={assignment.priority === priority ? 'primary' : 'secondary'} onPress={() => setAssignment({ ...assignment, priority })} />)}
                 </View>
                 <AdminButton title="儲存指派" disabled={updateMut.isPending} onPress={() => updateMut.mutate({ ...assignment, assignedTo: assignment.assignedTo.trim() })} />
                 <AdminButton title="取消編輯" type="secondary" onPress={() => setAssignment(null)} />

@@ -10,7 +10,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useApp } from "@/lib/app-context";
-import { useColorScheme } from "react-native";
+import { useThemePreference } from "@/hooks/use-theme-preference";
 import { useRouter } from "expo-router";
 import { trpc } from "@/lib/trpc";
 
@@ -19,7 +19,8 @@ type SettingItem = {
   title: string;
   subtitle?: string;
   icon: string;
-  type: "toggle" | "navigation" | "action";
+  type: "toggle" | "navigation" | "action" | "status";
+  disabled?: boolean;
   value?: boolean;
   onPress?: () => void;
   onToggle?: (value: boolean) => void;
@@ -28,7 +29,7 @@ type SettingItem = {
 export default function SettingsScreen() {
   const colors = useColors();
   const { logout } = useAuth();
-  const colorScheme = useColorScheme();
+  const { scheme, setTheme } = useThemePreference();
   const router = useRouter();
   const { state, setLanguage, t } = useApp();
   
@@ -36,8 +37,14 @@ export default function SettingsScreen() {
   const { data: user } = trpc.auth.me.useQuery();
   const isAdmin = user?.role === "admin";
 
-  const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(colorScheme === "dark");
+  const [savingTheme, setSavingTheme] = useState(false);
+  const changeTheme = (dark: boolean) => {
+    if (savingTheme) return;
+    setSavingTheme(true);
+    void setTheme(dark ? "dark" : "light")
+      .catch(() => Alert.alert(state.language === "en" ? "Theme not saved" : "主題未儲存", state.language === "en" ? "Please try again." : "請稍後重試。"))
+      .finally(() => setSavingTheme(false));
+  };
 
   // ── LINE binding (resident only) ────────────────────────────────────────
   // Poll bindStatus every 3s while a code is active so the UI flips to "✓
@@ -106,12 +113,10 @@ export default function SettingsScreen() {
   const preferenceSettings: SettingItem[] = [
     {
       id: "notifications",
-      title: "Notifications",
-      subtitle: "Push notifications for updates",
+      title: state.language === "en" ? "Push notifications" : "推播通知",
+      subtitle: state.language === "en" ? "Not configured for this Demo. View updates in the app or LINE." : "此 Demo 尚未啟用推播，請在服務頁面或 LINE 查看更新。",
       icon: "bell.fill",
-      type: "toggle",
-      value: notifications,
-      onToggle: setNotifications,
+      type: "status",
     },
     {
       id: "language",
@@ -124,11 +129,12 @@ export default function SettingsScreen() {
     {
       id: "theme",
       title: t("settings.dark_mode"),
-      subtitle: "Use dark color scheme",
+      subtitle: state.language === "en" ? "Apply across the app and remember on this device" : "套用全站深色外觀，並記住此裝置的選擇",
       icon: "moon.fill",
       type: "toggle",
-      value: darkMode,
-      onToggle: setDarkMode,
+      value: scheme === "dark",
+      onToggle: changeTheme,
+      disabled: savingTheme,
     },
   ];
 
@@ -155,13 +161,12 @@ export default function SettingsScreen() {
   });
 
   const renderSettingItem = (item: SettingItem) => {
+    const Container = item.type === 'toggle' || item.type === 'status' ? View : TouchableOpacity;
     return (
-      <TouchableOpacity
+      <Container
         key={item.id}
         style={[styles.settingItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={item.onPress}
-        activeOpacity={item.type === "toggle" ? 1 : 0.7}
-        disabled={item.type === "toggle"}
+        {...(Container === TouchableOpacity ? {onPress:item.onPress,activeOpacity:0.7} : {})}
       >
         <View style={[styles.iconContainer, { backgroundColor: colors.primary + "20" }]}>
           <IconSymbol name={item.icon as any} size={20} color={colors.primary} />
@@ -177,6 +182,8 @@ export default function SettingsScreen() {
         {item.type === "toggle" && item.onToggle && (
           <Switch
             value={item.value}
+            disabled={item.disabled}
+            accessibilityLabel={item.title}
             onValueChange={item.onToggle}
             trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor="#fff"
@@ -186,7 +193,7 @@ export default function SettingsScreen() {
         {item.type === "navigation" && (
           <IconSymbol name="chevron.right" size={20} color={colors.muted} />
         )}
-      </TouchableOpacity>
+      </Container>
     );
   };
 

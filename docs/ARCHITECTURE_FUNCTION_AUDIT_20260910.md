@@ -101,7 +101,7 @@ P1＝影響核心功能或帳戶／紀錄正確性；P2＝限制正式上線、�
 | A08 | 已修復／發布 | 交易outbox、持久重試、續租、逐收件人紀錄、同紀錄通知排序、後台失敗統計；移除重複best-effort推送 |
 | A09 | 已修復／發布（SQLite） | Web／離線／LINE／語音requestId，SQLite IMMEDIATE交易與trigger；多Node程序及回覆遺失重送測試通過 |
 | A10 | 已隔離可信性／發布 | 舊門禁來源unverified、新自述demo、強制本人；UI不宣稱實體開門成功。可信硬體上報入口尚未完成 |
-| A11 | 部分完成，保持開啟 | 備份／禁止覆寫／GCS重新下載／新檔還原腳本與5項測試完成；未建立私人bucket、啟用排程、實際GCS往返或告警。見OFFSITE_BACKUP_RUNBOOK.md |
+| A11 | 異地與操作端排程完成，告警待補 | 2026-09-10核准後建立私人bucket、14天生命週期；真實GCS重新下載及新檔還原通過，Windows每日09:00排程實跑成功。依賴操作電腦登入，外部失敗告警與無人值守VM自主備份未完成。見OFFSITE_BACKUP_RUNBOOK.md |
 | A12 | 已修復／發布 | 整體狀態取真實診斷，選配NLP未啟用不誤判核心失效，顯示錯誤／備援／檢查時間；線上瀏覽器確認 |
 | A13 | 已修復／發布 | 納入明確env建置、manifest、migration、快照、原子切換及回退腳本；本次實際使用並驗證。見CURRENT_RELEASE_RUNBOOK.md |
 

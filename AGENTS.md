@@ -1,5 +1,19 @@
 # 專案記憶
 
+## 設定與訪客顯示修正（2026-09-10）
+
+- 使用者兩張截圖指出深色開關無效及訪客JSON外洩到畫面。useColors改共用持久theme override，未設定跟隨系統，保存失敗提示；移除未接推播的假開關，改真實未啟用說明與中英文字。
+- work-order-presentation統一住戶activity、logistics-dashboard及admin/work-orders顯示：訪客V-單號、姓名／人數／日期／時間分欄、優先級中文；不改DB原始內容、ID或操作API。
+- 127檔839項測試、type-check、lint及正式env清快取build通過；前端bundle entry-4f2adda1f1ff531b05187efbe74c141c.js，後端沒有新變更。
+- Firebase發布成功；真實瀏覽器點擊深色開關、畫面色票與reload後checked=true通過；修掉TouchableOpacity disabled父層導致Switch被標停用。物業V-10訪客卡姓名／人數／日期／時間已在線上確認；未操作工單狀態或撤銷登入。
+
+## 私人GCS異地備份啟用（2026-09-10）
+
+- 使用者明確核准建立私人Cloud Storage桶、保留14天。已建立mai-touch-history-20260908-backups（us-west1），PAP=enforced／uniform=true，bucket policy指定kevin操作帳戶，移除預設projectViewer/Editor legacy bindings；專案繼承管理權限仍適用。
+- mai-touch/前綴滿14天Delete，soft delete=0，無retention lock。首次實際上傳、重新下載、SHA256及新檔SQLite還原驗證通過，receipt在忽略的_local/offsite/30035d97d2a54ec58a9dd74fa473725f/receipt.json；未覆寫線上DB。
+- Windows工作MaiTouch-OffsiteBackup每日台北09:00，錯過補跑、15分鐘重試3次、上限1小時、Interactive目前Windows帳戶。排程手動啟動亦產生成功receipt b68874d935254da2bf5832da1728d099。仍依賴操作電腦開機登入、網路與gcloud有效登入；未接外部失敗告警，不是VM自主備份。
+- A11由「未建立bucket」更新為「實際異地往返與操作端排程完成，無人值守／外部告警待完成」。详見docs/OFFSITE_BACKUP_RUNBOOK.md。
+
 ## 13項架構修復與發布（2026-09-10）
 
 - 使用者要求處理全部13項。A01–A05、A07–A09、A12–A13已實作發布；A06／A10已隔離模擬與自述，未接真實设备ACK／可信上報；A11僅完成腳本與測試，私人bucket、排程及真實異地還原未啟用，不可宣稱13項全部關閉。

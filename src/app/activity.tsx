@@ -9,6 +9,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useApp } from "@/lib/app-context";
 import { TranslationKey } from "@/lib/i18n";
+import { formatWorkOrder } from '@/lib/work-order-presentation';
 
 type TabType = "active" | "completed" | "all";
 
@@ -71,6 +72,7 @@ export default function ActivityScreen() {
   });
 
   const renderWorkOrder = useCallback(({ item }: { item: WorkOrder }) => {
+    const display = formatWorkOrder(item, state.language);
     const statusColor = STATUS_COLORS[item.status];
     const priorityColor = PRIORITY_COLORS[item.priority];
     
@@ -92,21 +94,21 @@ export default function ActivityScreen() {
           <View style={styles.orderHeader}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.orderTitle, { color: colors.foreground }]} numberOfLines={1}>
-                {item.title}
+                {display.title}
               </Text>
-              <Text style={[styles.orderCategory, { color: colors.muted }]}>{categoryLabel}</Text>
+              <Text style={[styles.orderCategory, { color: colors.muted }]}>#{display.reference} · {display.isVisitor ? (state.language === 'en' ? 'Visitor' : '訪客登記') : categoryLabel}</Text>
             </View>
             <View style={[styles.priorityBadge, { backgroundColor: priorityColor + "20" }]}>
               <Text style={[styles.priorityText, { color: priorityColor }]}>
-                {item.priority.toUpperCase()}
+                {display.priority}
               </Text>
             </View>
           </View>
 
           {/* Description */}
-          {item.description && (
-            <Text style={[styles.orderDescription, { color: colors.foreground, opacity: 0.8 }]} numberOfLines={2}>
-              {item.description}
+          {display.description && (
+            <Text style={[styles.orderDescription, { color: colors.foreground, opacity: 0.8 }]}>
+              {display.description}
             </Text>
           )}
 
@@ -125,7 +127,7 @@ export default function ActivityScreen() {
         </View>
       </View>
     );
-  }, [colors, t]);
+  }, [colors, t, state.language]);
 
   return (
     <ScreenContainer edges={["top"]}>

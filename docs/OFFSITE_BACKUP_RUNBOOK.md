@@ -1,15 +1,17 @@
-# 異地備份與還原演練（待啟用）
+# 異地備份與還原演練
 
-此輪只新增操作腳本與本機還原測試。**尚未建立 bucket、未安裝排程，也沒有完成真實 GCS 上傳／下載演練。** 目前 VM 每日備份仍在同一磁碟，不能當作異地保障。
+2026-09-10使用者核准後已建立 `gs://mai-touch-history-20260908-backups`（us-west1），完成真實GCS上傳／下載與新檔還原驗證。Public Access Prevention=enforced、uniform access=true；bucket IAM僅指定操作帳戶kevin19830331@gmail.com，移除新桶預設的projectViewer／Editor legacy授權（專案層繼承權限仍適用）。
+
+生命週期為`mai-touch/`前綴滿14天Delete，soft delete=0，避免刪除後再額外保留7天；沒有retention lock或版本保留。生命週期為非同步執行，不承諾恰好滿14天即刪除。首次驗證receipt：`_local/offsite/30035d97d2a54ec58a9dd74fa473725f/receipt.json`，SHA256=905ec719efdfa45c1eb57378def0a46652646eabf42d29972c54e94a62403816，integrity與foreign keys通過，未覆寫線上DB。
 
 ## 核准後的一次性準備
 
 先確認既有私人 bucket，或核准新增 Cloud Storage 的費用與權限後再建立。不要用 Firebase Hosting 的公開素材位置。建議使用專用 bucket，啟用 uniform bucket-level access 與 public access prevention，僅授權指定操作帳戶讀寫備份；不授權 `allUsers`／`allAuthenticatedUsers`。腳本會拒絕沒有明確 enforced 防公開設定的 bucket。
 
-以下為**待核准後手動執行**的模板，尚未執行；請先換掉占位名稱與帳號：
+以下保留重建模板，既有bucket不用重建；請先換掉占位名稱與帳號：
 
 ```powershell
-gcloud storage buckets create gs://PRIVATE_BACKUP_BUCKET --project=mai-touch-history-20260908 --account=OPERATOR_ACCOUNT --location=us-west1 --uniform-bucket-level-access --public-access-prevention
+gcloud storage buckets create gs://PRIVATE_BACKUP_BUCKET --project=mai-touch-history-20260908 --account=OPERATOR_ACCOUNT --location=us-west1 --uniform-bucket-level-access --public-access-prevention --soft-delete-duration=0
 gcloud storage buckets update gs://PRIVATE_BACKUP_BUCKET --project=mai-touch-history-20260908 --account=OPERATOR_ACCOUNT --lifecycle-file=scripts/gcp-backup-lifecycle.json
 ```
 
@@ -28,7 +30,11 @@ gcloud storage buckets update gs://PRIVATE_BACKUP_BUCKET --project=mai-touch-his
 
 成功才寫 `_local/offsite/<run-id>/receipt.json`，記錄物件、SHA256、驗證時間；結束碼 0 才算成功。失敗結束碼 1，日誌只含階段、不含憑證或 DB 資料。檢查失敗階段後重跑會使用新 UUID；不把僅成功上傳當成已完成演練。快照含個資與 token，本機 `_local` 必須使用受限帳戶／磁碟加密，不可提交或放到 public。腳本保留本機演練檔供查驗，操作人需依保留政策清理；VM 原備份沿用既有 14 份輪替。IAP 中途中斷可能留下 `/tmp/mai-touch-offsite-<run-id>.db`，核對 run ID 後由原操作帳戶清除該單一暫存檔。
 
-## 排程與失敗追蹤（尚未設定）
+## 排程與失敗追蹤
+
+2026-09-10建立Windows工作`MaiTouch-OffsiteBackup`，每日台北09:00執行，錯過後補跑、每15分鐘重試共3次、單次上限1小時、不重疊執行。使用目前Windows帳戶Interactive登入、隱藏PowerShell視窗；不保存帳戶密碼。此為本機操作端排程，仍依賴電腦開機、使用者登入與gcloud有效登入。尚未接外部失敗告警，不可宣稱無人值守VM自主備份。
+
+首次排程實跑16:56:52啟動，16:58:35產生`_local/offsite/b68874d935254da2bf5832da1728d099/receipt.json`，LastTaskResult=0；下一次2026-09-11 09:00。匿名HEAD讀取首份物件回403。兩次驗證均未修改線上資料庫。可用`Get-ScheduledTaskInfo -TaskName MaiTouch-OffsiteBackup`檢查最近結果；不能把一次成功當成未來每日都已成功。
 
 核准並完成一次真實演練後，可在 Windows 工作排程器建立每日工作，使用同一已驗證帳戶執行 `pwsh -NoProfile -File <repo>/scripts/gcp-offsite-backup.ps1 -Bucket <bucket> -Account <account>`；設定錯過時間後補跑與失敗通知，將工作最後結果非 0 或最新 receipt 超過 26 小時視為告警。此方案依賴操作電腦開機、網路、gcloud 登入與 IAP 可用，並非 VM 自主備份。未接好告警前仍需操作人每日檢查工作結果。名目每日 RPO 為 24 小時，離線或工作失敗時會超過；RTO 尚未實測。
 
