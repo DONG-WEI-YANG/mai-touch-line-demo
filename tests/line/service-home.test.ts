@@ -9,6 +9,23 @@ it('uses postback navigation and SVG-derived HTTPS icons',()=>{
   expect(JSON.stringify(facilityCarousel('zh-TW'))).toContain('/line-icons/pool.png');
   expect(serviceHome('housekeeper','zh-TW').contents.body.contents.flatMap(row=>row.contents).some(c=>c.action.data==='nav=workorders')).toBe(true);
 });
+it('ends a single-record lookup with an explicit empty relationship and return actions',()=>{
+  const result=recordResult('紀錄與關聯：\nBK-1｜泳池','查詢 BK-1');
+  const json=JSON.stringify(result);
+  expect(json).toContain('尚無關聯紀錄');
+  expect(json).not.toContain('query=');
+  expect(json).toContain('nav=bookings');
+  expect(json).toContain('nav=home');
+});
+it('shows linked records as a terminal detail view for typed and postback lookup syntax',()=>{
+  const result=recordResult('紀錄與關聯：\nWO-2｜報修\nV-3｜訪客','查wo-2');
+  const json=JSON.stringify(result);
+  expect(json).toContain('WO-2');
+  expect(json).toContain('V-3');
+  expect(json).not.toContain('尚無關聯紀錄');
+  expect(json).not.toContain('query=');
+  expect(json).toContain('nav=workorders');
+});
 it('shows record cards with links and preserves overflow',()=>{
   const text=Array.from({length:12},(_,i)=>`BK-${i+1}｜泳池`).join('\n');
   const result=recordResult(text);

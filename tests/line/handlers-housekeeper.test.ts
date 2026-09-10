@@ -26,7 +26,7 @@ describe('housekeeper handler', () => {
     expect(updateOrder).toHaveBeenCalledWith('BK-1', { status:'closed', rejectedBy:'H1' });
   });
 
-  it('on /reassign postback, replies "coming v2" without DB update', async () => {
+  it('directs legacy reassign cards to the management portal without DB update', async () => {
     const updateOrder = vi.fn();
     const client = mkClient();
     await handleHousekeeper(
@@ -35,7 +35,11 @@ describe('housekeeper handler', () => {
       { client: client as any, updateOrder, lineUser: baseLineUser as any });
     expect(updateOrder).not.toHaveBeenCalled();
     expect(client.replyOrPush).toHaveBeenCalledWith(expect.anything(), 'H1',
-      expect.objectContaining({ type:'text', text: expect.stringMatching(/v2|reassign/i) }));
+      expect.objectContaining({ type:'flex' }));
+    const message = JSON.stringify(client.replyOrPush.mock.calls[0][2]);
+    expect(message).toContain('nav=portal');
+    expect(message).toContain('尚未變更');
+    expect(message).not.toContain('coming in v2');
   });
 
   it('ignores text messages (not in housekeeper flow yet)', async () => {

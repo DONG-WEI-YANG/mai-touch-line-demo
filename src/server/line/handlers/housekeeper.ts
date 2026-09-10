@@ -2,6 +2,7 @@ import type { LineClient } from '../line-client';
 import type { Lang } from '../ai/types';
 import { parsePostback } from '../postback';
 import { t } from '../flex/i18n';
+import { serviceActions } from '../flex/serviceHome';
 
 export type HousekeeperDeps = {
   client: LineClient;
@@ -33,7 +34,12 @@ export async function handleHousekeeper(ev: any, deps: HousekeeperDeps): Promise
         await reply(`❌ ${p.wo} ${t('workorder.new.btn.reject', lang)}`);
         break;
       case 'reassign':
-        await reply(`🔁 ${p.wo} (reassign — coming in v2)`);
+        await deps.client.replyOrPush(ev.replyToken, userId, serviceActions(
+          '工單指派',
+          `${p.wo} 尚未變更指派。請開啟管理後台，在工單管理選擇處理人員。`,
+          [{ type: 'postback', label: '管理後台', data: 'nav=portal' }],
+          'services',
+        ));
         break;
       default:
         // unknown action — ignore

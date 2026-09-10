@@ -232,7 +232,10 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
   }
   if (session.intent === 'facility.cancel') {
     deps.store.set(userId, { ...newSession(userId, lang), step: 'IDLE' });
-    await deps.client.replyOrPush(ev.replyToken, userId, { type: 'text', text: t('facility.cancel.howto', lang) });
+    await deps.client.replyOrPush(ev.replyToken, userId, serviceActions('取消預約', t('facility.cancel.howto', lang), [
+      { type: 'postback', label: '查看我的預約', data: 'nav=bookings' },
+      { type: 'postback', label: '開啟 Web 管理預約', data: 'nav=portal' },
+    ], 'booking'));
     return;
   }
   if (session.intent === 'workorder.status') {

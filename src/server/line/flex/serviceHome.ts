@@ -59,8 +59,12 @@ export function serviceActions(title: string, description: string, actions: any[
     ]},
   }};
 }
-export function recordResult(text: string): any {
+export function recordResult(text: string, query = ''): any {
   const rows=text.split('\n').filter(line=>/^(?:BK|V|P|WO)-\d+｜/.test(line));
+  const detailRef=/^(?:查詢|查)\s*((?:BK|V|P|WO)-\d+)$/i.exec(query.trim())?.[1].toUpperCase();
+  const returnNav=detailRef?.startsWith('BK-')?'bookings':detailRef?.startsWith('WO-')?'workorders':'visitors';
+  const returnActions=[{type:'postback',label:'回紀錄清單',data:`nav=${returnNav}`}];
+  if (detailRef && !rows.length) return serviceActions('紀錄查詢',text,returnActions);
   if (!rows.length) return {type:'text',text,quickReply:homeQuickReply()};
   const cards=rows.slice(0,10).map(line=>{
     const split=line.indexOf('｜');
@@ -68,7 +72,11 @@ export function recordResult(text: string): any {
     return {type:'bubble',size:'kilo',body:{type:'box',layout:'vertical',spacing:'md',contents:[
       {type:'text',text:ref,color:'#8B6C35',weight:'bold',size:'lg'},
       {type:'text',text:line.slice(split+1),color:'#202020',wrap:true,size:'sm'},
-    ]},footer:{type:'box',layout:'vertical',contents:[{type:'button',style:'secondary',action:{type:'postback',label:'查看關聯紀錄',data:`query=${encodeURIComponent('查詢 '+ref)}`}}]}};
+      ...(detailRef?[{type:'text',text:ref===detailRef?(rows.length===1?'尚無關聯紀錄':`關聯紀錄 ${rows.length-1} 筆`):`關聯至 ${detailRef}`,wrap:true,size:'xs',color:'#626262'}]:[]),
+    ]},footer:{type:'box',layout:'vertical',contents:(detailRef
+      ? [...returnActions,{type:'postback',label:'回服務首頁',data:'nav=home'}]
+      : [{type:'postback',label:'查看詳情與關聯',data:`query=${encodeURIComponent('查詢 '+ref)}`}]
+    ).map(action=>({type:'button',style:'secondary',action}))}};
   });
   const result={type:'flex',altText:`服務紀錄 ${rows.length} 筆`,contents:{type:'carousel',contents:cards},quickReply:homeQuickReply()};
   return rows.length>10 ? [result,{type:'text',text:'其餘紀錄：\n'+rows.slice(10).join('\n'),quickReply:homeQuickReply()}] : result;

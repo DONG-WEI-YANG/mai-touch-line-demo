@@ -63,7 +63,7 @@ const dict: Record<I18nKey, Record<Lang, string>> = {
   'menu.status':              { 'zh-TW':'查詢工單',   en:'Check my orders',   ja:'依頼状況' },
   'myorders.title':           { 'zh-TW':'您目前的工單與預約', en:'Your work orders & bookings', ja:'依頼・予約一覧' },
   'myorders.empty':           { 'zh-TW':'您目前沒有進行中的工單或預約。', en:'You have no active work orders or bookings.', ja:'進行中の依頼・予約はありません。' },
-  'facility.cancel.howto':    { 'zh-TW':'要取消預約嗎?請回覆「查詢工單」查看您的預約編號,再聯繫管理室,或從 App 的「我的預約」操作。', en:'To cancel a booking, reply "Check my orders" to see the booking ref, then contact the front desk or use the app.', ja:'予約をキャンセルするには「依頼状況」と返信して予約番号を確認し、フロントまたはアプリでお手続きください。' },
+  'facility.cancel.howto':    { 'zh-TW':'可先查看我的預約，再開啟 Web 的「我的預約」，選取待確認或已確認的預約並確認取消。開啟入口不會取消預約；請以頁面顯示的取消結果為準。', en:'View your bookings, then open My Bookings on the web. Select a pending or confirmed booking and confirm cancellation. Opening the page does not cancel a booking; check the cancellation result on the page.', ja:'予約一覧を確認し、Webの「マイ予約」で確認待ちまたは確認済みの予約を選んでキャンセルを確定してください。ページを開くだけではキャンセルされません。画面の処理結果をご確認ください。' },
 };
 
 export function t(key: I18nKey, lang: Lang): string {

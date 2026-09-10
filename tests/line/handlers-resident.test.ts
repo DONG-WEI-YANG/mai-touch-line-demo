@@ -112,7 +112,7 @@ describe('resident handler — facility.book happy path', () => {
     expect(store.get('U1')?.step).toBe('IDLE');
   });
 
-  it('facility.cancel replies with text guidance, no work order', async () => {
+  it('facility.cancel opens booking guidance and working navigation without a work order', async () => {
     const ai = mkAi({ intent: 'facility.cancel', confidence: 0.9, slots: {}, language: 'zh-TW' });
     const client = mkClient();
     const reportFn = vi.fn();
@@ -122,7 +122,13 @@ describe('resident handler — facility.book happy path', () => {
       bookFn: vi.fn(), reportFn, pushHousekeepers: vi.fn(), listMyOrders: vi.fn().mockResolvedValue([]),
     });
     const msg = (client.replyOrPush as any).mock.calls.at(-1)?.[2];
-    expect(msg.type).toBe('text');
+    expect(msg.type).toBe('flex');
+    const json = JSON.stringify(msg);
+    expect(json).toContain('nav=bookings');
+    expect(json).toContain('nav=portal');
+    expect(json).toContain('確認取消');
+    expect(json).not.toContain('查詢工單');
+    expect(store.get('U1')?.step).toBe('IDLE');
     expect(reportFn).not.toHaveBeenCalled();
   });
 

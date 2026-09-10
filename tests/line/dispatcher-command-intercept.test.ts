@@ -148,6 +148,19 @@ describe('dispatcher command intercept', () => {
 
 
 describe('visible service entry points', () => {
+  it.each(['text','postback'])('opens terminal record details through %s without AI or writes',async kind=>{
+    const deps=mkDeps({queryRecords:vi.fn().mockResolvedValue('紀錄與關聯：\nBK-1｜泳池')});
+    const event=kind==='text'?mkTextEv('查詢 BK-1'):{type:'postback',replyToken:'rt',source:{userId:'U1'},postback:{data:`query=${encodeURIComponent('查詢 BK-1')}`}};
+    await dispatch([event],deps);
+    expect(deps.queryRecords).toHaveBeenCalledWith('查詢 BK-1','U1');
+    const message=JSON.stringify(deps.lineClient.replyOrPush.mock.calls[0][2]);
+    expect(message).toContain('尚無關聯紀錄');
+    expect(message).toContain('nav=bookings');
+    expect(message).not.toContain('query=');
+    expect(deps.ai.classify).not.toHaveBeenCalled();
+    expect(deps.bookFn).not.toHaveBeenCalled();
+    expect(deps.updateOrder).not.toHaveBeenCalled();
+  });
   it.each(['預約公設','查空時段','我的預約','報修服務'])('routes desktop label %s without AI', async text => {
     const deps=mkDeps({lineUserRepo:{byLineId:vi.fn().mockReturnValue(mkLineUserRow({appUserId:1})),upsert:vi.fn()},queryRecords:vi.fn(async (text:string)=>text==='查詢空間預約單'?'查無紀錄':undefined)});
     await dispatch([mkTextEv(text)],deps);

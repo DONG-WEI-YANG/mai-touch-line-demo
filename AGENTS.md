@@ -201,3 +201,27 @@
 - 回歸測試先重現後通過；109檔749項測試、type-check、lint通過，13組LINE訊息及rich menu官方格式驗證通過。
 - 已發布GCP /opt/mai-touch/releases/context-menu-20260910；server.js SHA256 0ebd6293cb203f34d2fb1e287af1ce7539d145967ab2e9a352ed0daab2f8b2ed一致，公開health及LINE webhook/test成功200。切換前快照已驗證，未重跑init、未代發用戶訊息。前端無變更。
 - 舊聊天卡片不會重寫，需重新開啟報修服務取得新卡；尚待使用者實機確認。
+
+## LINE未完成轉派入口修正（2026-09-10，本機）
+
+- 接續UX-09：新工單卡移除只回coming in v2的轉派按鈕；舊卡仍可收到清楚的尚未變更說明與nav=portal管理後台入口，沿用既有帳戶綁定，未直接修改工單。
+- 兩項既有測試改為回歸要求，先失敗後通過；109檔749項測試、type-check、lint通過。
+- 本輪未commit／push／deploy，未代發LINE訊息；UX-08關聯卡迴圈及其餘旅程驗收仍待接續。簡報既有異動保留。
+
+## LINE關聯紀錄迴圈修正（2026-09-10，本機）
+
+- 接續UX-08：recordResult接收原查詢，清單提供詳情入口；單號查詢的詳情卡不再查詢自身，無關聯明確提示，保留回原單號類別清單與首頁。查無紀錄亦保留出口，超過10張卡的文字紀錄仍保留。
+- 兩項卡片回歸先失敗後通過，另補文字／postback查單整合測試，確認不呼叫AI或寫入；109檔753項測試、type-check、lint通過。
+- 與前輪UX-09均仍為本機未提交／未發布；未進行官方Flex格式或真實LINE點擊驗收，未代發訊息。既有簡報異動保留。
+
+## LINE取消指引修正與Demo QR（2026-09-10，本機）
+
+- UX-11取消指引改Flex，提供nav=bookings與nav=portal，說明在Web我的預約確認取消，移除中英日文中的錯誤工單查詢指引。回歸先失敗後通過；109檔753項測試、type-check、lint通過，尚未提交／部署或實機驗收。
+- Demo加入好友既有素材：_local/line-friend-qr.png與.svg，公開資料檔line-friend-public.json記錄maitouchdemo、@679ntrul、https://line.me/R/ti/p/%40679ntrul。使用者要求提供QR，已找到並檢視既有PNG，未代發LINE訊息。
+
+## LINE紀錄與取消UX部署（2026-09-10）
+
+- 使用者要求部署；UX-08關聯詳情、UX-09未完成轉派入口及UX-11取消指引已發布至GCP /opt/mai-touch/releases/record-ux-20260910，server.js SHA256 6a12a873fab65def8dde4afe64a47561dff49e42cdfe038548f53852f14c818e與本機一致。依賴package.json雜湊一致，沿用Linux依賴，前端無變更。
+- 部署前Online Backup保存在/var/data/backups/pre-record-ux-20260910/；部署後完整性／外鍵檢查通過，28表筆數未減少。未重跑init，未改憑證。
+- 公開health db=ok／line=ready；直接呼叫LINE官方webhook/test成功200（06:32 UTC）。舊VM驗證腳本代理網址回404，不能當成官方測試結果；本機直連官方API驗證成功。
+- 16組訊息與rich menu官方格式驗證通過，未代發用戶訊息。沿用本輪109檔753測試、type-check、lint通過；真實手機旅程仍待驗收。程式尚未commit／push，簡報異動保留。

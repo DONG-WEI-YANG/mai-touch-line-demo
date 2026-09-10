@@ -194,7 +194,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       }
       if (p.query && deps.queryRecords) {
         const response=await deps.queryRecords(p.query,userId);
-        await deps.lineClient.replyOrPush(ev.replyToken,userId,recordResult(response ?? '請從服務首頁選擇查詢項目'));
+        await deps.lineClient.replyOrPush(ev.replyToken,userId,recordResult(response ?? '請從服務首頁選擇查詢項目',p.query));
         continue;
       }
       if (lineUser.role==='resident' && ['visitor.notify','repair.report','complaint.file'].includes(p.flow) && !(deps.store.get(userId)?.intent === p.flow && deps.store.get(userId)?.step === 'SLOT_FILLING')) {
@@ -216,7 +216,7 @@ export async function dispatch(events: any[], deps: DispatchDeps): Promise<void>
       if (ev.type === 'message' && ev.message?.type === 'text' && deps.queryRecords) {
         const response = await deps.queryRecords(ev.message.text, userId);
         if (response !== undefined) {
-          await deps.lineClient.replyOrPush(ev.replyToken, userId, recordResult(response));
+          await deps.lineClient.replyOrPush(ev.replyToken, userId, recordResult(response,ev.message.text));
           continue;
         }
       }
