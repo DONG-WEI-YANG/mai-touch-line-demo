@@ -42,13 +42,16 @@ function createGateway({backendOrigin,lineToken,lineFetch=fetch}) {
       if(!allowedLine.has(`${req.method} ${path}`)) { res.writeHead(404).end(); return; }
       try {
         const body=await readBody(req);
+        const retryKey=req.headers['x-line-retry-key'];
+        if(retryKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(retryKey))) { res.writeHead(400).end(); return; }
         const response=await lineFetch(`https://api.line.me${path}`,{
           method:req.method,
-          headers:{Authorization:`Bearer ${lineToken}`,'Content-Type':'application/json'},
+          headers:{Authorization:`Bearer ${lineToken}`,'Content-Type':'application/json',...(retryKey?{'X-Line-Retry-Key':retryKey}:{})},
           ...(req.method==='GET'?{}:{body}),
           redirect:'error',signal:AbortSignal.timeout(15000),
         });
         res.setHeader('content-type',response.headers.get('content-type') || 'application/json');
+        if(response.headers.get('x-line-accepted-request-id')) res.setHeader('x-line-accepted-request-id',response.headers.get('x-line-accepted-request-id'));
         res.writeHead(response.status).end(Buffer.from(await response.arrayBuffer()));
       } catch(error) {
         if(!res.headersSent) res.writeHead(error.status || 502);

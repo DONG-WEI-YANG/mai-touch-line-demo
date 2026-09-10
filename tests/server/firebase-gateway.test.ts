@@ -42,3 +42,13 @@ it('preserves LINE error status and JSON so expired reply tokens can fall back',
   const res=await request(app).post('/_line/v2/bot/message/reply').set('authorization','Bearer secret').send({replyToken:'expired',messages:[]});
   expect(res.status).toBe(400); expect(res.body.message).toBe('Invalid reply token');
 });
+
+it('forwards LINE retry key and accepted-request acknowledgement for duplicate delivery',async()=>{
+ const key='af2f390b-91cc-4ffb-a7a9-5bdca06fe632';
+ const app=createGateway({backendOrigin:'http://127.0.0.1:1',lineToken:'secret',lineFetch:async(_url:string,init:any)=>{
+  expect(init.headers['X-Line-Retry-Key']).toBe(key);
+  return new Response('{}',{status:409,headers:{'x-line-accepted-request-id':'accepted-id'}});
+ }});
+ const res=await request(app).post('/_line/v2/bot/message/push').set('authorization','Bearer secret').set('X-Line-Retry-Key',key).send({to:'U1',messages:[]});
+ expect(res.status).toBe(409);expect(res.headers['x-line-accepted-request-id']).toBe('accepted-id');
+});

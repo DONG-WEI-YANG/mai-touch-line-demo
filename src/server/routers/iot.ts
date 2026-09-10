@@ -1,3 +1,4 @@
+import { requireSimulationMode, simulationResult } from "../services/deviceExecution";
 import { residentProcedure, adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
@@ -33,7 +34,8 @@ export const iotRouter = router({
         if (!ownsDevice) throw new Error("Unauthorized to control this device");
       }
 
+      requireSimulationMode();
       await db.updateDeviceStatus(input.deviceId, input.status);
-      return { success: true };
+      return simulationResult;
     }),
 });

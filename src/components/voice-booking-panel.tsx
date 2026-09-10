@@ -6,7 +6,7 @@
  * 櫃台版共用本元件,只差注入的 command / commit 兩個函式。
  * 設計見 docs/superpowers/specs/2026-07-12-voice-booking-design.md。
  */
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState, useRef } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useColors } from "@/hooks/use-colors";
 import type { ColorScheme } from "@/hooks/color-palettes";
@@ -36,7 +36,7 @@ type Audio = { audioBase64: string; mimeType: string };
 
 type Props = {
   command: (audio: Audio) => Promise<VoiceProposal>;
-  commit: (intent: string, slots: VoiceSlots) => Promise<{ ref: string }>;
+  commit: (intent: string, slots: VoiceSlots, requestId: string) => Promise<{ ref: string }>;
   /** Optional gate — e.g. property desk must pick a resident before recording. */
   disabled?: boolean;
   disabledHint?: string;
@@ -64,6 +64,7 @@ export function VoiceBookingPanel({ command, commit, disabled, disabledHint, pal
   const [slots, setSlots] = useState<VoiceSlots>({});
   const [resultRef, setResultRef] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const request=useRef<{payload:string;id:string}|null>(null);
 
   const busy = phase === "thinking" || phase === "committing";
   const recording = voice.state === "recording";
@@ -77,11 +78,13 @@ export function VoiceBookingPanel({ command, commit, disabled, disabledHint, pal
   }, [proposal, slots]);
 
   const reset = useCallback(() => {
+    request.current=null;
     setPhase("idle"); setProposal(null); setSlots({}); setResultRef(null); setErrorMsg(null);
   }, []);
 
   const onPressIn = useCallback(async () => {
     if (disabled || busy) return;
+    request.current=null;
     setErrorMsg(null); setResultRef(null); setProposal(null);
     await voice.start();
   }, [disabled, busy, voice]);
@@ -106,7 +109,9 @@ export function VoiceBookingPanel({ command, commit, disabled, disabledHint, pal
     if (!proposal || missing.length > 0) return;
     setPhase("committing");
     try {
-      const { ref } = await commit(proposal.intent, slots);
+      const payload=JSON.stringify([proposal.intent,slots]);
+      if(request.current?.payload!==payload) request.current={payload,id:globalThis.crypto?.randomUUID?.() ?? `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`};
+      const { ref } = await commit(proposal.intent, slots, request.current.id);
       setResultRef(ref);
       setPhase("done");
     } catch (err: any) {

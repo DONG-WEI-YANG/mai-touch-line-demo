@@ -6,7 +6,6 @@ import { transcribeAudio } from "../_core/voiceTranscription";
 import { getAi } from "../_core/profile";
 import * as db from "../db";
 import { buildVoiceProposal, commitVoiceProposal, buildFacilityMap, VoiceValidationError } from "../_core/voiceCommand";
-import { assertWithinCapacity } from "../_core/bookingCapacity";
 import { voiceAuditService, type VoiceAuditSource } from "../services/voiceAuditService";
 import type { IntentName, Slot } from "../line/ai/types";
 
@@ -159,14 +158,14 @@ export const voiceRouter = router({
   // the facility map from the live amenities table so voice bookings target the
   // same amenities as the LINE flow.
   commit: residentProcedure
-    .input(z.object({ intent: intentSchema, slots: slotSchema }))
+    .input(z.object({ intent: intentSchema, slots: slotSchema, requestId: z.string().min(1).max(160).optional() }))
     .mutation(async ({ ctx, input }) => {
       const facilityMap = buildFacilityMap(await db.getAllAmenities());
       return auditedCommit({
         intent: input.intent as IntentName,
         slots: input.slots as Slot,
         userId: ctx.user.id,
-        deps: { resolveAmenityId: (f) => facilityMap.get(f), ...commitDeps },
+        deps: { resolveAmenityId: (f) => facilityMap.get(f), ...commitDeps, createBooking: async (i) => Number(await createCheckedBooking({...i, requestId: input.requestId})) },
         actorUserId: ctx.user.id, source: "resident",
       });
     }),
@@ -221,7 +220,7 @@ export const voiceRouter = router({
     }),
 
   staffCommit: staffProcedure
-    .input(z.object({ intent: intentSchema, slots: slotSchema, targetUserId: z.number() }))
+    .input(z.object({ intent: intentSchema, slots: slotSchema, requestId: z.string().min(1).max(160).optional(), targetUserId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       await assertResident(input.targetUserId);
       const facilityMap = buildFacilityMap(await db.getAllAmenities());
@@ -229,7 +228,7 @@ export const voiceRouter = router({
         intent: input.intent as IntentName,
         slots: input.slots as Slot,
         userId: input.targetUserId,
-        deps: { resolveAmenityId: (f) => facilityMap.get(f), ...commitDeps },
+        deps: { resolveAmenityId: (f) => facilityMap.get(f), ...commitDeps, createBooking: async (i) => Number(await createCheckedBooking({...i, requestId: input.requestId})) },
         actorUserId: ctx.user.id, targetUserId: input.targetUserId, source: "staff",
       });
     }),
@@ -252,32 +251,9 @@ async function assertResident(userId: number): Promise<void> {
   }
 }
 
-// Capacity guard for the voice booking path — shares assertWithinCapacity with
-// bookingsRouter.create so a voice-confirmed booking can't overbook a full slot
-// (audit findings C1 + C: range-overlap occupancy, not exact-startTime match).
-async function assertBookingCapacity(input: {
-  amenityId: number; date: string; startTime: string; endTime: string; guestCount: number;
-}): Promise<void> {
-  const amenity = await db.getAmenityById(input.amenityId);
-  if (!amenity) throw new TRPCError({ code: "NOT_FOUND", message: "Amenity not found" });
-  const existing = await db.getBookingsByAmenityAndDate(input.amenityId, input.date);
-  try {
-    assertWithinCapacity({
-      existing: existing as any,
-      startTime: input.startTime,
-      endTime: input.endTime,
-      guestCount: input.guestCount,
-      capacity: amenity.capacity,
-    });
-  } catch (err) {
-    throw new TRPCError({ code: "CONFLICT", message: err instanceof Error ? err.message : "Capacity exceeded" });
-  }
-}
-
-// Shared commit deps (booking capacity guard + writers), reused by resident and
-// property-desk commit procedures.
+// The writer validates capacity after idempotency lookup in its transaction.
 const commitDeps = {
   createBooking: async (i: Parameters<typeof createCheckedBooking>[0]) => Number(await createCheckedBooking(i)),
   createWorkOrder: async (i: any) => Number(await db.createWorkOrder(i)),
-  assertBookingAllowed: assertBookingCapacity,
+  assertBookingAllowed: async () => {},
 };

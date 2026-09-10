@@ -394,8 +394,9 @@ function VoiceBookingScenario({ session }: { session: SessionData }) {
   );
 
   const commit = useCallback(
-    (intent: string, slots: VoiceSlots) =>
+    (intent: string, slots: VoiceSlots, requestId: string) =>
       commitMutation.mutateAsync({
+        requestId,
         intent: intent as never,
         slots: slots as never,
         targetUserId: targetUserId!,
@@ -421,6 +422,7 @@ function DeviceScenario({ onNotice }: { onNotice: (message: string) => void }) {
   const devicesQuery = trpc.showcase.devices.useQuery(undefined, { refetchOnWindowFocus: false });
   const updateMutation = trpc.iot.updateDevice.useMutation({
     onSuccess: async () => {
+      onNotice("模擬資料已更新；未取得實體設備確認。");
       await Promise.all([
         utils.showcase.devices.invalidate(),
         utils.showcase.timeline.invalidate(),

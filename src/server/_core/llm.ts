@@ -112,6 +112,7 @@ export class LLMProviderError extends Error {
 }
 
 export interface LLMHealthReport {
+  fallbackUsed?: boolean;
   status: "healthy" | "degraded" | "unavailable" | "unconfigured";
   configured: boolean;
   reachable: boolean;
@@ -128,8 +129,19 @@ function providerUrl(path: string): string {
 /** Authenticated metadata probe. It never sends a resident prompt and never
  * reads the provider response body, so diagnostics cannot echo provider data. */
 export async function checkLLMHealth(timeoutMs = 3_000): Promise<LLMHealthReport> {
+  const keys = ENV.openaiApiKey.split(',').map(key => key.trim()).filter(Boolean);
   const startedAt = Date.now();
-  if (!ENV.openaiApiKey) {
+  let report = await probeLLMHealth(keys[0] ?? '', Math.max(1, timeoutMs / Math.max(1, keys.length)));
+  for (let index = 1; index < keys.length && report.status !== 'healthy'; index++) {
+    report = await probeLLMHealth(keys[index], Math.max(1, timeoutMs / keys.length));
+    if (report.status === 'healthy') report.fallbackUsed = true;
+  }
+  return { ...report, latencyMs: Date.now() - startedAt };
+}
+
+async function probeLLMHealth(apiKey: string, timeoutMs: number): Promise<LLMHealthReport> {
+  const startedAt = Date.now();
+  if (!apiKey) {
     return {
       status: "unconfigured",
       configured: false,
@@ -144,7 +156,7 @@ export async function checkLLMHealth(timeoutMs = 3_000): Promise<LLMHealthReport
   try {
     const response = await fetch(providerUrl("models"), {
       method: "GET",
-      headers: { Authorization: `Bearer ${ENV.openaiApiKey}` },
+      headers: { Authorization: `Bearer ${apiKey}` },
       signal: controller.signal,
     });
     const common = {
@@ -240,9 +252,24 @@ function errorForStatus(status: number): LLMProviderError {
  * Invoke OpenAI GPT API
  */
 export async function invokeLLM(options: LLMOptions): Promise<LLMResponse> {
+  const keys = ENV.openaiApiKey.split(',').map(key => key.trim()).filter(Boolean);
+  if (!keys.length) throw new LLMProviderError('AI_NOT_CONFIGURED', 'AI provider is not configured', { retryable: false });
+  const budget = Math.max(1, options.timeoutMs ?? 30_000);
+  const startedAt = Date.now();
+  for (let index = 0; index < keys.length; index++) {
+    try {
+      return await invokeWithKey({ ...options, timeoutMs: Math.max(1, Math.min(budget / keys.length, budget - (Date.now() - startedAt))) }, keys[index]);
+    } catch (error) {
+      if (!(error instanceof LLMProviderError) || error.code === 'AI_REQUEST_REJECTED' || index === keys.length - 1 || Date.now() - startedAt >= budget) throw error;
+    }
+  }
+  throw new LLMProviderError('AI_UNAVAILABLE', 'AI provider is unavailable', { retryable: true });
+}
+
+async function invokeWithKey(options: LLMOptions, apiKey: string): Promise<LLMResponse> {
   const {
     messages,
-    model = "gpt-4o-mini",
+    model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
     temperature = 0.7,
     max_tokens = 1000,
     timeoutMs = 30_000,
@@ -264,7 +291,7 @@ export async function invokeLLM(options: LLMOptions): Promise<LLMResponse> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${ENV.openaiApiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model,
@@ -276,7 +303,18 @@ export async function invokeLLM(options: LLMOptions): Promise<LLMResponse> {
       }),
       signal: controller.signal,
     });
+    if (!response.ok) throw errorForStatus(response.status);
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      throw new LLMProviderError('AI_INVALID_RESPONSE', 'AI provider returned invalid JSON', { retryable: true });
+    }
+    if (!isLLMResponse(payload)) throw new LLMProviderError('AI_INVALID_RESPONSE', 'AI provider returned an invalid response', { retryable: true });
+    return payload;
   } catch (error) {
+    if (error instanceof LLMProviderError) throw error;
     if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
       throw new LLMProviderError("AI_TIMEOUT", "AI provider request timed out", {
         retryable: true,
@@ -291,23 +329,4 @@ export async function invokeLLM(options: LLMOptions): Promise<LLMResponse> {
     clearTimeout(deadline);
   }
 
-  if (!response.ok) {
-    throw errorForStatus(response.status);
-  }
-
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch (error) {
-    throw new LLMProviderError("AI_INVALID_RESPONSE", "AI provider returned invalid JSON", {
-      retryable: true,
-      cause: error,
-    });
-  }
-  if (!isLLMResponse(payload)) {
-    throw new LLMProviderError("AI_INVALID_RESPONSE", "AI provider returned an invalid response", {
-      retryable: true,
-    });
-  }
-  return payload;
 }

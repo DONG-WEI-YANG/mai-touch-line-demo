@@ -2,6 +2,7 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import { createServer } from 'http';
 import net from 'net';
+import { setInterval } from 'node:timers';
 import { createApp } from './app';
 import * as db from './db';
 import { startAuditCleanupScheduler } from './audit-cleanup-scheduler';
@@ -11,7 +12,10 @@ import { sessionStore, SqliteSessionBackend } from './line/session-store';
 import { makeLineUserRepo } from './line/line-user-repo';
 import { makeMessageLog } from './line/message-log';
 import { setLineAdminContext } from './_core/context';
-import { makePushHousekeepers } from './line/push-housekeepers';
+import { tokenForBoundUser } from './_core/personal-token';
+import { recoverInterruptedJobs } from './services/jobRecovery';
+import { drainNotificationOutbox } from './services/notificationOutbox';
+import { makeOutboxDelivery } from './services/outboxDelivery';
 import { getAi } from './_core/profile';
 import { logError } from './_core/logError';
 import { ErrorIds } from './constants/errorIds';
@@ -71,6 +75,7 @@ async function startServer() {
     logError(ErrorIds.BOOT_SEED_FAILED, 'seedSystemIfEmpty failed (continuing — may be SQLite vs MySQL syntax)', { cause: err });
   }
   startAuditCleanupScheduler();
+  if (dbManager.getType() === 'sqlite') recoverInterruptedJobs(dbManager.getRawSqlite());
 
   // ──── LINE dispatcher setup (only when LINE env vars present) ────────────────
   // Must run BEFORE createApp() so getDispatchDeps() is available when the
@@ -151,10 +156,7 @@ async function startServer() {
       const setLineAppUserStmt = rawSqlite.prepare(
         `UPDATE line_user SET app_user_id = ? WHERE channel_id = ? AND line_user_id = ?`
       );
-      const tokenForUserStmt = rawSqlite.prepare(
-        `SELECT token FROM web_tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`
-      );
-      const webBaseUrl = process.env.WEB_BASE_URL ?? 'https://mai-touch-web.vercel.app';
+      const webBaseUrl = process.env.WEB_BASE_URL ?? 'https://mai-touch-history-20260908.web.app';
 
       const bindWebUser = (lineUserId: string, displayName?: string | null): { url: string; isNew: boolean } => {
         let row = lineUserRepo.byLineId(channelId, lineUserId);
@@ -164,8 +166,8 @@ async function startServer() {
         }
         // Already bound — reuse existing token (prevents accidental token rotation)
         if (row.appUserId) {
-          const existing = tokenForUserStmt.get(row.appUserId) as { token: string } | undefined;
-          if (existing) return { url: `${webBaseUrl}/?token=${existing.token}`, isNew: false };
+          const token = tokenForBoundUser(rawSqlite, row.appUserId);
+          return { url: `${webBaseUrl}/?token=${token}`, isNew: false };
         }
         // Provision: new users row + token, link line_user
         const openId = `line-${lineUserId}`;
@@ -208,7 +210,7 @@ async function startServer() {
       };
 
       // Real bookFn — calls db.createBooking directly (skip tRPC ctx auth for demo)
-      const bookFn = async (input: { facility: string; date: string; time: string }, lineUserId?: string): Promise<{ id: string }> => {
+      const bookFn = async (input: { facility: string; date: string; time: string; requestId?: string }, lineUserId?: string): Promise<{ id: string }> => {
         const amenityId = await resolveAmenityId(input.facility);
         // Audit finding: don't silently book amenity #1 when the facility isn't
         // mapped — that told the user their sauna/pool booking succeeded while a
@@ -218,23 +220,26 @@ async function startServer() {
           console.error('[LINE] no amenity mapped for facility', input.facility);
           throw new Error(`Unknown facility "${input.facility}" — no matching amenity`);
         }
-        const slot = (await availableSlots(amenityId, input.date)).find(s => s.startTime === input.time);
+        const userId = resolveAppUserId(lineUserId);
+        const previous = input.requestId ? rawSqlite.prepare('SELECT b.endTime FROM booking_requests r JOIN bookings b ON b.id=r.booking_id WHERE r.user_id=? AND r.request_id=?').get(userId, input.requestId) as {endTime:string}|undefined : undefined;
+        const slot = previous ?? (await availableSlots(amenityId, input.date)).find(s => s.startTime === input.time);
         if (!slot) throw new Error('此時段無法預約，請重新選擇日期與時段');
         const endTime = slot.endTime;
         const bookingId = await createCheckedBooking({
-          userId: resolveAppUserId(lineUserId),
+          userId,
           amenityId,
           date: input.date,
           startTime: input.time,
           endTime,
           guestCount: 1,
           notes: `[LINE demo] facility=${input.facility}`,
+          requestId: input.requestId,
         });
         return { id: `BK-${bookingId}` };
       };
 
-      // Real pushHousekeepers — fan-out to all housekeepers in the channel
-      const pushHousekeepers = makePushHousekeepers({ lineUserRepo, client: lineClient, channelId });
+      // SQLite triggers enqueue creation notifications in the write transaction.
+      const pushHousekeepers = async () => {};
 
       // updateOrder: housekeeper accept/reject from LINE → write the shared 單號
       // back to the right table, then push the status change to the original
@@ -242,9 +247,6 @@ async function startServer() {
       //   BK-<id>            → bookings table (status enum: confirmed|pending|cancelled|completed)
       //   WO-/V-/C-<id>      → work_orders table (status enum is the LineStatus union 1:1)
       type LineStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
-      const STATUS_ZH: Record<LineStatus, string> = {
-        open: '已建立', in_progress: '處理中', resolved: '已完成', closed: '已關閉',
-      };
       // Friendly label for a housekeeper LINE userId — prefers their display name,
       // falls back to "管家 <short-id>" so the logistics/admin dashboard never shows a raw LINE U-hash.
       const friendlyHousekeeperLabel = (lineUserId: string): string => {
@@ -252,21 +254,6 @@ async function startServer() {
         const name = hk?.displayName?.trim();
         if (name) return name;
         return `管家 ${lineUserId.slice(1, 7)}`;
-      };
-      // Notify the LINE user who originally filed work order app_user_id=`appUserId` (if any) — best-effort.
-      // Includes the assignee name in the message when a housekeeper just accepted.
-      const pushStatusBackToRequester = async (appUserId: number, orderRef: string, title: string, status: LineStatus, assigneeName?: string): Promise<void> => {
-        try {
-          const row = rawSqlite.prepare(
-            `SELECT line_user_id FROM line_user WHERE app_user_id = ? AND channel_id = ? LIMIT 1`
-          ).get(appUserId, channelId) as { line_user_id: string } | undefined;
-          if (row?.line_user_id) {
-            const suffix = assigneeName ? `(處理人:${assigneeName})` : '';
-            await pushToLineUser(row.line_user_id, `工單 #${orderRef}「${title}」狀態更新:${STATUS_ZH[status]}${suffix}`);
-          }
-        } catch (err) {
-          console.error('[LINE] status push-back to requester failed', { orderRef, appUserId, err });
-        }
       };
       const WORK_ORDER_REF = /^(?:WO|V|C)-(\d+)$/;
       const updateOrder = async (orderId: string, patch: {
@@ -323,7 +310,6 @@ async function startServer() {
             ...(assigneeName ? { assignedTo: assigneeName } : {}),
           });
           console.log('[LINE] work order status updated', { id: numId, status: patch.status, assignedTo: assigneeName, by: patch.acceptedBy ?? patch.rejectedBy });
-          if (before) await pushStatusBackToRequester(before.userId, orderId, String(before.title ?? ''), patch.status, assigneeName);
           return;
         }
 
@@ -550,6 +536,17 @@ async function startServer() {
       });
 
       console.log('[LINE] dispatcher configured');
+      const deliver = makeOutboxDelivery(rawSqlite, channelId, lineClient);
+      let draining = false;
+      const drain = async () => {
+        if (draining) return;
+        draining = true;
+        try { await drainNotificationOutbox(rawSqlite, deliver); }
+        catch { console.error('[LINE] notification outbox unavailable'); }
+        finally { draining = false; }
+      };
+      setInterval(() => { void drain(); }, 5000);
+      void drain();
     } catch (err) {
       logError(ErrorIds.LINE_DISPATCHER_SETUP_FAILED, 'LINE dispatcher setup failed — bot is DOWN until restart (/health reports line:degraded)', { cause: err });
     }

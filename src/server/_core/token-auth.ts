@@ -34,6 +34,7 @@ function mk(id: number, openId: string, email: string, name: string,
 
 export function userFromToken(token: string | null | undefined): SyntheticUser | null {
   if (!token) return null;
+  if (process.env.APP_PROFILE === 'production') return null;
   for (const m of MAPPINGS) {
     const expected = process.env[m.envName];
     if (expected && token === expected) return m.build();
@@ -61,6 +62,8 @@ export function userFromPersonalToken(
       FROM web_tokens wt
       JOIN users u ON u.id = wt.user_id
       WHERE wt.token = ?
+        AND julianday(wt.created_at) > julianday('now', '-30 days')
+        AND julianday(wt.created_at) <= julianday('now')
       LIMIT 1
     `).get(token) as undefined | {
       id: number; openId: string; email: string | null; name: string | null;

@@ -23,6 +23,7 @@ export type OfflineOperationType =
   | 'send_message';
 
 export type OfflineOperation = {
+  owner?: string;
   id: string;
   type: OfflineOperationType;
   data: any;
@@ -67,6 +68,24 @@ export class OfflineService extends EventEmitter {
   private syncPromise: Promise<void> | null = null;
   private syncInterval: ReturnType<typeof setInterval> | null = null;
   private operationHandler: OfflineOperationHandler | null = null;
+  private ownerResolver: (() => Promise<string | null>) | null = null;
+  private visibleOwner: string | null = null;
+  private ownerGeneration = 0;
+  setOwnerResolver(resolver: () => Promise<string | null>): void { this.ownerResolver = resolver; void this.refreshOwner(); }
+  async refreshOwner(): Promise<void> {
+    const generation = ++this.ownerGeneration;
+    this.visibleOwner = null;
+    this.notifyStatus();
+    let owner: string | null = null;
+    try { owner = this.ownerResolver ? await this.ownerResolver() : null; }
+    catch { /* Keep private data hidden when account resolution fails. */ }
+    if (generation !== this.ownerGeneration) return;
+    this.visibleOwner = owner;
+    this.notifyStatus();
+  }
+  private visibleOperations(): OfflineOperation[] {
+    return this.ownerResolver ? this.syncQueue.filter(op=>!!this.visibleOwner && op.owner===this.visibleOwner) : this.syncQueue;
+  }
   private lastSyncAt: number | null = null;
 
   // Public for testability — but treat `getInstance()` as the canonical entry
@@ -186,9 +205,9 @@ export class OfflineService extends EventEmitter {
     return Object.freeze({
       online: this.isOnline,
       syncing: this.isSyncing,
-      pendingCount: this.syncQueue.filter((op) => op.status === 'pending').length,
-      failedCount: this.syncQueue.filter((op) => op.status === 'failed').length,
-      totalCount: this.syncQueue.length,
+      pendingCount: this.visibleOperations().filter((op) => op.status === 'pending').length,
+      failedCount: this.visibleOperations().filter((op) => op.status === 'failed').length,
+      totalCount: this.visibleOperations().length,
       lastSyncAt: this.lastSyncAt,
     });
   }
@@ -206,8 +225,13 @@ export class OfflineService extends EventEmitter {
    * Add operation to sync queue
    */
   async queueOperation(operation: Omit<OfflineOperation, 'id' | 'timestamp' | 'retryCount' | 'status'>): Promise<string> {
+    const generation = this.ownerGeneration;
+    const owner = this.ownerResolver ? await this.ownerResolver() : undefined;
+    if (this.ownerResolver && generation === this.ownerGeneration) this.visibleOwner = owner ?? null;
+    if (this.ownerResolver && !owner) throw new Error('請登入後再使用離線操作');
     const op: OfflineOperation = {
       ...operation,
+      owner: owner ?? undefined,
       id: `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: Date.now(),
       retryCount: 0,
@@ -286,6 +310,7 @@ export class OfflineService extends EventEmitter {
    * completed (the previous implementation did, which was a data-loss bug).
    */
   private async processOperation(op: OfflineOperation): Promise<boolean> {
+    if (this.ownerResolver && (!op.owner || op.owner !== await this.ownerResolver())) return false;
     if (!this.operationHandler) {
       op.status = 'pending';
       this.emit('operation:pending', op);
@@ -328,18 +353,19 @@ export class OfflineService extends EventEmitter {
    * Get pending operations count
    */
   getPendingCount(): number {
-    return this.syncQueue.filter(op => op.status === 'pending' || op.status === 'failed').length;
+    return this.visibleOperations().filter(op => op.status === 'pending' || op.status === 'failed').length;
   }
 
   /**
    * Get all operations
    */
   getOperations(): OfflineOperation[] {
-    return [...this.syncQueue];
+    return [...this.visibleOperations()];
   }
 
   async retryOperation(id: string): Promise<boolean> {
-    const operation = this.syncQueue.find((item) => item.id === id && item.status === 'failed');
+    if (this.ownerResolver) await this.refreshOwner();
+    const operation = this.visibleOperations().find((item) => item.id === id && item.status === 'failed');
     if (!operation) return false;
     const previous = { ...operation };
     operation.status = 'pending';
@@ -358,7 +384,8 @@ export class OfflineService extends EventEmitter {
   }
 
   async retryAllFailed(): Promise<number> {
-    const failed = this.syncQueue.filter((operation) => operation.status === 'failed');
+    if (this.ownerResolver) await this.refreshOwner();
+    const failed = this.visibleOperations().filter((operation) => operation.status === 'failed');
     if (failed.length === 0) return 0;
     const previous = failed.map((operation) => ({ operation, snapshot: { ...operation } }));
     failed.forEach((operation) => {
@@ -382,7 +409,9 @@ export class OfflineService extends EventEmitter {
    * Clear all operations
    */
   async clearOperations(): Promise<void> {
-    this.syncQueue = [];
+    if (this.ownerResolver) await this.refreshOwner();
+    const visible = new Set(this.visibleOperations());
+    this.syncQueue = this.syncQueue.filter(op=>!visible.has(op));
     await this.saveSyncQueue();
     this.emit('operations:cleared');
     this.notifyStatus();
@@ -393,7 +422,9 @@ export class OfflineService extends EventEmitter {
    */
   async saveData<T extends keyof OfflineData>(key: T, data: OfflineData[T]): Promise<void> {
     try {
-      await AsyncStorage.setItem(`@offline_data_${key}`, JSON.stringify(data));
+      const owner=this.ownerResolver?await this.ownerResolver():undefined;
+      if(this.ownerResolver&&!owner) throw new Error('請登入後儲存離線資料');
+      await AsyncStorage.setItem(`@offline_data_${owner ? owner+'_' : ''}${key}`, JSON.stringify(data));
       this.emit('data:saved', { key, data });
     } catch (error) {
       console.error(`Failed to save ${key}:`, error);
@@ -406,7 +437,11 @@ export class OfflineService extends EventEmitter {
    */
   async loadData<T extends keyof OfflineData>(key: T): Promise<OfflineData[T] | null> {
     try {
-      const dataJson = await AsyncStorage.getItem(`@offline_data_${key}`);
+      const generation = this.ownerGeneration;
+      const owner=this.ownerResolver?await this.ownerResolver():undefined;
+      if(this.ownerResolver&&!owner) return null;
+      const dataJson = await AsyncStorage.getItem(`@offline_data_${owner ? owner+'_' : ''}${key}`);
+      if (generation !== this.ownerGeneration || (this.ownerResolver && owner !== await this.ownerResolver())) return null;
       return dataJson ? JSON.parse(dataJson) : null;
     } catch (error) {
       console.error(`Failed to load ${key}:`, error);

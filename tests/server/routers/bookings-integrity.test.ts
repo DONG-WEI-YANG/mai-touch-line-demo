@@ -14,12 +14,16 @@ const input = { amenityId: 1, date: "2099-12-31", startTime: "09:00", endTime: "
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(db.getAmenityById).mockResolvedValue({ id: 1, isActive: true, capacity: 1 } as NonNullable<Awaited<ReturnType<typeof db.getAmenityById>>>);
+  vi.mocked(db.getAmenityById).mockResolvedValue({ id: 1, isActive: true, capacity: 1, openTime:'08:00',closeTime:'22:00',slotDurationMinutes:60 } as NonNullable<Awaited<ReturnType<typeof db.getAmenityById>>>);
   vi.mocked(db.getBookingsByAmenityAndDate).mockResolvedValue([]);
   vi.mocked(db.createBooking).mockResolvedValue(1);
 });
 
 describe("booking integrity", () => {
+  it.each([{date:'2000-01-01'},{date:'2099-02-29'},{startTime:'25:00',endTime:'26:00'},{startTime:'07:00'},{startTime:'09:30'}])('rejects invalid booking before DB writes: %j',async patch=>{
+    await expect(caller.create({...input,...patch})).rejects.toMatchObject({code:'BAD_REQUEST'});
+    expect(db.createBooking).not.toHaveBeenCalled();
+  });
   it("rechecks completion inside the lock before resident cancellation", async () => {
     vi.mocked(db.getBookingById)
       .mockResolvedValueOnce({ ...input, id: 7, userId: 1, status: "confirmed" } as never)

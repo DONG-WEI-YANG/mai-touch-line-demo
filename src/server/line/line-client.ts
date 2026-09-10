@@ -40,18 +40,18 @@ export class LineClient {
     if (this.opts.apiProxyUrl) return this.sendViaProxy('reply',{replyToken:token},msg);
     await this.sdk.replyMessage(token, applyBanner(msg, this.isBannerOn()));
   }
-  async push(userId: string, msg: any | any[]): Promise<void> {
-    if (this.opts.apiProxyUrl) return this.sendViaProxy('push',{to:userId},msg);
+  async push(userId: string, msg: any | any[], retryKey?: string): Promise<void> {
+    if (this.opts.apiProxyUrl || retryKey) return this.sendViaProxy('push',{to:userId},msg,retryKey);
     await this.sdk.pushMessage(userId, applyBanner(msg, this.isBannerOn()));
   }
-  private async sendViaProxy(kind: 'reply' | 'push', recipient: object, msg: any | any[]): Promise<void> {
+  private async sendViaProxy(kind: 'reply' | 'push', recipient: object, msg: any | any[], retryKey?: string): Promise<void> {
     const messages=applyBanner(Array.isArray(msg)?msg:[msg],this.isBannerOn());
-    const url=new URL(`/_line/v2/bot/message/${kind}`,this.opts.apiProxyUrl).toString();
+    const url=this.opts.apiProxyUrl ? new URL(`/_line/v2/bot/message/${kind}`,this.opts.apiProxyUrl).toString() : `https://api.line.me/v2/bot/message/${kind}`;
     const response=await fetch(url,{
-      method:'POST',headers:{Authorization:`Bearer ${this.opts.channelAccessToken}`,'Content-Type':'application/json'},
+      method:'POST',headers:{Authorization:`Bearer ${this.opts.channelAccessToken}`,'Content-Type':'application/json',...(retryKey?{'X-Line-Retry-Key':retryKey}:{})},
       body:JSON.stringify({...recipient,messages}),signal:AbortSignal.timeout(20000),redirect:'error',
     });
-    if(!response.ok) throw Object.assign(new Error(`LINE relay failed (HTTP ${response.status})`),{statusCode:response.status});
+    if(!response.ok && !(retryKey && response.status===409 && response.headers.get('x-line-accepted-request-id'))) throw Object.assign(new Error(`LINE relay failed (HTTP ${response.status})`),{statusCode:response.status});
     await response.arrayBuffer();
   }
   async replyOrPush(replyToken: string | undefined, userId: string, msg: any | any[]): Promise<void> {

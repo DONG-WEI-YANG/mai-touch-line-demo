@@ -1,6 +1,7 @@
 import { residentProcedure, staffProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
+import { dbManager } from "../database/adapter";
 import { TRPCError } from "@trpc/server";
 
 export const workOrdersRouter = router({
@@ -45,7 +46,7 @@ export const workOrdersRouter = router({
       // Push status change back to the original LINE requester (if bound).
       // Best-effort: log + swallow errors so the mutation always succeeds for
       // logistics even when the LINE webhook is degraded.
-      if (input.status && before && ctx.lineAdmin?.pushToLineUser) {
+      if (dbManager.getType() !== "sqlite" && input.status && before && before.status !== input.status && ctx.lineAdmin?.pushToLineUser) {
         try {
           const adminDb = ctx.lineAdmin.db;
           const row = adminDb.prepare(

@@ -11,6 +11,7 @@ export type BookingWindow = { startTime: string; endTime: string; guestCount: nu
 
 /** minutes since midnight for "HH:MM" (NaN-safe: unparseable → NaN, filtered by callers). */
 function toMinutes(hhmm: string): number {
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(hhmm))) return NaN;
   const [h, m] = String(hhmm).split(":").map(Number);
   return h * 60 + (m || 0);
 }
@@ -21,13 +22,20 @@ function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number): b
   return aStart < bEnd && aEnd > bStart;
 }
 
-/** Total guestCount of existing bookings whose time range overlaps [startTime,endTime). */
+/** Peak concurrent guests inside the requested half-open window. */
 export function occupancyForWindow(existing: BookingWindow[], startTime: string, endTime: string): number {
-  const s = toMinutes(startTime);
-  const e = toMinutes(endTime);
-  return existing
-    .filter((b) => overlaps(s, e, toMinutes(b.startTime), toMinutes(b.endTime)))
-    .reduce((sum, b) => sum + (b.guestCount || 0), 0);
+  const s=toMinutes(startTime),e=toMinutes(endTime);
+  const events=new Map<number,number>();
+  for(const booking of existing) {
+    const start=toMinutes(booking.startTime),end=toMinutes(booking.endTime);
+    if(!overlaps(s,e,start,end))continue;
+    const left=Math.max(s,start),right=Math.min(e,end);
+    events.set(left,(events.get(left)??0)+booking.guestCount);
+    events.set(right,(events.get(right)??0)-booking.guestCount);
+  }
+  let current=0,peak=0;
+  for(const [,delta] of [...events].sort(([a],[b])=>a-b)) {current+=delta;peak=Math.max(peak,current);}
+  return peak;
 }
 
 /** Throw if the requested window is invalid or would exceed capacity for an

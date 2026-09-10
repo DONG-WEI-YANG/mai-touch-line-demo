@@ -32,7 +32,7 @@ if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined')
   } catch { /* non-browser or sandboxed: no-op */ }
 }
 
-function getStoredToken(): string | null {
+export function getStoredToken(): string | null {
   if (typeof globalThis.localStorage === 'undefined') return null;
   try { return globalThis.localStorage.getItem(TOKEN_STORAGE_KEY); }
   catch { return null; }
@@ -41,6 +41,7 @@ function getStoredToken(): string | null {
 export function setStoredToken(token: string): void {
   if (typeof globalThis.localStorage === 'undefined') return;
   try { globalThis.localStorage.setItem(TOKEN_STORAGE_KEY, token); } catch {}
+  if(typeof window!=='undefined') window.dispatchEvent(new Event('mai-touch-account-changed'));
 }
 
 /** 本機是否存有 token —— authGate 用它判斷「查不出來」該留在原地還是導向登入。 */
@@ -51,6 +52,23 @@ export function hasStoredToken(): boolean {
 export function clearStoredToken(): void {
   if (typeof globalThis.localStorage === 'undefined') return;
   try { globalThis.localStorage.removeItem(TOKEN_STORAGE_KEY); } catch {}
+  if(typeof window!=='undefined') window.dispatchEvent(new Event('mai-touch-account-changed'));
+}
+
+export async function offlineOwner(token = getStoredToken()): Promise<string | null> {
+  if (!token || !globalThis.crypto?.subtle) return null;
+  const digest = await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+/** Captures the credential before any batching; account switches cannot retarget a queued write. */
+export async function offlineClient(owner: string | undefined) {
+  const token=getStoredToken();
+  if (!owner || !token || owner!==await offlineOwner(token)) throw new Error('請切回原帳戶同步');
+  return createTRPCProxyClient<AppRouter>({transformer:superjson,links:[httpBatchLink({
+    url:`${API_BASE_URL}/api/trpc`,headers:()=>({Authorization:`Bearer ${token}`}),
+    fetch:(url,options)=>fetch(url,{...options,credentials:'omit'}),
+  })]});
 }
 
 /**

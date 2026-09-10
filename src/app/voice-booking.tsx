@@ -47,8 +47,8 @@ export default function VoiceBookingScreen() {
           command={(audio) =>
             commandMutation.mutateAsync({ audioBase64: audio.audioBase64, mimeType: audio.mimeType, language: "zh" })
           }
-          commit={(intent: string, slots: VoiceSlots) =>
-            commitMutation.mutateAsync({ intent: intent as any, slots: slots as any })
+          commit={(intent: string, slots: VoiceSlots, requestId: string) =>
+            commitMutation.mutateAsync({ intent: intent as any, slots: slots as any, requestId })
           }
         />
 

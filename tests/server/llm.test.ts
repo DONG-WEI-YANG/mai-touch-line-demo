@@ -31,6 +31,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   ENV.openaiApiKey = originalKey;
   ENV.openaiBaseUrl = originalBaseUrl;
   vi.useRealTimers();
@@ -38,6 +39,36 @@ afterEach(() => {
 });
 
 describe("invokeLLM", () => {
+  it('keeps the deadline active while reading the response body',async()=>{
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch',vi.fn(async (_url,init)=>({ok:true,json:()=>new Promise((_resolve,reject)=>init.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError'))))})));
+    const result=expect(invokeLLM({messages:[],timeoutMs:25})).rejects.toMatchObject({code:'AI_TIMEOUT'});
+    await vi.advanceTimersByTimeAsync(25);
+    await result;
+  });
+  it('does not spend backup credentials on a malformed request',async()=>{
+    ENV.openaiApiKey='primary,backup';
+    const transport=vi.fn().mockResolvedValue(new Response('',{status:400}));
+    vi.stubGlobal('fetch',transport);
+    await expect(invokeLLM({messages:[]})).rejects.toMatchObject({code:'AI_REQUEST_REJECTED'});
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+  it('reports failure after both credentials fail without returning fabricated content',async()=>{
+    ENV.openaiApiKey='primary,backup';
+    const transport=vi.fn().mockImplementation(async()=>new Response('',{status:401}));
+    vi.stubGlobal('fetch',transport);
+    await expect(invokeLLM({messages:[]})).rejects.toMatchObject({code:'AI_AUTHENTICATION_FAILED'});
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+  it('uses configured model and falls back with separate credentials', async()=>{
+    vi.stubEnv('OPENAI_MODEL','gemini-3.5-flash-lite');
+    ENV.openaiApiKey='primary,backup';
+    const transport=vi.fn().mockResolvedValueOnce(new Response('',{status:503})).mockResolvedValueOnce(new Response(JSON.stringify(validResponse)));
+    vi.stubGlobal('fetch',transport);
+    await expect(invokeLLM({messages:[]})).resolves.toEqual(validResponse);
+    expect(transport.mock.calls.map(c=>c[1].headers.Authorization)).toEqual(['Bearer primary','Bearer backup']);
+    expect(JSON.parse(transport.mock.calls[1][1].body).model).toBe('gemini-3.5-flash-lite');
+  });
   it("rejects before transport when the provider key is absent", async () => {
     ENV.openaiApiKey = "";
     const transport = vi.fn();
@@ -154,6 +185,15 @@ describe("invokeLLM", () => {
 });
 
 describe("checkLLMHealth", () => {
+  it('tries credentials separately and reports fallback use without exposing secrets', async () => {
+    ENV.openaiApiKey=' primary , backup ';
+    const transport=vi.fn().mockResolvedValueOnce(new Response('{}',{status:401})).mockResolvedValueOnce(new Response('{}',{status:200}));
+    vi.stubGlobal('fetch',transport);
+    const result=await checkLLMHealth();
+    expect(transport.mock.calls.map(call=>call[1].headers.Authorization)).toEqual(['Bearer primary','Bearer backup']);
+    expect(result).toMatchObject({status:'healthy',fallbackUsed:true});
+    expect(JSON.stringify(result)).not.toContain('backup');
+  });
   it("reports unconfigured without contacting the provider", async () => {
     ENV.openaiApiKey = "";
     const transport = vi.fn();

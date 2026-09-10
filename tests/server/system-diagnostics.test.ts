@@ -27,6 +27,11 @@ const healthyAi: LLMHealthReport = {
 };
 
 describe("getSystemDiagnostics", () => {
+  it('does not mark the core service degraded solely for disabled optional NLP',async()=>{
+    const report=await getSystemDiagnostics({database:async()=>healthyDatabase,ai:async()=>healthyAi,nlp:async()=>({status:'unconfigured',configured:false,reachable:false,latencyMs:0}),runtime:()=>({nodeVersion:'v24',environment:'demo',appVersion:'1'}),now:()=>1});
+    expect(report.overall).toBe('healthy');
+    expect(report.services.nlp.status).toBe('unconfigured');
+  });
   it("reports healthy only when every configured service passes a real check", async () => {
     const report = await getSystemDiagnostics({
       database: async () => healthyDatabase,

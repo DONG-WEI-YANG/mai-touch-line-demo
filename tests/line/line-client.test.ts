@@ -32,6 +32,18 @@ describe('LineClient', () => {
       {url:'https://relay.run.app/_line/v2/bot/message/push',body:{to:'U1',messages:[{type:'text',text:'hello'}]}},
     ]);
   });
+  it.each([undefined,'https://relay.run.app'])('forwards stable retry key and accepts only an acknowledged duplicate (%s)',async(apiProxyUrl)=>{
+    const key='af2f390b-91cc-4ffb-a7a9-5bdca06fe632';
+    const fetchMock=vi.fn().mockResolvedValueOnce(new Response('{}',{status:409,headers:{'x-line-accepted-request-id':'accepted-id'}})).mockResolvedValueOnce(new Response('{}',{status:409}));
+    vi.stubGlobal('fetch',fetchMock);
+    const {LineClient}=await import('../../src/server/line/line-client');
+    const client=new LineClient({channelAccessToken:'t',channelSecret:'s',apiProxyUrl});
+    await expect(client.push('U1',{type:'text',text:'hello'},key)).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0][0]).toBe(apiProxyUrl?`${apiProxyUrl}/_line/v2/bot/message/push`:'https://api.line.me/v2/bot/message/push');
+    expect(fetchMock.mock.calls[0][1].headers['X-Line-Retry-Key']).toBe(key);
+    await expect(client.push('U1',{type:'text',text:'hello'},key)).rejects.toMatchObject({statusCode:409});
+    expect(pushMessage).not.toHaveBeenCalled();
+  });
   it('reply calls SDK replyMessage', async () => {
     const { LineClient } = await import('../../src/server/line/line-client');
     const c = new LineClient({ channelAccessToken: 't', channelSecret: 's' });

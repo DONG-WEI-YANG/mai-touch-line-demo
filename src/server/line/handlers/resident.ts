@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { SessionStore, SessionState } from '../session-store';
 import type { IntentClassifier, Lang, IntentName } from '../ai/types';
 import { AiUnavailableError } from '../ai/types';
@@ -28,7 +29,7 @@ export type ResidentDeps = {
   store: SessionStore;
   channelId: string;
   lineUser: { lineUserId: string; role: 'resident' | 'housekeeper' | 'admin'; language: Lang };
-  bookFn: (input: { facility: string; date: string; time: string }, lineUserId?: string) => Promise<{ id: string }>;
+  bookFn: (input: { facility: string; date: string; time: string; requestId?: string }, lineUserId?: string) => Promise<{ id: string }>;
   // Generic work-order creator for non-facility intents (repair/visitor/complaint).
   // Returns the new order id for echo-back to the user.
   reportFn: (input: { intent: IntentName; slots: Record<string, unknown> }, lineUserId?: string) => Promise<{ id: string }>;
@@ -124,8 +125,9 @@ export async function handleResident(ev: any, deps: ResidentDeps): Promise<void>
       };
     }
 
-    if (params.act === 'confirm' && !session.slots.queryOnly && session.step === 'CONFIRMING' && session.intent === 'facility.book') {
-      session = { ...session, step: 'EXECUTING' };
+    if (params.act === 'confirm' && !session.slots.queryOnly && (session.step === 'CONFIRMING' || (session.step === 'EXECUTING' && typeof session.slots.requestId === 'string')) && session.intent === 'facility.book') {
+      // Persist before writing so a lost response or process restart reuses the same key.
+      session = { ...session, step: 'EXECUTING', slots: {...session.slots, requestId: session.slots.requestId ?? `line:${randomUUID()}`} };
       deps.store.set(userId, session);
       try {
         const order = await deps.bookFn(session.slots as any, userId);

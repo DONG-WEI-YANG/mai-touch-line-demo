@@ -1,5 +1,5 @@
 import { Alert } from "@/lib/alert";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import {
   ScrollView,
   Text,
@@ -41,6 +41,7 @@ export default function AmenityDetailScreen() {
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [guestCount, setGuestCount] = useState("2");
   const [notes, setNotes] = useState("");
+  const bookingRequest = useRef<{ payload: string; id: string } | null>(null);
 
   const dates = useMemo(() => getNext7Days(), []);
 
@@ -79,14 +80,17 @@ export default function AmenityDetailScreen() {
     if (!amenity || !selectedSlot) return;
 
     try {
-      await createBookingMutation.mutateAsync({
+      const payload = {
         amenityId: amenity.id,
         date: selectedDate,
         startTime: selectedSlot.startTime,
         endTime: selectedSlot.endTime,
         guestCount: parseInt(guestCount, 10) || 2,
         notes: notes.trim() || undefined,
-      });
+      };
+      const serialized = JSON.stringify(payload);
+      if (bookingRequest.current?.payload !== serialized) bookingRequest.current = { payload: serialized, id: globalThis.crypto?.randomUUID?.() ?? `web-${Date.now()}-${Math.random().toString(36).slice(2)}` };
+      await createBookingMutation.mutateAsync({ ...payload, requestId: bookingRequest.current.id });
       setStep("success");
     } catch (error: any) {
       Alert.alert("Booking Failed", error.message || "Something went wrong");

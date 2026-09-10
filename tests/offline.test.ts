@@ -65,6 +65,7 @@ vi.mock("@react-native-community/netinfo", () => ({
 }));
 
 import { OfflineService } from "@/lib/offline";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 async function flush(times = 3) {
   for (let i = 0; i < times; i++) await new Promise((r) => setTimeout(r, 0));
@@ -78,6 +79,63 @@ async function newReadyService(): Promise<OfflineService> {
 }
 
 describe("OfflineService", () => {
+  it('does not reveal an old cached response after switching accounts while storage is pending', async () => {
+    const svc = await newReadyService();
+    svc.setOwnerResolver(async () => 'A');
+    await svc.refreshOwner();
+    let finish!: (value: string) => void;
+    vi.mocked(AsyncStorage.getItem).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = svc.loadData('bookings');
+    await flush();
+    svc.setOwnerResolver(async () => 'B');
+    await svc.refreshOwner();
+    finish(JSON.stringify([{ private: 'A booking' }]));
+    expect(await pending).toBeNull();
+  });
+  it('ignores an older owner lookup that completes after an account switch', async () => {
+    netHarness.set({ isConnected: false });
+    const svc = await newReadyService();
+    svc.setOwnerResolver(async () => 'A');
+    await svc.refreshOwner();
+    await svc.queueOperation({ type: 'send_message', data: { message: 'A private' } });
+    let resolveOld!: (value: string) => void;
+    svc.setOwnerResolver(() => new Promise(resolve => { resolveOld = resolve; }));
+    svc.setOwnerResolver(async () => 'B');
+    await svc.refreshOwner();
+    resolveOld('A');
+    await flush();
+    expect(svc.getOperations()).toEqual([]);
+    expect(svc.getSnapshot().totalCount).toBe(0);
+  });
+  it('keeps legacy unowned operations stored but never replays or exposes them to a new account', async () => {
+    storageHarness.storage['@offline_sync_queue'] = JSON.stringify([{ id: 'legacy', type: 'send_message', data: { message: 'old private' }, timestamp: 1, retryCount: 0, status: 'pending' }]);
+    const svc = await newReadyService();
+    svc.setOwnerResolver(async () => 'B');
+    await svc.refreshOwner();
+    const handler = vi.fn();
+    svc.setOperationHandler(handler);
+    await svc.startSync();
+    await svc.clearOperations();
+    expect(handler).not.toHaveBeenCalled();
+    expect(svc.getOperations()).toEqual([]);
+    expect(JSON.parse(storageHarness.storage['@offline_sync_queue'])).toHaveLength(1);
+  });
+  it('does not replay another account or legacy unowned operations',async()=>{
+    netHarness.set({isConnected:false});
+    const svc=await newReadyService();
+    let owner:string|null='A';
+    svc.setOwnerResolver(async()=>owner);
+    await svc.queueOperation({type:'send_message',data:{message:'private',language:'zh'}});
+    owner='B';
+    const handler=vi.fn().mockResolvedValue(undefined);
+    svc.setOperationHandler(handler);
+    netHarness.emit({isConnected:true});
+    await flush();
+    expect(handler).not.toHaveBeenCalled();
+    owner='A';
+    await svc.startSync();
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
   beforeEach(() => {
     for (const k of Object.keys(storageHarness.storage)) delete storageHarness.storage[k];
     netHarness.listeners.length = 0;

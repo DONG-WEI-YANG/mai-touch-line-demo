@@ -22,9 +22,9 @@ export default function GuestPassScreen() {
         entryPoint: "Main Lobby",
         result: "success"
       });
-      Alert.alert("Access Granted", "Welcome to m'AI Touch Residence.\nThe gate is now open.");
+      Alert.alert("示範掃描已記錄", "這是模擬通行紀錄，沒有控制門禁設備。實際通行請使用物業提供的有效通行證。");
     } catch {
-      Alert.alert("Access Denied", "Invalid pass or system error.");
+      Alert.alert("示範紀錄失敗", "請稍後再試，此結果不代表實際門禁狀態。");
     }
   };
 
@@ -107,7 +107,7 @@ export default function GuestPassScreen() {
         </View>
 
         <Text style={[styles.hintText, { color: colors.muted }]}>
-          {t("access.scan_hint")}
+          示範通行證・掃描僅記錄模擬結果，不會開門
         </Text>
 
         <View style={styles.actions}>

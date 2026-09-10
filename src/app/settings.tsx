@@ -51,6 +51,15 @@ export default function SettingsScreen() {
   });
   const startBindMutation = trpc.auth.startLineBind.useMutation();
   const unbindMutation = trpc.auth.unbindLine.useMutation();
+  const revokeMutation = trpc.auth.revokeAllTokens.useMutation();
+  const handleRevoke = () => Alert.alert("撤銷所有個人登入連結", "所有裝置的個人登入連結將失效，需回 LINE 重新開啟 Web 入口。舊登入的離線待送操作不會自動改用新憑證傳送。Demo 共用登入不受影響。", [
+    { text: "取消", style: "cancel" },
+    { text: "撤銷", style: "destructive", onPress: () => {
+      if (revokeMutation.isPending) return;
+      void revokeMutation.mutateAsync().then(async () => { await logout(); router.replace("/login"); })
+        .catch((error: Error) => Alert.alert("撤銷未完成", error.message));
+    } },
+  ]);
 
   useEffect(() => {
     // Once the binding succeeds, drop the active code panel.
@@ -83,6 +92,7 @@ export default function SettingsScreen() {
   };
 
   const profileSettings: SettingItem[] = [
+    { id: "revokeTokens", title: "撤銷所有個人登入連結", subtitle: "讓各裝置舊連結失效；本機登出不會撤銷", icon: "lock.fill", type: "action", onPress: handleRevoke },
     {
       id: "profile",
       title: t("settings.profile"),

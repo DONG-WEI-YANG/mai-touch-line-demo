@@ -224,6 +224,7 @@ export const accessLogs = mysqlTable("access_logs", {
   passId: int("passId"), // Link to guest pass if applicable
   entryPoint: varchar("entryPoint", { length: 255 }).notNull(), // e.g. "Main Lobby", "Unit 42A Door"
   result: mysqlEnum("result", ["success", "denied", "expired"]).notNull(),
+  source: varchar("source", { length: 32 }).default('unverified').notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -312,7 +313,6 @@ export const demoScriptConfig = sqliteTable('demo_script_config', {
 
 export type DemoScriptConfigRow = typeof demoScriptConfig.$inferSelect;
 export type InsertDemoScriptConfigRow = typeof demoScriptConfig.$inferInsert;
-
 
 
 

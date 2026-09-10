@@ -4,7 +4,7 @@ import { View, ActivityIndicator, Text } from "react-native";
 import { Tabs, usePathname, useRouter, useRootNavigationState } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { trpc, createTRPCClient, trpcProxy, hasStoredToken } from "@/lib/trpc";
+import { trpc, createTRPCClient, offlineClient, offlineOwner, hasStoredToken } from "@/lib/trpc";
 import { AppProvider, useApp } from "@/lib/app-context";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
@@ -44,14 +44,20 @@ offlineService.on('operation:completed', () => {
 // Register once at module load so any queued operations from a previous session
 // can drain on next online tick. The handler dispatches by op.type to the
 // matching tRPC mutation. Throw to trigger retry; resolve to mark complete.
+offlineService.setOwnerResolver(offlineOwner);
+if(typeof window!=='undefined') {
+  window.addEventListener('mai-touch-account-changed',()=>void offlineService.refreshOwner());
+  window.addEventListener('storage',()=>void offlineService.refreshOwner());
+}
 offlineService.setOperationHandler(async (op: OfflineOperation) => {
+  const trpcProxy = await offlineClient(op.owner);
   switch (op.type) {
     // Resident-side operations
     case 'cancel_booking':
       await trpcProxy.bookings.cancel.mutate({ id: op.data.id });
       return;
     case 'create_booking':
-      await trpcProxy.bookings.create.mutate(op.data);
+      await trpcProxy.bookings.create.mutate({...op.data,requestId:op.id});
       return;
     case 'create_work_order':
       await trpcProxy.workOrders.create.mutate(op.data);

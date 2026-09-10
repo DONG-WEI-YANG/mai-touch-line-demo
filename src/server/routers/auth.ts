@@ -31,6 +31,12 @@ export const authRouter = router({
     ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
     return { success: true } as const;
   }),
+  revokeAllTokens: protectedProcedure.mutation(({ ctx }) => {
+    const sqlite = ctx.lineAdmin?.db;
+    if (!sqlite) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Token store unavailable" });
+    const result = sqlite.prepare("DELETE FROM web_tokens WHERE user_id = ?").run(ctx.user.id);
+    return { revoked: result.changes, scope: "personal-tokens" as const };
+  }),
   updateProfile: residentProcedure
     .input(z.object({ name: z.string().min(1).optional() }))
     .mutation(async ({ ctx, input }) => {

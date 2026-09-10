@@ -1,5 +1,14 @@
 # 專案記憶
 
+## 13項架構修復與發布（2026-09-10）
+
+- 使用者要求處理全部13項。A01–A05、A07–A09、A12–A13已實作發布；A06／A10已隔離模擬與自述，未接真實设备ACK／可信上報；A11僅完成腳本與測試，私人bucket、排程及真實異地還原未啟用，不可宣稱13項全部關閉。
+- 125檔829項測試、型別、lint、正式env --clear建置與SQLite隔離smoke通過；Gemini3.5 Flash-Lite實際推論成功，LINE官方webhook/test200。瀏覽器確認新版診斷、角色切換與設定，未代發真實LINE訊息。
+- VM /opt/mai-touch/releases/audit-20260910，gateway revision mai-touch-gateway-00002-nbv，Firebase bundle entry-b4b3c098d5b7ead8417ccdc7edcdfbb5.js。部署使用新tracked腳本，三份migration經完整快照副本預演；部署後原27張資料表筆數全相同、完整性與外鍵通過，未init。
+- 個人token30天／撤銷／同帳戶重新簽發；APP_PROFILE=production禁共用token，現行仍Demo。離線owner採token SHA256，換token後舊佇列不重送，保留原操作供查核。
+- SQLite requestId+IMMEDIATE+trigger防重複／跨程序超額，容量計同時高峰。通知outbox須配合新gateway轉送LINE retry key；逐收件人持久化及同紀錄排序，不保證跨供應商去重期限永遠恰好一次。
+- 詳見docs/ARCHITECTURE_FUNCTION_AUDIT_20260910.md、CURRENT_RELEASE_RUNBOOK.md、OFFSITE_BACKUP_RUNBOOK.md。異地方案為14天保留模板，新增雲端資源與費用選擇仍待使用者回覆；本機操作端排程依賴電腦開機，非已啟用VM自動異地備份。
+
 ## 工作方式
 
 - 2026-09-08 使用者指出 GitHub Actions CI 額度有問題，預期遠端檢查可能無法通過。後續優先以本機測試、型別、lint、建置及隔離 smoke 推進，不將 CI 額度不足視為程式失敗，也不因等待 CI 停止開發。
@@ -232,3 +241,16 @@
 - 新booking-calendar.ts直接按LINE綁定appUserId與月份查SQLite，不沿用最近20筆清單，不回退共用種子帳戶；含已取消／已完成，拒絕無效年月日，失敗有重試與Web入口，不呼叫AI或建立預約。
 - 110檔762項測試、type-check、lint與後端bundle通過。LINE官方格式驗證通過六週空月及閏日10筆／多頁卡，未代發訊息；手機／桌面點擊仍待實機驗收。
 - 已部署GCP /opt/mai-touch/releases/calendar-20260910，server.js SHA256 9150df50aa779f1281102c5655b7dd7925cf3a6c563da6f0b641b46d7a7fd670，服務active、db=ok／line=ready；官方webhook/test成功200（07:31 UTC）。部署前快照pre-calendar-20260910，部署後完整性／外鍵檢查通過，28表筆數未減少，未重跑init。前端無變更。
+
+## 系統診斷誤判修正（2026-09-10，本機）
+
+- 截圖的NORMAL原為硬體fallback告警，非整體健康；admin-dashboard改用diagnostics.overall與checkedAt，顯示查詢失敗，移除重複未設定標籤，AI改稱供應商連線並提示只是模型清單探測。
+- checkLLMHealth原將逗號分隔的兩組key直接放進Authorization。回歸先失敗後通過；改逐組探測、分攤原timeout預算、備援成功回fallbackUsed，保留安全錯誤碼，不洩漏key。
+- 本機使用既有部署憑證逐組呼叫/models皆HTTP200；不是VM推論驗收。110檔763項測試、type-check、lint通過。此次尚未部署／commit／push；發布Web須使用正式env及--clear，不能直接發布本機dist。
+
+## 整體架構功能稽核（2026-09-10）
+
+- 報告docs/ARCHITECTURE_FUNCTION_AUDIT_20260910.md，13項分級發現、架構圖與功能覆蓋矩陣；盤點43個app TSX，非逐頁點擊驗收。保留既有未發布診斷修改及簡報異動，未動線上資料。
+- 本機攔截fetch重現Web invokeLLM仍合併多key、預設gpt-4o-mini；健康檢查修正不等於聊天推論修正。本機容量函式接受25:00–26:00與10:99–12:00；寫入service缺營業／日期等共用檢查。
+- 程式確認離線佇列無owner且使用當前token；跨帳戶誤歸屬尚未瀏覽器重現。另有長效token、硬刪關聯、僅DB的IoT成功、非持久任務、通知無outbox、建立缺冪等、門禁自述結果、異地備份與發布可重現性等缺口，詳見報告。
+- 本輪SQLite隔離smoke通過；沿用同工作階段763測試／型別／lint／Web build通過。smoke明示未配置外部AI，不代表真實服務驗收。活動卡已改View，舊UX-12不再成立。此輪僅稽核未修新缺陷／未發布。

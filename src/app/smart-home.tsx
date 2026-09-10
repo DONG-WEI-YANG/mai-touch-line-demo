@@ -1,3 +1,4 @@
+import { Alert } from "@/lib/alert";
 import React from "react";
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, ActivityIndicator } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
@@ -13,7 +14,7 @@ export default function SmartHomeScreen() {
   const { t, state } = useApp();
   const router = useRouter();
 
-  // Real-time IoT data
+  // Demo device records; no physical device ACK.
   const { data: devices = [], isLoading, refetch } = trpc.iot.myDevices.useQuery();
   const updateDeviceMutation = trpc.iot.updateDevice.useMutation();
 
@@ -25,7 +26,7 @@ export default function SmartHomeScreen() {
       await updateDeviceMutation.mutateAsync({ deviceId, status: nextStatus });
       refetch();
     } catch (e) {
-      console.error("Failed to update device", e);
+      Alert.alert("模擬操作失敗", e instanceof Error ? e.message : "請稍後重試。");
     }
   };
 
@@ -79,6 +80,7 @@ export default function SmartHomeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={{ color: colors.muted, marginBottom: 16 }}>模擬設備：操作只更新示範資料，未確認實體設備執行。</Text>
         <Text style={[styles.sectionTitle, { color: colors.muted }]}>{t("smarthome.devices")}</Text>
         
         {isLoading ? (

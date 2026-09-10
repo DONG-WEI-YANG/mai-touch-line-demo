@@ -23,10 +23,11 @@ export default function AdminDashboardScreen() {
   type StatCardIconName = React.ComponentProps<typeof IconSymbol>["name"];
   
   // Queries
-  const { data: stats } = trpc.admin.stats.useQuery();
+  const { data: stats, refetch: refetchStats } = trpc.admin.stats.useQuery();
   const { data: nlpHealth, refetch: refetchHealth } = trpc.admin.nlpHealth.useQuery();
   const { data: modelStats, refetch: refetchModels } = trpc.admin.modelDownloads.useQuery();
-  const { data: diag, refetch: refetchDiag } = trpc.system.diagnostics.useQuery();
+  const { data: diag, refetch: refetchDiag, isError: diagnosticsFailed } = trpc.system.diagnostics.useQuery();
+  const {data: notificationQueue, refetch: refetchNotifications, isError: notificationsFailed} = trpc.system.notificationQueue.useQuery();
   // refetchInterval returns false when the last fetch errored — stops tight 403
   // loops if backend rejects the procedure (e.g. demo synthetic user missing
   // some permission).
@@ -55,18 +56,20 @@ export default function AdminDashboardScreen() {
   const isSnoozed = snoozedUntil > Date.now();
   const isAcknowledged = acknowledgedSignature !== "" && acknowledgedSignature === spikeSignature;
   const showFallbackAlert = isFallbackSpike && !isSnoozed && !isAcknowledged;
-  const alertStatusLabel = showFallbackAlert ? "ACTIVE" : isSnoozed ? "SNOOZED" : isAcknowledged ? "ACK" : "NORMAL";
-  const alertStatusColor = showFallbackAlert ? colors.error : isSnoozed ? colors.warning : isAcknowledged ? colors.success : colors.muted;
-  const lastAlertUpdateText = recentHardwareHistory[0]?.timestamp
-    ? `Updated ${new Date(recentHardwareHistory[0].timestamp).toLocaleTimeString()}`
-    : "Updated --";
+  const alertStatusLabel = diagnosticsFailed ? '讀取失敗' : !diag ? '檢查中' : diag.overall === 'healthy' ? '正常' : diag.overall === 'unavailable' ? '服務異常' : '部分服務未就緒';
+  const alertStatusColor = diagnosticsFailed || diag?.overall === 'unavailable' ? colors.error : diag?.overall === 'healthy' ? colors.success : colors.warning;
+  const lastAlertUpdateText = diag?.checkedAt
+    ? `檢查時間 ${new Date(diag.checkedAt).toLocaleTimeString()}`
+    : '尚無檢查結果';
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
+      refetchStats(),
       refetchHealth(),
       refetchModels(),
       refetchDiag(),
+      refetchNotifications(),
       refetchLogs(),
       refetchGatewayHealth(),
       refetchDispatchHistory(),
@@ -127,10 +130,9 @@ export default function AdminDashboardScreen() {
     <View style={styles.diagRow}>
       <Text style={[styles.diagLabel, { color: colors.foreground }]}>{label}</Text>
       <View style={styles.diagRight}>
-        {!isConfigured && <View style={styles.warningTag}><Text style={styles.warningTagText}>UNCONFIGURED</Text></View>}
-        <View style={[styles.statusBadgeSmall, { backgroundColor: status === 'healthy' ? colors.success + '20' : colors.error + '20' }]}>
-          <Text style={[styles.statusTextSmall, { color: status === 'healthy' ? colors.success : colors.error }]}>
-            {status.toUpperCase()}
+        <View style={[styles.statusBadgeSmall, { backgroundColor: (status === 'healthy' ? colors.success : status === 'unavailable' || status === '讀取失敗' ? colors.error : colors.warning) + '20' }]}>
+          <Text style={[styles.statusTextSmall, { color: status === 'healthy' ? colors.success : status === 'unavailable' || status === '讀取失敗' ? colors.error : colors.warning }]}>
+            {!isConfigured || status === 'unconfigured' ? '未啟用' : status.toUpperCase()}
           </Text>
         </View>
       </View>
@@ -167,11 +169,17 @@ export default function AdminDashboardScreen() {
         <Text style={[styles.sectionTitle, { color: colors.muted, marginTop: 32 }]}>API & CONNECTIVITY</Text>
         <View style={[styles.monitorBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <StatusRow label={`Database (${diag?.services.database.dialect || "checking"})`} status={diag?.services.database.status || "checking"} />
-          <StatusRow label="NLP Neural Engine" status={diag?.services.nlp.status || "checking"} isConfigured={diag?.services.nlp.configured} />
-          <StatusRow label="OpenAI Provider" status={diag?.services.ai.status || "checking"} isConfigured={diag?.services.ai.configured} />
+          <StatusRow label="獨立 NLP 服務" status={diagnosticsFailed ? '讀取失敗' : diag?.services.nlp.status || "checking"} isConfigured={diag?.services.nlp.configured} />
+          <StatusRow label="AI 供應商連線" status={diagnosticsFailed ? '讀取失敗' : diag?.services.ai.status || "checking"} isConfigured={diag?.services.ai.configured} />
+          <Text style={{ color: colors.muted, marginTop: 8 }}>AI 檢查為模型清單連線測試，不代表實際推論驗收。獨立 NLP 未啟用不代表 LINE AI 無法使用。</Text>
+          {diag?.services.ai.fallbackUsed && <Text style={{ color: colors.warning }}>主用憑證檢查失敗，目前備援連線正常。</Text>}
+          {diag?.services.ai.code && <Text style={{ color: colors.warning }}>AI 檢查結果：{diag.services.ai.code}</Text>}
         </View>
 
         {/* AI & NLP Health */}
+        <Text style={{color: notificationsFailed || notificationQueue?.failed ? colors.warning : colors.muted, marginTop:12}}>
+          {notificationsFailed ? '通知佇列讀取失敗' : !notificationQueue ? '通知佇列檢查中' : !notificationQueue.configured ? '持久通知佇列未配置' : `通知待送 ${notificationQueue.pending} 筆，其中 ${notificationQueue.failed} 筆失敗待重試`}
+        </Text>
         <Text style={[styles.sectionTitle, { color: colors.muted, marginTop: 32 }]}>AI INFRASTRUCTURE</Text>
         <View style={[styles.monitorBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.progressContainer}>
@@ -277,22 +285,22 @@ export default function AdminDashboardScreen() {
         </View>
 
         {/* Security Tracking Feed */}
-        <Text style={[styles.sectionTitle, { color: colors.muted, marginTop: 32 }]}>LIVE SECURITY FEED</Text>
+        <Text style={[styles.sectionTitle, { color: colors.muted, marginTop: 32 }]}>門禁回報（未驗證設備）</Text>
         <View style={[styles.monitorBox, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0 }]}>
           {!logs || logs.length === 0 ? (
             <Text style={{ color: colors.muted, padding: 20, textAlign: 'center' }}>No recent entry logs</Text>
           ) : (
             logs.map((log) => (
               <View key={log.id} style={[styles.logItem, { borderBottomColor: colors.border }]}>
-                <View style={[styles.logIcon, { backgroundColor: log.result === 'success' ? colors.success + '20' : colors.error + '20' }]}>
-                  <IconSymbol name={log.result === 'success' ? 'checkmark.circle.fill' : 'xmark.circle.fill'} size={14} color={log.result === 'success' ? colors.success : colors.error} />
+                <View style={[styles.logIcon, { backgroundColor: colors.muted + '20' }]}>
+                  <IconSymbol name="info.circle.fill" size={14} color={colors.muted} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.logText, { color: colors.foreground }]}>{log.entryPoint}</Text>
-                  <Text style={[styles.logTime, { color: colors.muted }]}>{new Date(log.createdAt).toLocaleTimeString()}</Text>
+                  <Text style={[styles.logTime, { color: colors.muted }]}>{log.source === 'demo' ? '示範紀錄' : '來源未驗證'} · {new Date(log.createdAt).toLocaleTimeString()}</Text>
                 </View>
-                <Text style={[styles.logResult, { color: log.result === 'success' ? colors.success : colors.error }]}>
-                  {log.result.toUpperCase()}
+                <Text style={[styles.logResult, { color: colors.muted }]}>
+                  自述 {log.result.toUpperCase()}
                 </Text>
               </View>
             ))

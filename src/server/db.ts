@@ -18,6 +18,7 @@ import { ENV } from "./_core/env";
 import { dbManager } from "./database/adapter";
 import { logError } from "./_core/logError";
 import { ErrorIds } from "./constants/errorIds";
+import { deleteUnlinkedWorkOrder } from './services/workOrderHistory';
 import type {
   BatchControlAuditEntry,
   BatchControlAuditRecordInput,
@@ -99,6 +100,7 @@ async function ensureAccessLogsTable() {
         passId INTEGER,
         entryPoint TEXT NOT NULL,
         result TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'unverified',
         createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `),
@@ -977,6 +979,10 @@ export async function deleteBooking(id: number) {
 export async function deleteWorkOrder(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  if (dbManager.getType() === 'sqlite') {
+    deleteUnlinkedWorkOrder(dbManager.getRawSqlite(), id);
+    return;
+  }
   await db.delete(workOrders).where(eq(workOrders.id, id));
 }
 
@@ -1195,10 +1201,10 @@ export async function createSystemJob(data: SystemJobInsert) {
   }
 }
 
-export async function updateJobProgress(id: number, progress: number, currentStep: string) {
+export async function updateJobProgress(id: number, progress: number, currentStep: string, statusOverride?: "failed") {
   const db = await getDb();
   if (!db) return;
-  const status = progress >= 100 ? "completed" : "running";
+  const status = statusOverride ?? (progress >= 100 ? "completed" : "running");
   try {
     await db.update(systemJobs).set({ progress, currentStep, status }).where(eq(systemJobs.id, id));
   } catch (error) {

@@ -84,7 +84,7 @@ export async function getSystemDiagnostics(
   ]);
   const overall = database.status === "unavailable"
     ? "unavailable"
-    : database.status === "healthy" && ai.status === "healthy" && nlp.status === "healthy"
+    : database.status === "healthy" && ai.status === "healthy" && (nlp.status === "healthy" || (!nlp.configured && nlp.status === 'unconfigured'))
       ? "healthy"
       : "degraded";
 

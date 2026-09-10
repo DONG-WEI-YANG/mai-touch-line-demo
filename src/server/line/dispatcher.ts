@@ -28,7 +28,7 @@ export type DispatchDeps = {
   lineUserRepo: ReturnType<typeof makeLineUserRepo>;
   messageLog: ReturnType<typeof makeMessageLog>;
   channelId: string;
-  bookFn: (input: { facility: string; date: string; time: string }, lineUserId?: string) => Promise<{ id: string }>;
+  bookFn: (input: { facility: string; date: string; time: string; requestId?: string }, lineUserId?: string) => Promise<{ id: string }>;
   reportFn: (input: { intent: import('./ai/types').IntentName; slots: Record<string, unknown> }, lineUserId?: string) => Promise<{ id: string }>;
   /** Bind this LINE user to a personal web account; returns the portal URL. Idempotent. */
   bindWebUser: (lineUserId: string, displayName?: string | null) => { url: string; isNew: boolean };

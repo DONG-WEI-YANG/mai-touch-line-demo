@@ -1,3 +1,4 @@
+import { Alert } from "@/lib/alert";
 /**
  * Home Screen - Digital Brain AI
  * Sophisticated AI Concierge with Real-time Physical Dispatching
@@ -74,7 +75,10 @@ export default function HomeScreen() {
       return data?.length ? 1000 : 5000;
     },
   });
-  const runJobMutation = trpc.system.runJob.useMutation({ onSuccess: () => refetchJobs() });
+  const runJobMutation = trpc.system.runJob.useMutation({
+    onSuccess: () => { void refetchJobs(); Alert.alert("模擬情境完成", "示範資料已更新；未取得實體設備確認。"); },
+    onError: (error) => Alert.alert("情境未完成", error.message),
+  });
 
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);

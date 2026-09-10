@@ -43,18 +43,18 @@ beforeEach(() => {
 describe("iot.updateDevice authorization", () => {
   it("管理員可以控制任一戶的設備(櫃檯／展示模式靠這條)", async () => {
     const c = await caller({ id: 20, role: "admin" });
-    await expect(c.updateDevice({ deviceId: 1, status: "on" })).resolves.toEqual({ success: true });
+    await expect(c.updateDevice({ deviceId: 1, status: "on" })).resolves.toEqual({ success: true, executionMode: "simulation", acknowledged: false });
     expect(statusWrites).toEqual([{ deviceId: 1, status: "on" }]);
   });
 
   it("物流／管理職員同樣可以控制", async () => {
     const c = await caller({ id: 21, role: "logistics" });
-    await expect(c.updateDevice({ deviceId: 1, status: "on" })).resolves.toEqual({ success: true });
+    await expect(c.updateDevice({ deviceId: 1, status: "on" })).resolves.toEqual({ success: true, executionMode: "simulation", acknowledged: false });
   });
 
   it("住戶可以控制自己家的設備", async () => {
     const c = await caller({ id: 10, role: "resident" });
-    await expect(c.updateDevice({ deviceId: 1, status: "on" })).resolves.toEqual({ success: true });
+    await expect(c.updateDevice({ deviceId: 1, status: "on" })).resolves.toEqual({ success: true, executionMode: "simulation", acknowledged: false });
   });
 
   it("住戶不能控制別戶的設備", async () => {
@@ -67,7 +67,7 @@ describe("iot.updateDevice authorization", () => {
     // 正式環境的 demo/員工 token 會產生「合成使用者」,資料庫裡沒有那一列。
     // 授權若去 DB 重查 actor 角色就會查無此人 → 誤擋。角色的事實來源是 ctx.user。
     const c = await caller({ id: 999, role: "admin" });
-    await expect(c.updateDevice({ deviceId: 1, status: "on" })).resolves.toEqual({ success: true });
+    await expect(c.updateDevice({ deviceId: 1, status: "on" })).resolves.toEqual({ success: true, executionMode: "simulation", acknowledged: false });
   });
 
   it("token 認證的住戶在 users 表裡查不到時仍被擋下 —— 放寬的只有員工", async () => {
@@ -86,4 +86,13 @@ describe("iot.updateDevice authorization", () => {
     await expect(c.updateDevice({ deviceId: 999, status: "on" })).rejects.toThrow(/not found/i);
     expect(statusWrites).toHaveLength(0);
   });
+});
+
+it("rejects physical mode without writing simulated status", async () => {
+  process.env.IOT_EXECUTION_MODE = "physical";
+  try {
+    const c = await caller({ id: 20, role: "admin" });
+    await expect(c.updateDevice({ deviceId: 1, status: "on" })).rejects.toThrow(/ACK/);
+    expect(statusWrites).toHaveLength(0);
+  } finally { delete process.env.IOT_EXECUTION_MODE; }
 });

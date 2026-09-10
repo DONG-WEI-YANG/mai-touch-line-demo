@@ -64,7 +64,7 @@ describe('resident handler — facility.book happy path', () => {
       bookFn, pushHousekeepers,
     });
 
-    expect(bookFn).toHaveBeenCalledWith({ facility: 'gym', date: '2026-05-09', time: '19:00' }, 'U1');
+    expect(bookFn).toHaveBeenCalledWith({ facility: 'gym', date: '2026-05-09', time: '19:00', requestId: expect.stringMatching(/^line:/) }, 'U1');
     expect(pushHousekeepers).toHaveBeenCalled();
     expect(store.get('U1')?.step).toBe('IDLE');
   });

@@ -29,6 +29,7 @@ export const bookingsRouter = router({
       endTime: z.string(),
       guestCount: z.number().int().min(1).default(1),
       notes: z.string().optional(),
+      requestId: z.string().min(1).max(160).optional(),
     }))
     .mutation(async ({ ctx, input }) => createCheckedBooking({
       userId: ctx.user.id,
@@ -38,6 +39,7 @@ export const bookingsRouter = router({
       endTime: input.endTime,
       guestCount: input.guestCount,
       notes: input.notes,
+      requestId: input.requestId,
     })),
 
   cancel: residentProcedure
@@ -62,7 +64,7 @@ export const bookingsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const before = await updateCheckedBookingStatus(input.id, input.status);
-      if (before && ctx.lineAdmin?.pushToLineUser) {
+      if (dbManager.getType() !== "sqlite" && before && before.status !== input.status && ctx.lineAdmin?.pushToLineUser) {
         try {
           const row = ctx.lineAdmin.db.prepare(
             `SELECT line_user_id FROM line_user WHERE app_user_id = ? AND channel_id = ? LIMIT 1`
