@@ -43,6 +43,39 @@ it('preserves LINE error status and JSON so expired reply tokens can fall back',
   expect(res.status).toBe(400); expect(res.body.message).toBe('Invalid reply token');
 });
 
+it('reports ready only when the private backend answers /health',async()=>{
+  const backend=http.createServer((req,res)=>{res.statusCode=req.url==='/health'?200:404;res.end('{"ok":true}');});
+  servers.push(backend);
+  await new Promise<void>(r=>backend.listen(0,'127.0.0.1',r));
+  const app=createGateway({backendOrigin:`http://127.0.0.1:${(backend.address() as any).port}`,lineToken:'secret'});
+  expect((await request(app).get('/_gateway/ready')).status).toBe(200);
+});
+
+it('treats an unhealthy but reachable backend as ready so the gateway can still start',async()=>{
+  const backend=http.createServer((_req,res)=>{res.statusCode=503;res.end();});
+  servers.push(backend);
+  await new Promise<void>(r=>backend.listen(0,'127.0.0.1',r));
+  const app=createGateway({backendOrigin:`http://127.0.0.1:${(backend.address() as any).port}`,lineToken:'secret'});
+  expect((await request(app).get('/_gateway/ready')).status).toBe(200);
+});
+
+it('reports not ready when the private backend refuses connections',async()=>{
+  const app=createGateway({backendOrigin:'http://127.0.0.1:1',lineToken:'secret'});
+  expect((await request(app).get('/_gateway/ready')).status).toBe(503);
+});
+
+// A cold Direct VPC path drops packets instead of refusing them; the probe must give up
+// quickly rather than wait for the 45s proxy timeout.
+it('reports not ready when the private backend hangs',async()=>{
+  const backend=http.createServer(()=>{});
+  servers.push(backend);
+  await new Promise<void>(r=>backend.listen(0,'127.0.0.1',r));
+  const app=createGateway({backendOrigin:`http://127.0.0.1:${(backend.address() as any).port}`,lineToken:'secret',readyTimeoutMs:100});
+  const started=Date.now();
+  expect((await request(app).get('/_gateway/ready')).status).toBe(503);
+  expect(Date.now()-started).toBeLessThan(2000);
+});
+
 it('forwards LINE retry key and accepted-request acknowledgement for duplicate delivery',async()=>{
  const key='af2f390b-91cc-4ffb-a7a9-5bdca06fe632';
  const app=createGateway({backendOrigin:'http://127.0.0.1:1',lineToken:'secret',lineFetch:async(_url:string,init:any)=>{

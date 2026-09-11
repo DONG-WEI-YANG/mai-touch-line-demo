@@ -268,3 +268,10 @@
 - 本機攔截fetch重現Web invokeLLM仍合併多key、預設gpt-4o-mini；健康檢查修正不等於聊天推論修正。本機容量函式接受25:00–26:00與10:99–12:00；寫入service缺營業／日期等共用檢查。
 - 程式確認離線佇列無owner且使用當前token；跨帳戶誤歸屬尚未瀏覽器重現。另有長效token、硬刪關聯、僅DB的IoT成功、非持久任務、通知無outbox、建立缺冪等、門禁自述結果、異地備份與發布可重現性等缺口，詳見報告。
 - 本輪SQLite隔離smoke通過；沿用同工作階段763測試／型別／lint／Web build通過。smoke明示未配置外部AI，不代表真實服務驗收。活動卡已改View，舊UX-12不再成立。此輪僅稽核未修新缺陷／未發布。
+
+## LINE流程卡住／重複回覆：gateway冷啟動（2026-09-11）
+
+- 使用者回報LINE流程卡住或重複。Cloud Run日誌顯示每次「Starting new instance」後約2.5分鐘，所有請求等滿45秒upstream timeout回502（9/10 12:34 UTC一次9則webhook全失敗，恢復後連續回覆）；9/10–9/11約每日10次。VM服務28小時未重啟、無OOM，非LINE流程程式問題。
+- 根因：gateway min=0，新實例TCP探針3秒通過即接流量，但Direct VPC到VM需2–3分鐘。keepalive workflow仍ping舊Render，未對新gateway保溫。
+- 修正：gateway新增`/_gateway/ready`（對VM `/health`，3秒逾時，任何HTTP回應即就緒）；Cloud Run改HTTP啟動探針（10秒×24）並設min=1（使用者選擇，超出免費額度）；keepalive改ping Firebase入口並改名keep-gateway-warm。回歸先失敗後通過；127檔843測試、type-check、lint通過。
+- 已部署revision mai-touch-gateway-00003-kbh（tag ready-probe-20260911），探針第7次（約76秒）成功，部署後/health 200、無5xx；回退用00002-nbv。未改VM、webhook與憑證。讀取正式LINE訊息紀錄被權限分類器擋下，未確認恢復後的回覆是LINE重送或使用者重按；手機實機旅程待驗收。使用者要求commit並push至origin/main。

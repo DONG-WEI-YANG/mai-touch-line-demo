@@ -1,5 +1,12 @@
 # GCP 專用環境
 
+## Gateway 冷啟動修正（2026-09-11）
+
+- 症狀：LINE 流程卡住後又一次湧出多則回覆。根因是 gateway min=0 縮到 0 後，新實例自身 TCP 探針 3 秒即通過，但 Direct VPC 到 VM 約需 2–3 分鐘才通；期間每個請求等滿 45 秒 upstream timeout 回 502。9/10–9/11 約每天 10 次冷啟動，每次約 2.5 分鐘無回應。
+- 修正：gateway 新增 `/_gateway/ready`（對 VM `/health` 發請求，3 秒逾時；收到任何 HTTP 回應即視為通路可用），Cloud Run 啟動探針改為 HTTP `/_gateway/ready`（每 10 秒、最多 24 次），並設 min=1。
+- 部署 revision `mai-touch-gateway-00003-kbh`（image `firebase-gateway@sha256:198b099b…`，tag `ready-probe-20260911`），探針第 7 次（約 76 秒）才成功，證實探針會擋住未就緒實例；部署後 `/health` 200、無 5xx。回退用 revision `mai-touch-gateway-00002-nbv`。
+- min=1 超出免費額度，會產生閒置實例費用。GitHub `keep-gateway-warm` 已改 ping 本入口，僅為輔助監測。
+
 ## Firebase／GCP LINE 已切換（2026-09-09）
 
 - 使用者指定 Firebase，並接受 Demo 不保留舊紀錄；此次建立新示範資料庫，並非無損移轉 Render 歷史。
@@ -17,7 +24,7 @@
 
 1. `node scripts/build-gcp-backend.cjs` 產生後端 release，依鎖定版本安裝 Linux Node24 依賴；better-sqlite3 必須使用對應 ABI 的原生模組。
 2. 將 release 安裝到 `/opt/mai-touch/releases/`，以 maitouch 擁有，再更新 current symlink，重啟 `mai-touch`；更新不得重跑 init.js。服務設定見 `infrastructure/mai-touch.service`。
-3. Gateway 原始碼與 Dockerfile 位於 `infrastructure/firebase-gateway/`；BACKEND_ORIGIN 固定為內網後端，LINE_CHANNEL_ACCESS_TOKEN 使用現行 LINE token。部署保留 Direct VPC、標籤與 min=0。
+3. Gateway 原始碼與 Dockerfile 位於 `infrastructure/firebase-gateway/`；BACKEND_ORIGIN 固定為內網後端，LINE_CHANNEL_ACCESS_TOKEN 使用現行 LINE token。部署保留 Direct VPC、標籤、min=1 與 `/_gateway/ready` 啟動探針（2026-09-11 起，見上方紀錄）。
 4. 設定 EXPO_PUBLIC_API_URL 為 Firebase 網址及對應 Demo token，再執行 `npm run web:build -- --clear`、`firebase deploy --only hosting --config firebase.gcp.json --project mai-touch-history-20260908 --non-interactive`。
 5. 使用 ADMIN_DASHBOARD_TOKEN 存取 `/admin/database/backup`，下載後以 snapshot 工具 verify。不要把資料庫或環境檔加入 Git。
 6. IAP 管理必須明確指定 project、zone、account；不更改全域預設專案。

@@ -28,7 +28,20 @@ function readBody(req) {
     req.on('error',reject);
   });
 }
-function createGateway({backendOrigin,lineToken,lineFetch=fetch}) {
+// Cloud Run's startup probe targets /_gateway/ready so a new instance takes traffic only once its
+// Direct VPC path reaches the backend; a cold path silently drops packets for minutes after start.
+// Any HTTP answer proves the path; backend app health is reported by the backend's own /health.
+function backendReachable(backend,timeoutMs) {
+  return new Promise(resolve=>{
+    const probe=http.get({hostname:backend.hostname,port:backend.port || 80,path:'/health',timeout:timeoutMs},response=>{
+      response.resume();
+      resolve(true);
+    });
+    probe.on('timeout',()=>probe.destroy(new Error('Backend probe timeout')));
+    probe.on('error',()=>resolve(false));
+  });
+}
+function createGateway({backendOrigin,lineToken,lineFetch=fetch,readyTimeoutMs=3000}) {
   if(!backendOrigin || !lineToken) throw new Error('Backend and LINE token are required');
   const backend=new URL(backendOrigin);
   if(backend.protocol!=='http:') throw new Error('Backend must be an internal HTTP origin');
@@ -36,6 +49,10 @@ function createGateway({backendOrigin,lineToken,lineFetch=fetch}) {
     const target=req.url || '/';
     res.setHeader('cache-control','no-store');
     if(!target.startsWith('/') || target.startsWith('//')) { res.writeHead(400).end(); return; }
+    if(target==='/_gateway/ready') {
+      res.writeHead(await backendReachable(backend,readyTimeoutMs)?200:503).end();
+      return;
+    }
     if(target.startsWith('/_line')) {
       if(!authorized(req.headers.authorization,lineToken)) { res.writeHead(401).end(); return; }
       const path=target.slice('/_line'.length);

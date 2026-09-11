@@ -48,6 +48,8 @@ gcloud run services update mai-touch-gateway --image=us-west1-docker.pkg.dev/mai
 
 確認新revision已承接流量，再部署相依後端。保留舊revision供回退；不要輸出環境內容或在指令中加入token。
 
+gateway 必須維持 min=1 與 HTTP startup probe `/_gateway/ready`（`periodSeconds=10`、`failureThreshold=24`）；只換 image 的 `services update` 會沿用，重建服務時須重新指定，否則冷啟動期間 LINE webhook 會 502 約 2–3 分鐘（見 docs/GCP_DEPLOYMENT.md 2026-09-11）。
+
 後端驗證後，從 repo 根目錄執行：
 
 ```powershell

@@ -1,15 +1,16 @@
-name: keep-render-warm
+name: keep-gateway-warm
 
-# Render Free spins the instance down after ~15 min of no inbound HTTP traffic.
-# When it's asleep, a LINE webhook delivery hits a cold-starting server (30-60s),
-# LINE times out, and — because LINE does not retry webhooks by default — the
-# customer's message is silently dropped and the bot never replies.
-# This workflow pings /health frequently enough to keep the instance awake.
+# Production LINE traffic goes Firebase Hosting → Cloud Run `mai-touch-gateway`
+# (min instances 0) → Direct VPC → GCP VM. After the gateway scales to zero, a
+# fresh instance passes its own startup probe in seconds, but the Direct VPC
+# path to the VM takes ~2–3 minutes to come up. During that window every
+# webhook hangs until the gateway's 45s upstream timeout and returns 502, so
+# residents see no reply, tap again, then receive a burst of replies at once.
 #
-# NOTE: GitHub-hosted scheduled workflows can be delayed several minutes under
-# load, so a 10-min cron occasionally slips past Render's 15-min idle window.
-# For a hard guarantee also add an external pinger (cron-job.org) and/or enable
-# "Webhook redelivery" in the LINE Developers console as a safety net.
+# The fix lives on Cloud Run (2026-09-11): min instances 1 plus a startup probe
+# on /_gateway/ready, so a new instance takes traffic only once the VM is
+# reachable. This workflow is a best-effort external monitor on top of that;
+# GitHub-hosted schedules can be delayed or skipped under load.
 
 on:
   schedule:
@@ -19,16 +20,17 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
     steps:
-      - name: Ping Render /health (with cold-start retries)
+      - name: Ping gateway /health (with cold-start retries)
         run: |
-          URL="https://mai-touch-line-us.onrender.com/health"
+          URL="https://mai-touch-history-20260908.web.app/health"
           body_file=$(mktemp)
           trap 'rm -f "$body_file"' EXIT
-          for i in 1 2 3 4 5 6; do
+          # A cold gateway can 502 for ~3 min (each attempt up to 45s), so retry past that window.
+          for i in 1 2 3 4 5 6 7 8; do
             : > "$body_file"
-            if code=$(curl -sS -o "$body_file" -w '%{http_code}' --max-time 60 "$URL"); then
+            if code=$(curl -sS -o "$body_file" -w '%{http_code}' --max-time 50 "$URL"); then
               :
             else
               code=000
@@ -36,7 +38,7 @@ jobs:
             echo "attempt $i -> HTTP $code"
             if [ -s "$body_file" ]; then cat "$body_file"; echo; fi
             if [ "$code" = "200" ]; then exit 0; fi
-            sleep 15
+            sleep 10
           done
           echo "::error::/health did not return 200 after retries"
           exit 1
